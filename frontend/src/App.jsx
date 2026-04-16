@@ -1,22 +1,36 @@
+import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import PianosPage from './pages/PianosPage'
 import './App.css'
+
+function Dashboard() {
+  return (
+    <div className="app-main">
+      <h2>Welcome to Piano Maintainer</h2>
+      <p>Track and manage piano maintenance records, schedules, and technicians.</p>
+    </div>
+  )
+}
 
 function App() {
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Piano Maintainer</h1>
-        <nav>
-          <a href="#">Dashboard</a>
-          <a href="#">Pianos</a>
-          <a href="#">Maintenance</a>
-          <a href="#">Schedule</a>
-        </nav>
-      </header>
-      <main className="app-main">
-        <h2>Welcome to Piano Maintainer</h2>
-        <p>Track and manage piano maintenance records, schedules, and technicians.</p>
-      </main>
-    </div>
+    <BrowserRouter>
+      <div className="app">
+        <header className="app-header">
+          <h1>Piano Maintainer</h1>
+          <nav>
+            <NavLink to="/" end>Dashboard</NavLink>
+            <NavLink to="/pianos">Pianos</NavLink>
+            <NavLink to="/maintenance">Maintenance</NavLink>
+            <NavLink to="/schedule">Schedule</NavLink>
+          </nav>
+        </header>
+
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/pianos" element={<PianosPage />} />
+        </Routes>
+      </div>
+    </BrowserRouter>
   )
 }
 

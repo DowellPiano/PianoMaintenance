@@ -33,10 +33,18 @@ body {
   color: #ccc;
   text-decoration: none;
   font-size: 0.95rem;
+  padding: 0.25rem 0;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .app-header nav a:hover {
   color: white;
+}
+
+.app-header nav a.active {
+  color: white;
+  border-bottom-color: white;
 }
 
 .app-main {
