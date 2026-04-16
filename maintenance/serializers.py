@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate
+from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, Technician
 
 
 class LocationSerializer(serializers.ModelSerializer):
@@ -14,17 +14,9 @@ class PianoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Piano
         fields = [
-            'id',
-            'name',
-            'brand',
-            'model',
-            'serial_number',
-            'piano_type',
-            'location',
-            'location_name',
-            'date_acquired',
-            'notes',
-            'qr_code_token',
+            'id', 'name', 'brand', 'model', 'serial_number',
+            'piano_type', 'location', 'location_name',
+            'date_acquired', 'notes', 'qr_code_token',
         ]
         read_only_fields = ['qr_code_token']
 
@@ -35,36 +27,49 @@ class ScheduleTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScheduleTemplate
         fields = [
-            'id',
-            'name',
-            'task_name',
-            'task_type',
-            'interval_days',
-            'warning_days_before',
-            'description',
-            'schedule_count',
+            'id', 'name', 'task_name', 'task_type',
+            'interval_days', 'warning_days_before', 'description', 'schedule_count',
         ]
 
 
 class MaintenanceScheduleSerializer(serializers.ModelSerializer):
-    piano_name = serializers.CharField(source='piano.name', read_only=True)
-    piano_brand = serializers.CharField(source='piano.brand', read_only=True)
+    piano_name     = serializers.CharField(source='piano.name',          read_only=True)
+    piano_brand    = serializers.CharField(source='piano.brand',         read_only=True)
     piano_location = serializers.CharField(source='piano.location.name', read_only=True)
-    template_name = serializers.CharField(source='template.name', read_only=True)
+    template_name  = serializers.CharField(source='template.name',       read_only=True)
 
     class Meta:
         model = MaintenanceSchedule
         fields = [
-            'id',
-            'piano',
-            'piano_name',
-            'piano_brand',
-            'piano_location',
-            'template',
-            'template_name',
-            'task_name',
-            'task_type',
-            'interval_days',
-            'warning_days_before',
-            'is_active',
+            'id', 'piano', 'piano_name', 'piano_brand', 'piano_location',
+            'template', 'template_name', 'task_name', 'task_type',
+            'interval_days', 'warning_days_before', 'is_active',
         ]
+
+
+class TechnicianMinimalSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Technician
+        fields = ['id', 'username', 'full_name']
+
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.username
+
+
+class WorkOrderSerializer(serializers.ModelSerializer):
+    piano_name          = serializers.CharField(source='piano.name',          read_only=True)
+    piano_brand         = serializers.CharField(source='piano.brand',         read_only=True)
+    piano_location      = serializers.CharField(source='piano.location.name', read_only=True)
+    assigned_tech_name  = serializers.CharField(source='assigned_tech.get_full_name', read_only=True)
+
+    class Meta:
+        model = WorkOrder
+        fields = [
+            'id', 'piano', 'piano_name', 'piano_brand', 'piano_location',
+            'assigned_tech', 'assigned_tech_name', 'schedule',
+            'order_type', 'status', 'priority',
+            'description', 'due_date', 'completed_date', 'created_at',
+        ]
+        read_only_fields = ['created_at']
