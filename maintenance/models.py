@@ -68,19 +68,50 @@ class Technician(AbstractUser):
 
 
 # ---------------------------------------------------------------------------
+# Shared task-type choices
+# ---------------------------------------------------------------------------
+class TaskType(models.TextChoices):
+    TUNING = "Tuning", "Tuning"
+    REGULATION = "Regulation", "Regulation"
+    VOICING = "Voicing", "Voicing"
+    CLEANING = "Cleaning", "Cleaning"
+    INSPECTION = "Inspection", "Inspection"
+    OTHER = "Other", "Other"
+
+
+# ---------------------------------------------------------------------------
+# ScheduleTemplate  (reusable blueprint)
+# ---------------------------------------------------------------------------
+class ScheduleTemplate(models.Model):
+    name = models.CharField(max_length=200)
+    task_name = models.CharField(max_length=200)
+    task_type = models.CharField(max_length=20, choices=TaskType.choices)
+    interval_days = models.IntegerField()
+    warning_days_before = models.IntegerField(default=7)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+# ---------------------------------------------------------------------------
 # MaintenanceSchedule
 # ---------------------------------------------------------------------------
 class MaintenanceSchedule(models.Model):
-    class TaskType(models.TextChoices):
-        TUNING = "Tuning", "Tuning"
-        REGULATION = "Regulation", "Regulation"
-        VOICING = "Voicing", "Voicing"
-        CLEANING = "Cleaning", "Cleaning"
-        INSPECTION = "Inspection", "Inspection"
-        OTHER = "Other", "Other"
+    TaskType = TaskType  # keep existing references working
 
     piano = models.ForeignKey(
         Piano, on_delete=models.CASCADE, related_name="schedules"
+    )
+    template = models.ForeignKey(
+        ScheduleTemplate,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="schedules",
     )
     task_name = models.CharField(max_length=200)
     task_type = models.CharField(max_length=20, choices=TaskType.choices)
