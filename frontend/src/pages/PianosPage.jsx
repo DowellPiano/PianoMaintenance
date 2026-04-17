@@ -77,7 +77,8 @@ export default function PianosPage() {
                 <th>Type</th>
                 <th>Location</th>
                 <th>Serial #</th>
-                <th>Date Acquired</th>
+                <th>Year Built</th>
+                <th>Year Acquired</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -102,7 +103,8 @@ export default function PianosPage() {
                   </td>
                   <td>{piano.location_name}</td>
                   <td>{piano.serial_number || <span className="empty">—</span>}</td>
-                  <td>{piano.date_acquired || <span className="empty">—</span>}</td>
+                  <td>{piano.year_built    || <span className="empty">—</span>}</td>
+                  <td>{piano.year_acquired || <span className="empty">—</span>}</td>
                   <td className="actions">
                     <button className="btn-edit" onClick={() => openEdit(piano)}>Edit</button>
                     <button className="btn-delete" onClick={() => setDeleteConfirm(piano)}>Delete</button>

@@ -34,7 +34,7 @@ class PianoSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'brand', 'model', 'serial_number',
             'piano_type', 'location', 'location_name',
-            'date_acquired', 'notes', 'qr_code_token',
+            'year_built', 'year_acquired', 'notes', 'qr_code_token',
             'profile_photo_url',
         ]
         read_only_fields = ['qr_code_token']

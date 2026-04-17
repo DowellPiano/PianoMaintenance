@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import PianoFormModal from '../components/PianoFormModal'
 import WorkOrderFormModal from '../components/WorkOrderFormModal'
 import './PianoProfilePage.css'
@@ -37,18 +37,27 @@ function fmt(val, fallback = '—') {
 
 function DetailsTab({ piano }) {
   const rows = [
-    ['Brand', fmt(piano.brand)],
-    ['Model', fmt(piano.model)],
-    ['Piano Type', piano.piano_type],
+    ['Brand',         fmt(piano.brand)],
+    ['Model',         fmt(piano.model)],
+    ['Piano Type',    piano.piano_type],
     ['Serial Number', fmt(piano.serial_number)],
-    ['Location', fmt(piano.location_name)],
-    ['Date Acquired', fmt(piano.date_acquired)],
-    ['QR Token', piano.qr_code_token],
-    ['Notes', fmt(piano.notes)],
+    ['Year Built',    fmt(piano.year_built)],
+    ['Year Acquired', fmt(piano.year_acquired)],
+    ['QR Token',      piano.qr_code_token],
+    ['Notes',         fmt(piano.notes)],
   ]
 
   return (
     <div className="details-grid">
+      <div className="details-row" key="location">
+        <dt>Location</dt>
+        <dd>
+          {piano.location
+            ? <Link to={`/locations/${piano.location}`}>{piano.location_name}</Link>
+            : <span className="empty">—</span>
+          }
+        </dd>
+      </div>
       {rows.map(([label, value]) => (
         <div className="details-row" key={label}>
           <dt>{label}</dt>

@@ -1,6 +1,9 @@
 import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import MinValueValidator, MaxValueValidator
+
+YEAR_VALIDATORS = [MinValueValidator(1700), MaxValueValidator(2100)]
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +38,8 @@ class Piano(models.Model):
     model = models.CharField(max_length=100, blank=True)
     serial_number = models.CharField(max_length=100, blank=True)
     piano_type = models.CharField(max_length=20, choices=PianoType.choices)
-    date_acquired = models.DateField(null=True, blank=True)
+    year_built    = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
+    year_acquired = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
     notes = models.TextField(blank=True)
     qr_code_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 

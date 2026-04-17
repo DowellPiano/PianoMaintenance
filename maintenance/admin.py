@@ -36,7 +36,8 @@ class PianoAdmin(admin.ModelAdmin):
         "piano_type",
         "location",
         "serial_number",
-        "date_acquired",
+        "year_built",
+        "year_acquired",
     )
     list_filter = ("piano_type", "location", "brand")
     search_fields = ("name", "brand", "model", "serial_number")
