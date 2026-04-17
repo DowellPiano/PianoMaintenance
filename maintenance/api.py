@@ -16,9 +16,11 @@ from .serializers import (
 )
 
 
-class LocationViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Location.objects.all().order_by('name')
+class LocationViewSet(viewsets.ModelViewSet):
     serializer_class = LocationSerializer
+
+    def get_queryset(self):
+        return Location.objects.prefetch_related('pianos').order_by('name')
 
 
 class PianoViewSet(viewsets.ModelViewSet):
@@ -256,4 +258,26 @@ def piano_profile(request, piano_id):
         'work_orders': wo_data,
         'schedules':   sched_data,
         'photos':      photo_data,
+    })
+
+
+@api_view(['GET'])
+def location_profile(request, location_id):
+    """
+    Returns enriched profile data for a single location:
+    location detail + all pianos at that location (with profile photo URLs).
+    """
+    try:
+        location = Location.objects.prefetch_related('pianos__photos').get(pk=location_id)
+    except Location.DoesNotExist:
+        return Response({'error': 'Location not found.'}, status=404)
+
+    location_data = LocationSerializer(location).data
+
+    pianos = location.pianos.prefetch_related('photos').order_by('name')
+    piano_data = PianoSerializer(pianos, many=True, context={'request': request}).data
+
+    return Response({
+        'location': location_data,
+        'pianos':   piano_data,
     })

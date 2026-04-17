@@ -3,9 +3,11 @@ from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, Work
 
 
 class LocationSerializer(serializers.ModelSerializer):
+    piano_count = serializers.IntegerField(source='pianos.count', read_only=True)
+
     class Meta:
         model = Location
-        fields = ['id', 'name', 'building', 'address']
+        fields = ['id', 'name', 'building', 'address', 'piano_count']
 
 
 class PhotoSerializer(serializers.ModelSerializer):
