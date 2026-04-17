@@ -49,15 +49,15 @@ export default function LocationFormModal({ location, onClose, onSaved }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{location ? 'Edit Location' : 'Add Location'}</h3>
+          <h2>{location ? 'Edit Location' : 'Add Location'}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
         {error && <div className="modal-error">{error}</div>}
 
-        <form onSubmit={handleSubmit} className="modal-form">
+        <form onSubmit={handleSubmit} className="piano-form">
           <label>
             Name <span className="required">*</span>
             <input
