@@ -331,3 +331,21 @@ class MaintenanceRequest(models.Model):
 
     def __str__(self):
         return f"Request {self.pk} — {self.piano} [{self.status}]"
+
+
+# ---------------------------------------------------------------------------
+# Photo
+# ---------------------------------------------------------------------------
+class Photo(models.Model):
+    piano      = models.ForeignKey(Piano,     null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
+    work_order = models.ForeignKey(WorkOrder, null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
+    image      = models.ImageField(upload_to='photos/')
+    caption    = models.CharField(max_length=300, blank=True)
+    is_profile_photo = models.BooleanField(default=False)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"Photo {self.pk}"

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import PianoFormModal from '../components/PianoFormModal'
 import './PianosPage.css'
 
@@ -83,7 +84,15 @@ export default function PianosPage() {
             <tbody>
               {pianos.map(piano => (
                 <tr key={piano.id}>
-                  <td className="piano-name">{piano.name}</td>
+                  <td className="piano-name">
+                    <div className="piano-name-cell">
+                      {piano.profile_photo_url
+                        ? <img src={piano.profile_photo_url} alt="" className="piano-thumb" />
+                        : <div className="piano-thumb piano-thumb-placeholder">🎹</div>
+                      }
+                      <Link to={`/pianos/${piano.id}`}>{piano.name}</Link>
+                    </div>
+                  </td>
                   <td>{piano.brand}</td>
                   <td>{piano.model || <span className="empty">—</span>}</td>
                   <td>
