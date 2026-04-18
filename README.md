@@ -11,7 +11,7 @@ A Computerized Maintenance Management System (CMMS) built for piano technicians 
 | Backend | Python 3 · Django 5.2 · Django REST Framework |
 | Frontend | React 18 · Vite · React Router |
 | Database | SQLite (dev) |
-| Auth | Django session auth (custom `Technician` user model) |
+| Auth | Token auth via DRF (custom `Technician` user model) |
 
 ---
 
@@ -42,22 +42,34 @@ maintenance/
   models.py                All 10 domain models
   api.py                   DRF ViewSets (REST API)
   serializers.py           API serializers
-  views.py                 Server-rendered views (login, QR form, dashboard)
   urls.py                  URL routing
   admin.py                 Django Admin customizations
   management/commands/
     generate_work_orders.py  CLI command: auto-create overdue work orders
 frontend/
   src/
-    App.jsx                Top-level router + nav
+    App.jsx                Top-level router + nav + auth guards
+    AuthContext.jsx        Token auth context (login, logout, isAuthenticated)
+    api.js                 Authenticated fetch wrapper
     pages/
+      LoginPage.jsx        Login form
+      DashboardPage.jsx    KPI cards + urgent work orders
       PianosPage.jsx       Piano inventory CRUD
+      PianoProfilePage.jsx Piano detail — history, schedules, photos
+      LocationsPage.jsx    Location list CRUD
+      LocationProfilePage.jsx  Location detail with piano list
       MaintenancePage.jsx  Schedules & templates (tabbed)
+      WorkOrdersPage.jsx   Work order list with filters + status actions
+      SchedulePage.jsx     Calendar view of schedules and work orders
     components/
+      WorkOrderFormModal.jsx   Create/edit work orders
+      LogEntryModal.jsx        Log hours + notes when completing a WO
       PianoFormModal.jsx
+      LocationFormModal.jsx
       ScheduleFormModal.jsx
       TemplateFormModal.jsx
       ApplyTemplateModal.jsx
+      MonthCalendar.jsx
 ```
 
 ---
@@ -118,42 +130,60 @@ All endpoints are under `/api/` and served by Django REST Framework.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| POST | `/api/auth/login/` | Login — returns token + user |
+| POST | `/api/auth/logout/` | Invalidate token |
+| GET | `/api/auth/me/` | Current user info |
+| GET | `/api/dashboard/` | KPI counts + urgent work orders |
 | GET/POST | `/api/locations/` | List or create locations |
-| GET/POST/PUT/DELETE | `/api/pianos/` | Full piano CRUD |
+| GET/PUT/DELETE | `/api/locations/{id}/` | Location detail |
+| GET | `/api/locations/{id}/profile/` | Location + all pianos |
+| GET/POST | `/api/pianos/` | Full piano CRUD |
+| GET/PUT/DELETE | `/api/pianos/{id}/` | Piano detail |
+| GET | `/api/pianos/{id}/profile/` | Piano + work orders + schedules + photos |
 | GET/POST/PUT/DELETE | `/api/schedules/` | Maintenance schedule CRUD |
 | GET/POST/PUT/DELETE | `/api/schedule-templates/` | Template CRUD |
 | POST | `/api/schedule-templates/{id}/apply_to_pianos/` | Bulk-apply template to selected pianos |
+| GET/POST | `/api/work-orders/` | Work order list (filterable) + create |
+| GET/PUT/DELETE | `/api/work-orders/{id}/` | Work order detail |
+| POST | `/api/work-orders/{id}/start/` | Transition Open → In Progress |
+| POST | `/api/work-orders/{id}/complete/` | Complete WO + create maintenance log |
+| GET/POST | `/api/maintenance-logs/` | List or create maintenance logs |
+| GET/POST | `/api/technicians/` | Technician list |
+| GET/POST | `/api/photos/` | Photo management |
+| GET | `/api/calendar-events/` | Unified calendar (WOs + schedules) by date range |
 
 ---
 
 ## Implemented Features
 
-- [x] Piano inventory (CRUD) with location grouping and type badges
+### Foundation
+- [x] Piano inventory (CRUD) with location grouping, type badges, and photo management
+- [x] Location management with per-location piano roster
+- [x] Piano profile page — work order history, active schedules, photos
 - [x] Maintenance schedule management (CRUD) per piano
 - [x] Schedule templates for DRY recurring task definitions
 - [x] Bulk template application across multiple pianos
 - [x] Automatic work order generation (management command)
+- [x] Calendar view — unified WOs and scheduled tasks by month
 - [x] QR code token per piano for public maintenance requests
-- [x] Public maintenance request form (no login required)
 - [x] Django Admin for all models
-- [x] Backend models for: work orders, logs, parts, condition readings, requests
+
+### P0 — Core Workflow ✅ Complete
+- [x] Token-based authentication (login / logout / session persistence)
+- [x] Protected routes — unauthenticated users redirected to login
+- [x] Dashboard with live KPI cards (Open, In Progress, Overdue, Due Soon, Completed This Month)
+- [x] Work order list with status, priority, and keyword filters
+- [x] Work order creation and editing via modal
+- [x] Status transitions: Open → In Progress → Complete → Cancelled
+- [x] Maintenance log entry on completion (hours worked, work performed, notes)
+- [x] Overdue work order highlighting
+- [x] Technician assignment on work orders
 
 ---
 
 ## Feature Roadmap — What's Needed for Full CMMS
 
-The backend data models exist for most of these features, but the React frontend and API endpoints need to be built out.
-
-### P0 — Core Workflow (Must Have)
-
-| # | Feature | Notes |
-|---|---------|-------|
-| 1 | **Work Order List & Detail UI** | View/filter all work orders by status, priority, piano, tech. Currently no frontend page. |
-| 2 | **Work Order Creation (manual)** | Create ad-hoc work orders from the UI (not just via CLI). |
-| 3 | **Work Order Assignment** | Assign/reassign a work order to a technician from the UI. |
-| 4 | **Maintenance Log Entry** | Technician closes a work order by filing a log: hours worked, work performed, notes. |
-| 5 | **Authentication UI** | Login/logout flow in React. Currently auth is Django-session only, with no React login page. API is currently open (`AllowAny`). |
-| 6 | **Dashboard with KPIs** | Open work order count, overdue count, upcoming (within warning window), completion rate. |
+### ~~P0 — Core Workflow~~ ✅ Complete
 
 ### P1 — Operations (High Value)
 
@@ -164,8 +194,8 @@ The backend data models exist for most of these features, but the React frontend
 | 9 | **Parts Inventory Management** | CRUD for parts stock, unit cost, reorder thresholds. Show low-stock alerts. |
 | 10 | **Parts Usage on Work Orders** | Attach parts consumed (and qty) to a maintenance log; auto-decrement stock. |
 | 11 | **Technician Management** | Admin can create/deactivate technicians, set roles, view workload. |
-| 12 | **Work Order Status Workflow** | Move WO through: Open → In Progress → Complete / Cancelled with timestamps. |
-| 13 | **Maintenance Request Queue** | List incoming public requests, assign them to a work order, mark resolved. |
+| 11 | **Technician Management** | Admin can create/deactivate technicians, set roles, view workload. |
+| 12 | **Maintenance Request Queue** | List incoming public requests, assign them to a work order, mark resolved. |
 
 ### P2 — Scheduling Intelligence
 
@@ -195,7 +225,7 @@ The backend data models exist for most of these features, but the React frontend
 | 25 | **Photo Attachments** | Attach before/after photos to a work order or log entry. |
 | 26 | **Search & Filter** | Global search across pianos, work orders, and logs. |
 | 27 | **Multi-Tenant / Org Support** | Isolate data per organization for a SaaS offering. |
-| 28 | **API Authentication** | JWT or token auth on all DRF endpoints (currently `AllowAny`). |
+| 28 | **API Authentication** | Harden token auth — add token expiry, rotation, and refresh endpoints. |
 | 29 | **Audit Log** | Track who changed what and when on work orders and assets. |
 | 30 | **PostgreSQL Migration** | Swap SQLite for Postgres for production readiness. |
 
