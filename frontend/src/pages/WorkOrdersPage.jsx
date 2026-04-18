@@ -159,7 +159,11 @@ export default function WorkOrdersPage() {
               </tr>
             ) : workOrders.length === 0 ? (
               <tr>
-                <td colSpan={10} className="td-empty">No work orders found.</td>
+                <td colSpan={10} className="td-empty">
+                  {statusFilter || priorityFilter || searchQuery
+                    ? 'No work orders match your filters.'
+                    : 'No work orders found.'}
+                </td>
               </tr>
             ) : (
               workOrders.map(wo => (

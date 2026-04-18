@@ -47,13 +47,20 @@ function RequireAuth() {
   return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />
 }
 
+function RedirectIfAuthed() {
+  const { isAuthenticated } = useAuth()
+  return isAuthenticated ? <Navigate to="/" replace /> : <Outlet />
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public */}
-          <Route path="/login" element={<LoginPage />} />
+          {/* Public — redirect to / if already logged in */}
+          <Route element={<RedirectIfAuthed />}>
+            <Route path="/login" element={<LoginPage />} />
+          </Route>
 
           {/* Auth gate — renders nothing itself, just checks the token */}
           <Route element={<RequireAuth />}>

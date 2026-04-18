@@ -64,8 +64,8 @@ export default function LogEntryModal({ workOrder, onClose, onSaved }) {
               name="hours_worked"
               value={form.hours_worked}
               onChange={handleChange}
-              min="0.1"
-              step="0.25"
+              min="0"
+              step="any"
               required
               placeholder="e.g. 1.5"
               className={fieldErrors.hours_worked ? 'input-error' : undefined}
