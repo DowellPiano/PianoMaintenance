@@ -170,15 +170,19 @@ class PartUsedSerializer(serializers.ModelSerializer):
 # Technician (full)
 # ---------------------------------------------------------------------------
 class TechnicianSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    password  = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    full_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Technician
         fields = [
-            'id', 'username', 'email', 'first_name', 'last_name',
+            'id', 'username', 'full_name', 'email', 'first_name', 'last_name',
             'is_active', 'is_staff', 'date_joined', 'password',
         ]
         read_only_fields = ['date_joined']
+
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.username
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
@@ -202,12 +206,13 @@ class TechnicianSerializer(serializers.ModelSerializer):
 # MaintenanceRequest
 # ---------------------------------------------------------------------------
 class MaintenanceRequestSerializer(serializers.ModelSerializer):
-    piano_name = serializers.CharField(source='piano.name', read_only=True)
+    piano_name     = serializers.CharField(source='piano.name',          read_only=True)
+    piano_location = serializers.CharField(source='piano.location.name', read_only=True)
 
     class Meta:
         model = MaintenanceRequest
         fields = [
-            'id', 'piano', 'piano_name',
+            'id', 'piano', 'piano_name', 'piano_location',
             'reported_by_name', 'reported_by_email',
             'issue_description', 'status', 'work_order', 'created_at',
         ]

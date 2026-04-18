@@ -165,9 +165,6 @@ class TechnicianViewSet(viewsets.ModelViewSet):
     queryset = Technician.objects.all().order_by('first_name', 'last_name')
 
     def get_serializer_class(self):
-        # List / retrieve use the minimal serializer so existing callers are unchanged
-        if self.action in ('list', 'retrieve'):
-            return TechnicianMinimalSerializer
         return TechnicianSerializer
 
     def get_permissions(self):
