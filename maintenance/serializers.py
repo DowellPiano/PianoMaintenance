@@ -138,10 +138,10 @@ class ConditionReadingSerializer(serializers.ModelSerializer):
         model = ConditionReading
         fields = [
             'id', 'piano', 'piano_name', 'log',
-            'pitch_offset_cents', 'humidity_pct', 'temperature_f',
+            'pitch_before_cents', 'pitch_after_cents', 'humidity_pct', 'temperature_f',
             'overall_rating', 'notes', 'recorded_at',
         ]
-        read_only_fields = ['recorded_at']
+        read_only_fields = []
 
 
 # ---------------------------------------------------------------------------

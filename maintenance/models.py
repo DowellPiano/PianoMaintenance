@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
 
@@ -232,8 +233,12 @@ class ConditionReading(models.Model):
         on_delete=models.SET_NULL,
         related_name="condition_readings",
     )
-    pitch_offset_cents = models.DecimalField(
-        max_digits=6, decimal_places=2, null=True, blank=True
+    pitch_before_cents = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        db_column='pitch_before_cents',
+    )
+    pitch_after_cents = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
     )
     humidity_pct = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True
@@ -245,7 +250,7 @@ class ConditionReading(models.Model):
         max_length=10, choices=OverallRating.choices, blank=True
     )
     notes = models.TextField(blank=True)
-    recorded_at = models.DateTimeField(auto_now_add=True)
+    recorded_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ["-recorded_at"]
