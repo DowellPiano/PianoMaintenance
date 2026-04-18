@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import PianoFormModal from '../components/PianoFormModal'
 import './PianosPage.css'
 
@@ -76,14 +77,23 @@ export default function PianosPage() {
                 <th>Type</th>
                 <th>Location</th>
                 <th>Serial #</th>
-                <th>Date Acquired</th>
+                <th>Year Built</th>
+                <th>Year Acquired</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {pianos.map(piano => (
                 <tr key={piano.id}>
-                  <td className="piano-name">{piano.name}</td>
+                  <td className="piano-name">
+                    <div className="piano-name-cell">
+                      {piano.profile_photo_url
+                        ? <img src={piano.profile_photo_url} alt="" className="piano-thumb" />
+                        : <div className="piano-thumb piano-thumb-placeholder">🎹</div>
+                      }
+                      <Link to={`/pianos/${piano.id}`}>{piano.name}</Link>
+                    </div>
+                  </td>
                   <td>{piano.brand}</td>
                   <td>{piano.model || <span className="empty">—</span>}</td>
                   <td>
@@ -93,7 +103,8 @@ export default function PianosPage() {
                   </td>
                   <td>{piano.location_name}</td>
                   <td>{piano.serial_number || <span className="empty">—</span>}</td>
-                  <td>{piano.date_acquired || <span className="empty">—</span>}</td>
+                  <td>{piano.year_built    || <span className="empty">—</span>}</td>
+                  <td>{piano.year_acquired || <span className="empty">—</span>}</td>
                   <td className="actions">
                     <button className="btn-edit" onClick={() => openEdit(piano)}>Edit</button>
                     <button className="btn-delete" onClick={() => setDeleteConfirm(piano)}>Delete</button>

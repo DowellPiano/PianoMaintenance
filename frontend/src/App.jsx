@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import PianosPage from './pages/PianosPage'
+import PianoProfilePage from './pages/PianoProfilePage'
+import LocationsPage from './pages/LocationsPage'
+import LocationProfilePage from './pages/LocationProfilePage'
 import MaintenancePage from './pages/MaintenancePage'
 import SchedulePage from './pages/SchedulePage'
 import './App.css'
@@ -22,6 +25,7 @@ function App() {
           <nav>
             <NavLink to="/" end>Dashboard</NavLink>
             <NavLink to="/pianos">Pianos</NavLink>
+            <NavLink to="/locations">Locations</NavLink>
             <NavLink to="/maintenance">Maintenance</NavLink>
             <NavLink to="/schedule">Schedule</NavLink>
           </nav>
@@ -29,9 +33,12 @@ function App() {
 
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/pianos" element={<PianosPage />} />
-          <Route path="/maintenance" element={<MaintenancePage />} />
-          <Route path="/schedule"    element={<SchedulePage />} />
+          <Route path="/pianos"           element={<PianosPage />} />
+          <Route path="/pianos/:id"       element={<PianoProfilePage />} />
+          <Route path="/locations"        element={<LocationsPage />} />
+          <Route path="/locations/:id"    element={<LocationProfilePage />} />
+          <Route path="/maintenance"      element={<MaintenancePage />} />
+          <Route path="/schedule"         element={<SchedulePage />} />
         </Routes>
       </div>
     </BrowserRouter>

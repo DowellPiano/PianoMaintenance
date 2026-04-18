@@ -4,7 +4,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
-from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, Technician
+from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, Technician, Photo
 from .serializers import (
     LocationSerializer,
     PianoSerializer,
@@ -12,17 +12,25 @@ from .serializers import (
     ScheduleTemplateSerializer,
     WorkOrderSerializer,
     TechnicianMinimalSerializer,
+    PhotoSerializer,
 )
 
 
-class LocationViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Location.objects.all().order_by('name')
+class LocationViewSet(viewsets.ModelViewSet):
     serializer_class = LocationSerializer
+
+    def get_queryset(self):
+        return Location.objects.prefetch_related('pianos').order_by('name')
 
 
 class PianoViewSet(viewsets.ModelViewSet):
-    queryset = Piano.objects.select_related('location').order_by('location__name', 'name')
+    queryset = Piano.objects.select_related('location').prefetch_related('photos').order_by('location__name', 'name')
     serializer_class = PianoSerializer
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['request'] = self.request
+        return ctx
 
 
 class ScheduleTemplateViewSet(viewsets.ModelViewSet):
@@ -75,6 +83,36 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 class TechnicianViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Technician.objects.filter(is_active=True).order_by('first_name', 'last_name')
     serializer_class = TechnicianMinimalSerializer
+
+
+class PhotoViewSet(viewsets.ModelViewSet):
+    serializer_class = PhotoSerializer
+
+    def get_queryset(self):
+        qs = Photo.objects.all()
+        piano_id = self.request.query_params.get('piano')
+        work_order_id = self.request.query_params.get('work_order')
+        if piano_id:
+            qs = qs.filter(piano_id=piano_id)
+        if work_order_id:
+            qs = qs.filter(work_order_id=work_order_id)
+        return qs
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['request'] = self.request
+        return ctx
+
+    @action(detail=True, methods=['post'])
+    def set_profile(self, request, pk=None):
+        photo = self.get_object()
+        if not photo.piano_id:
+            return Response({'error': 'Photo is not linked to a piano.'}, status=400)
+        # Unset all other profile photos for this piano
+        Photo.objects.filter(piano_id=photo.piano_id, is_profile_photo=True).update(is_profile_photo=False)
+        photo.is_profile_photo = True
+        photo.save()
+        return Response({'ok': True})
 
 
 @api_view(['GET'])
@@ -185,3 +223,61 @@ def calendar_events(request):
 
     events.sort(key=lambda e: e['date'])
     return Response(events)
+
+
+@api_view(['GET'])
+def piano_profile(request, piano_id):
+    """
+    Returns enriched profile data for a single piano:
+    piano detail, work_orders (last 50), schedules, photos
+    """
+    try:
+        piano = Piano.objects.select_related('location').prefetch_related('photos').get(pk=piano_id)
+    except Piano.DoesNotExist:
+        return Response({'error': 'Piano not found.'}, status=404)
+
+    # Piano detail
+    piano_data = PianoSerializer(piano, context={'request': request}).data
+
+    # Work orders for this piano
+    work_orders = WorkOrder.objects.select_related('assigned_tech').filter(
+        piano=piano
+    ).order_by('-created_at')[:50]
+    wo_data = WorkOrderSerializer(work_orders, many=True).data
+
+    # Active schedules for this piano
+    schedules = MaintenanceSchedule.objects.filter(piano=piano, is_active=True)
+    sched_data = MaintenanceScheduleSerializer(schedules, many=True).data
+
+    # Photos
+    photos = Photo.objects.filter(piano=piano)
+    photo_data = PhotoSerializer(photos, many=True, context={'request': request}).data
+
+    return Response({
+        'piano':       piano_data,
+        'work_orders': wo_data,
+        'schedules':   sched_data,
+        'photos':      photo_data,
+    })
+
+
+@api_view(['GET'])
+def location_profile(request, location_id):
+    """
+    Returns enriched profile data for a single location:
+    location detail + all pianos at that location (with profile photo URLs).
+    """
+    try:
+        location = Location.objects.prefetch_related('pianos__photos').get(pk=location_id)
+    except Location.DoesNotExist:
+        return Response({'error': 'Location not found.'}, status=404)
+
+    location_data = LocationSerializer(location).data
+
+    pianos = location.pianos.prefetch_related('photos').order_by('name')
+    piano_data = PianoSerializer(pianos, many=True, context={'request': request}).data
+
+    return Response({
+        'location': location_data,
+        'pianos':   piano_data,
+    })

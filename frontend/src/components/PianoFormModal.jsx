@@ -8,7 +8,8 @@ const EMPTY_FORM = {
   serial_number: '',
   piano_type: 'Grand',
   location: '',
-  date_acquired: '',
+  year_built: '',
+  year_acquired: '',
   notes: '',
 }
 
@@ -34,7 +35,8 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
         serial_number: piano.serial_number ?? '',
         piano_type: piano.piano_type ?? 'Grand',
         location: piano.location ?? '',
-        date_acquired: piano.date_acquired ?? '',
+        year_built: piano.year_built ?? '',
+        year_acquired: piano.year_acquired ?? '',
         notes: piano.notes ?? '',
       })
     } else {
@@ -61,8 +63,9 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          location: Number(form.location) || null,
-          date_acquired: form.date_acquired || null,
+          location:     Number(form.location)     || null,
+          year_built:   Number(form.year_built)   || null,
+          year_acquired: Number(form.year_acquired) || null,
         }),
       })
       if (!res.ok) {
@@ -134,8 +137,30 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
 
           <div className="form-row">
             <label>
-              Date Acquired
-              <input type="date" name="date_acquired" value={form.date_acquired} onChange={handleChange} />
+              Year Built
+              <input
+                type="number"
+                name="year_built"
+                value={form.year_built}
+                onChange={handleChange}
+                placeholder="e.g. 1985"
+                min="1700"
+                max="2100"
+                step="1"
+              />
+            </label>
+            <label>
+              Year Acquired
+              <input
+                type="number"
+                name="year_acquired"
+                value={form.year_acquired}
+                onChange={handleChange}
+                placeholder="e.g. 2010"
+                min="1700"
+                max="2100"
+                step="1"
+              />
             </label>
           </div>
 

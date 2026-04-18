@@ -1,6 +1,9 @@
 import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import MinValueValidator, MaxValueValidator
+
+YEAR_VALIDATORS = [MinValueValidator(1700), MaxValueValidator(2100)]
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +38,8 @@ class Piano(models.Model):
     model = models.CharField(max_length=100, blank=True)
     serial_number = models.CharField(max_length=100, blank=True)
     piano_type = models.CharField(max_length=20, choices=PianoType.choices)
-    date_acquired = models.DateField(null=True, blank=True)
+    year_built    = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
+    year_acquired = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
     notes = models.TextField(blank=True)
     qr_code_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
@@ -331,3 +335,21 @@ class MaintenanceRequest(models.Model):
 
     def __str__(self):
         return f"Request {self.pk} — {self.piano} [{self.status}]"
+
+
+# ---------------------------------------------------------------------------
+# Photo
+# ---------------------------------------------------------------------------
+class Photo(models.Model):
+    piano      = models.ForeignKey(Piano,     null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
+    work_order = models.ForeignKey(WorkOrder, null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
+    image      = models.ImageField(upload_to='photos/')
+    caption    = models.CharField(max_length=300, blank=True)
+    is_profile_photo = models.BooleanField(default=False)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"Photo {self.pk}"

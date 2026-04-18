@@ -1,24 +1,50 @@
 from rest_framework import serializers
-from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, Technician
+from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, Technician, Photo
 
 
 class LocationSerializer(serializers.ModelSerializer):
+    piano_count = serializers.IntegerField(source='pianos.count', read_only=True)
+
     class Meta:
         model = Location
-        fields = ['id', 'name', 'building', 'address']
+        fields = ['id', 'name', 'building', 'address', 'piano_count']
+
+
+class PhotoSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Photo
+        fields = ['id', 'piano', 'work_order', 'image', 'image_url', 'caption', 'is_profile_photo', 'uploaded_at']
+        read_only_fields = ['uploaded_at']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image and request:
+            return request.build_absolute_uri(obj.image.url)
+        return None
 
 
 class PianoSerializer(serializers.ModelSerializer):
-    location_name = serializers.CharField(source='location.name', read_only=True)
+    location_name     = serializers.CharField(source='location.name', read_only=True)
+    profile_photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Piano
         fields = [
             'id', 'name', 'brand', 'model', 'serial_number',
             'piano_type', 'location', 'location_name',
-            'date_acquired', 'notes', 'qr_code_token',
+            'year_built', 'year_acquired', 'notes', 'qr_code_token',
+            'profile_photo_url',
         ]
         read_only_fields = ['qr_code_token']
+
+    def get_profile_photo_url(self, obj):
+        request = self.context.get('request')
+        photo = obj.photos.filter(is_profile_photo=True).first()
+        if photo and photo.image and request:
+            return request.build_absolute_uri(photo.image.url)
+        return None
 
 
 class ScheduleTemplateSerializer(serializers.ModelSerializer):
