@@ -189,11 +189,10 @@ All endpoints are under `/api/` and served by Django REST Framework.
 
 | # | Feature | Notes |
 |---|---------|-------|
-| 7 | **Condition Readings UI** | Log pitch offset, humidity, temperature, and overall rating when completing a work order. |
+| 7 | **Condition Readings UI** | Log pitch before/after tuning (¢), humidity, temperature, and overall rating when completing a work order. |
 | 8 | **Piano Detail Page** | Full history: work order timeline, condition trend charts, schedule overview, recent logs. |
 | 9 | **Parts Inventory Management** | CRUD for parts stock, unit cost, reorder thresholds. Show low-stock alerts. |
 | 10 | **Parts Usage on Work Orders** | Attach parts consumed (and qty) to a maintenance log; auto-decrement stock. |
-| 11 | **Technician Management** | Admin can create/deactivate technicians, set roles, view workload. |
 | 11 | **Technician Management** | Admin can create/deactivate technicians, set roles, view workload. |
 | 12 | **Maintenance Request Queue** | List incoming public requests, assign them to a work order, mark resolved. |
 
@@ -212,9 +211,10 @@ All endpoints are under `/api/` and served by Django REST Framework.
 |---|---------|-------|
 | 18 | **Maintenance Cost Reporting** | Total labor + parts cost per piano, per location, per date range. |
 | 19 | **Technician Workload Report** | Hours logged, WOs completed, avg completion time per technician. |
-| 20 | **Condition Trend Charts** | Pitch offset / humidity / temperature over time per piano. |
-| 21 | **Compliance / PM Completion Rate** | % of scheduled PMs completed on time over a rolling period. |
-| 22 | **Export to CSV / PDF** | Export any report or work order list. |
+| 20 | **Condition Trend Charts** | Pitch before/after and humidity/temperature over time per piano. |
+| 21 | **Humidity/Pitch Correlation Table** | Per-piano table bucketing pitch drift by humidity range, enabling technicians to tune strategically and maintain a 0¢ average over a rolling 365-day window. Requires 6–12 months of condition readings to be statistically useful. Endpoint: `GET /api/pianos/{id}/pitch-humidity-table/` |
+| 22 | **Compliance / PM Completion Rate** | % of scheduled PMs completed on time over a rolling period. |
+| 23 | **Export to CSV / PDF** | Export any report or work order list. |
 
 ### P4 — Platform & UX Polish
 
