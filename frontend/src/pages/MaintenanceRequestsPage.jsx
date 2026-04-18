@@ -38,6 +38,7 @@ export default function MaintenanceRequestsPage() {
         setError(data.error || 'Assign failed.')
       } else {
         load()
+        window.dispatchEvent(new CustomEvent('requests-badge-changed'))
       }
     } catch {
       setError('Network error.')

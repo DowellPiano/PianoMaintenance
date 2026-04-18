@@ -34,7 +34,11 @@ function AppShell() {
     }
     fetchCount()
     const id = setInterval(fetchCount, 60_000)
-    return () => clearInterval(id)
+    window.addEventListener('requests-badge-changed', fetchCount)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('requests-badge-changed', fetchCount)
+    }
   }, [])
 
   return (

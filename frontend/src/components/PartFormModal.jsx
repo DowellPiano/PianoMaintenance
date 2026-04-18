@@ -70,7 +70,7 @@ export default function PartFormModal({ part, onClose, onSaved }) {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{part ? 'Edit Part' : 'Add Part'}</h2>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button type="button" className="modal-close" onClick={onClose}>×</button>
         </div>
         {error && <div className="modal-error">{error}</div>}
 
