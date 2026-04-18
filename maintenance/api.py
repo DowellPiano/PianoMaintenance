@@ -8,7 +8,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, MaintenanceLog, Technician, Photo
+from .models import (
+    Location, Piano, MaintenanceSchedule, ScheduleTemplate,
+    WorkOrder, MaintenanceLog, Technician, Photo,
+    ConditionReading, Part, PartUsed, MaintenanceRequest,
+)
 from .serializers import (
     LocationSerializer,
     PianoSerializer,
@@ -17,7 +21,12 @@ from .serializers import (
     WorkOrderSerializer,
     MaintenanceLogSerializer,
     TechnicianMinimalSerializer,
+    TechnicianSerializer,
     PhotoSerializer,
+    ConditionReadingSerializer,
+    PartSerializer,
+    PartUsedSerializer,
+    MaintenanceRequestSerializer,
 )
 
 
@@ -152,9 +161,136 @@ class MaintenanceLogViewSet(viewsets.ModelViewSet):
         serializer.save(technician=self.request.user)
 
 
-class TechnicianViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Technician.objects.filter(is_active=True).order_by('first_name', 'last_name')
-    serializer_class = TechnicianMinimalSerializer
+class TechnicianViewSet(viewsets.ModelViewSet):
+    queryset = Technician.objects.all().order_by('first_name', 'last_name')
+
+    def get_serializer_class(self):
+        # List / retrieve use the minimal serializer so existing callers are unchanged
+        if self.action in ('list', 'retrieve'):
+            return TechnicianMinimalSerializer
+        return TechnicianSerializer
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAuthenticated(), IsStaffPermission()]
+        return [IsAuthenticated()]
+
+
+class IsStaffPermission(IsAuthenticated):
+    """Extends IsAuthenticated: also requires is_staff=True."""
+    def has_permission(self, request, view):
+        return super().has_permission(request, view) and request.user.is_staff
+
+
+# ---------------------------------------------------------------------------
+# ConditionReadingViewSet
+# ---------------------------------------------------------------------------
+class ConditionReadingViewSet(viewsets.ModelViewSet):
+    serializer_class = ConditionReadingSerializer
+
+    filter_backends  = [DjangoFilterBackend, drf_filters.OrderingFilter]
+    filterset_fields = ['piano', 'log']
+    ordering_fields  = ['recorded_at']
+    ordering         = ['-recorded_at']
+
+    def get_queryset(self):
+        return ConditionReading.objects.select_related('piano', 'log').order_by('-recorded_at')
+
+    def perform_create(self, serializer):
+        # Auto-derive piano from the linked log if not explicitly provided
+        piano = serializer.validated_data.get('piano')
+        if piano is None:
+            log = serializer.validated_data.get('log')
+            if log:
+                piano = log.piano
+        serializer.save(piano=piano)
+
+
+# ---------------------------------------------------------------------------
+# PartViewSet / PartUsedViewSet
+# ---------------------------------------------------------------------------
+class PartViewSet(viewsets.ModelViewSet):
+    serializer_class = PartSerializer
+
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    search_fields   = ['name', 'part_number']
+    ordering_fields = ['name', 'stock_quantity']
+    ordering        = ['name']
+
+    def get_queryset(self):
+        qs = Part.objects.all().order_by('name')
+        needs_reorder = self.request.query_params.get('needs_reorder')
+        if needs_reorder is not None:
+            # Filter rows where stock_quantity <= reorder_threshold
+            from django.db.models import F
+            if needs_reorder.lower() in ('true', '1'):
+                qs = qs.filter(stock_quantity__lte=F('reorder_threshold'))
+            else:
+                qs = qs.exclude(stock_quantity__lte=F('reorder_threshold'))
+        return qs
+
+
+class PartUsedViewSet(viewsets.ModelViewSet):
+    serializer_class = PartUsedSerializer
+
+    filter_backends  = [DjangoFilterBackend]
+    filterset_fields = ['log']
+
+    def get_queryset(self):
+        return PartUsed.objects.select_related('log', 'part').order_by('-id')
+
+    def perform_create(self, serializer):
+        part          = serializer.validated_data['part']
+        quantity_used = serializer.validated_data['quantity_used']
+        cost_at_time  = serializer.validated_data.get('cost_at_time')
+
+        # Auto-fill cost from part.unit_cost if not provided
+        if cost_at_time is None:
+            cost_at_time = part.unit_cost
+
+        instance = serializer.save(cost_at_time=cost_at_time)
+
+        # Decrement stock
+        Part.objects.filter(pk=part.pk).update(
+            stock_quantity=part.stock_quantity - quantity_used
+        )
+        return instance
+
+
+# ---------------------------------------------------------------------------
+# MaintenanceRequestViewSet
+# ---------------------------------------------------------------------------
+class MaintenanceRequestViewSet(viewsets.ModelViewSet):
+    serializer_class = MaintenanceRequestSerializer
+
+    filter_backends  = [DjangoFilterBackend, drf_filters.OrderingFilter]
+    filterset_fields = ['status', 'piano']
+    ordering_fields  = ['created_at']
+    ordering         = ['-created_at']
+
+    def get_queryset(self):
+        return MaintenanceRequest.objects.select_related('piano', 'work_order').order_by('-created_at')
+
+    @action(detail=True, methods=['post'])
+    def assign(self, request, pk=None):
+        mr = self.get_object()
+        if mr.status == 'Assigned':
+            return Response({'error': 'Already assigned.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        wo = WorkOrder.objects.create(
+            piano=mr.piano,
+            order_type='Request',
+            status='Open',
+            description=mr.issue_description,
+        )
+        mr.work_order = wo
+        mr.status = 'Assigned'
+        mr.save()
+
+        return Response({
+            'maintenance_request': MaintenanceRequestSerializer(mr).data,
+            'work_order':          WorkOrderSerializer(wo).data,
+        })
 
 
 class PhotoViewSet(viewsets.ModelViewSet):

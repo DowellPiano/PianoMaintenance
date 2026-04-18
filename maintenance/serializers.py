@@ -1,5 +1,9 @@
 from rest_framework import serializers
-from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, Technician, Photo, MaintenanceLog
+from .models import (
+    Location, Piano, MaintenanceSchedule, ScheduleTemplate,
+    WorkOrder, Technician, Photo, MaintenanceLog,
+    ConditionReading, Part, PartUsed, MaintenanceRequest,
+)
 
 
 class LocationSerializer(serializers.ModelSerializer):
@@ -120,5 +124,91 @@ class WorkOrderSerializer(serializers.ModelSerializer):
             'assigned_tech', 'assigned_tech_name', 'schedule',
             'order_type', 'status', 'priority',
             'description', 'due_date', 'completed_date', 'created_at',
+        ]
+        read_only_fields = ['created_at']
+
+
+# ---------------------------------------------------------------------------
+# ConditionReading
+# ---------------------------------------------------------------------------
+class ConditionReadingSerializer(serializers.ModelSerializer):
+    piano_name = serializers.CharField(source='piano.name', read_only=True)
+
+    class Meta:
+        model = ConditionReading
+        fields = [
+            'id', 'piano', 'piano_name', 'log',
+            'pitch_offset_cents', 'humidity_pct', 'temperature_f',
+            'overall_rating', 'notes', 'recorded_at',
+        ]
+        read_only_fields = ['recorded_at']
+
+
+# ---------------------------------------------------------------------------
+# Part & PartUsed
+# ---------------------------------------------------------------------------
+class PartSerializer(serializers.ModelSerializer):
+    needs_reorder = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Part
+        fields = [
+            'id', 'name', 'part_number', 'supplier',
+            'unit_cost', 'stock_quantity', 'reorder_threshold', 'needs_reorder',
+        ]
+
+
+class PartUsedSerializer(serializers.ModelSerializer):
+    part_name = serializers.CharField(source='part.name', read_only=True)
+
+    class Meta:
+        model = PartUsed
+        fields = ['id', 'log', 'part', 'part_name', 'quantity_used', 'cost_at_time']
+
+
+# ---------------------------------------------------------------------------
+# Technician (full)
+# ---------------------------------------------------------------------------
+class TechnicianSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = Technician
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'is_active', 'is_staff', 'date_joined', 'password',
+        ]
+        read_only_fields = ['date_joined']
+
+    def create(self, validated_data):
+        password = validated_data.pop('password', None)
+        user = Technician(**validated_data)
+        if password:
+            user.set_password(password)
+        user.save()
+        return user
+
+    def update(self, instance, validated_data):
+        # username and password are not updatable
+        validated_data.pop('username', None)
+        validated_data.pop('password', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
+
+# ---------------------------------------------------------------------------
+# MaintenanceRequest
+# ---------------------------------------------------------------------------
+class MaintenanceRequestSerializer(serializers.ModelSerializer):
+    piano_name = serializers.CharField(source='piano.name', read_only=True)
+
+    class Meta:
+        model = MaintenanceRequest
+        fields = [
+            'id', 'piano', 'piano_name',
+            'reported_by_name', 'reported_by_email',
+            'issue_description', 'status', 'work_order', 'created_at',
         ]
         read_only_fields = ['created_at']
