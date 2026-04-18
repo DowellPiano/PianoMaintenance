@@ -172,7 +172,7 @@ class PartUsedSerializer(serializers.ModelSerializer):
 class TechnicianSerializer(serializers.ModelSerializer):
     password  = serializers.CharField(write_only=True, required=False, allow_blank=True)
     full_name = serializers.SerializerMethodField(read_only=True)
-    team_name = serializers.CharField(source='team.name', read_only=True)
+    team_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Technician
@@ -185,6 +185,9 @@ class TechnicianSerializer(serializers.ModelSerializer):
 
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username
+
+    def get_team_name(self, obj):
+        return obj.team.name if obj.team_id else None
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
