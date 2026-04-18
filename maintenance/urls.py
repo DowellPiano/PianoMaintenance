@@ -6,11 +6,16 @@ from .api import (
     MaintenanceScheduleViewSet,
     ScheduleTemplateViewSet,
     WorkOrderViewSet,
+    MaintenanceLogViewSet,
     TechnicianViewSet,
     PhotoViewSet,
+    dashboard_stats,
     calendar_events,
     piano_profile,
     location_profile,
+    auth_login,
+    auth_logout,
+    auth_me,
 )
 
 router = DefaultRouter()
@@ -21,10 +26,16 @@ router.register(r'schedule-templates', ScheduleTemplateViewSet,    basename='sch
 router.register(r'work-orders',        WorkOrderViewSet,           basename='work-order')
 router.register(r'technicians',        TechnicianViewSet,          basename='technician')
 router.register(r'photos',             PhotoViewSet,               basename='photo')
+router.register(r'maintenance-logs',   MaintenanceLogViewSet,      basename='maintenance-log')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('dashboard/', dashboard_stats, name='dashboard-stats'),
     path('calendar-events/', calendar_events, name='calendar-events'),
     path('pianos/<int:piano_id>/profile/',       piano_profile,    name='piano-profile'),
     path('locations/<int:location_id>/profile/', location_profile, name='location-profile'),
+    # Auth
+    path('auth/login/',  auth_login,  name='auth-login'),
+    path('auth/logout/', auth_logout, name='auth-logout'),
+    path('auth/me/',     auth_me,     name='auth-me'),
 ]

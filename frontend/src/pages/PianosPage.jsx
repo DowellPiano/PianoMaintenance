@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import PianoFormModal from '../components/PianoFormModal'
+import { apiFetch } from '../api'
 import './PianosPage.css'
 
 export default function PianosPage() {
@@ -13,7 +14,7 @@ export default function PianosPage() {
 
   const loadPianos = useCallback(() => {
     setLoading(true)
-    fetch('/api/pianos/')
+    apiFetch('/api/pianos/')
       .then(r => r.json())
       .then(data => { setPianos(data.results ?? data); setLoading(false) })
       .catch(() => { setError('Failed to load pianos — is Django running?'); setLoading(false) })
@@ -39,7 +40,7 @@ export default function PianosPage() {
 
   async function handleDelete(piano) {
     try {
-      await fetch(`/api/pianos/${piano.id}/`, { method: 'DELETE' })
+      await apiFetch(`/api/pianos/${piano.id}/`, { method: 'DELETE' })
       setDeleteConfirm(null)
       loadPianos()
     } catch {
@@ -59,31 +60,37 @@ export default function PianosPage() {
 
       {error && <div className="page-error">{error}</div>}
 
-      {loading ? (
-        <div className="loading">Loading…</div>
-      ) : pianos.length === 0 ? (
-        <div className="empty-state">
-          <p>No pianos yet.</p>
-          <button className="btn-primary" onClick={openCreate}>Add your first piano</button>
-        </div>
-      ) : (
-        <div className="table-wrapper">
-          <table className="pianos-table">
-            <thead>
+      <div className="table-wrapper">
+        <table className="pianos-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Brand</th>
+              <th>Model</th>
+              <th>Type</th>
+              <th>Location</th>
+              <th>Serial #</th>
+              <th>Year Built</th>
+              <th>Year Acquired</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
               <tr>
-                <th>Name</th>
-                <th>Brand</th>
-                <th>Model</th>
-                <th>Type</th>
-                <th>Location</th>
-                <th>Serial #</th>
-                <th>Year Built</th>
-                <th>Year Acquired</th>
-                <th>Actions</th>
+                <td colSpan={9} className="td-loading">
+                  <span className="td-loading-inner"><span className="spinner" />Loading pianos…</span>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {pianos.map(piano => (
+            ) : pianos.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="td-empty">
+                  No pianos yet.{' '}
+                  <button className="btn-link" onClick={openCreate}>Add your first piano</button>
+                </td>
+              </tr>
+            ) : (
+              pianos.map(piano => (
                 <tr key={piano.id}>
                   <td className="piano-name">
                     <div className="piano-name-cell">
@@ -110,11 +117,10 @@ export default function PianosPage() {
                     <button className="btn-delete" onClick={() => setDeleteConfirm(piano)}>Delete</button>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            )))}
+          </tbody>
+        </table>
+      </div>
 
       {modalOpen && (
         <PianoFormModal

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import MonthCalendar from '../components/MonthCalendar'
 import WorkOrderFormModal from '../components/WorkOrderFormModal'
+import { apiFetch } from '../api'
 import './SchedulePage.css'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -90,7 +91,7 @@ function DaySidebar({ date, events, onCreateWO, onEditWO, onClose }) {
                   piano: String(ev.piano_id),
                   order_type: 'Preventive',
                   description: ev.description,
-                })}>
+                }, ev)}>
                   Create Work Order
                 </button>
               )}
@@ -115,7 +116,7 @@ function CalendarView({ onCreateWO, onEditWO }) {
   const loadEvents = useCallback(() => {
     setLoading(true)
     const { start, end } = monthRange(year, month)
-    fetch(`/api/calendar-events/?start=${start}&end=${end}`)
+    apiFetch(`/api/calendar-events/?start=${start}&end=${end}`)
       .then(r => r.json())
       .then(data => { setEvents(Array.isArray(data) ? data : []); setLoading(false) })
       .catch(() => setLoading(false))
@@ -150,7 +151,7 @@ function CalendarView({ onCreateWO, onEditWO }) {
         <DaySidebar
           date={selectedDate}
           events={events}
-          onCreateWO={prefill => { onCreateWO(prefill); setSelectedDate(null) }}
+          onCreateWO={(prefill, schedEv) => { onCreateWO(prefill, schedEv); setSelectedDate(null) }}
           onEditWO={ev => { onEditWO(ev); loadEvents() }}
           onClose={() => setSelectedDate(null)}
         />
@@ -176,11 +177,11 @@ function ListView({ onCreateWO, onEditWO }) {
     const start = today.toISOString().slice(0, 10)
     const end90 = new Date(today); end90.setDate(today.getDate() + 90)
     const end = end90.toISOString().slice(0, 10)
-    fetch(`/api/calendar-events/?start=${start}&end=${end}`)
+    apiFetch(`/api/calendar-events/?start=${start}&end=${end}`)
       .then(r => r.json())
       .then(data => { setEvents(Array.isArray(data) ? data : []); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = events.filter(e => {
     if (typeFilter !== 'all' && e.type !== typeFilter) return false
@@ -222,9 +223,22 @@ function ListView({ onCreateWO, onEditWO }) {
       </div>
 
       {loading ? (
-        <div className="loading">Loading…</div>
+        <div className="td-loading" style={{ padding: '2rem 0' }}>
+          <span className="td-loading-inner"><span className="spinner" />Loading events…</span>
+        </div>
+      ) : events.length === 0 ? (
+        <div className="empty-state">
+          <p>No scheduled events in the next 90 days.</p>
+          <p className="meta">Work orders and active maintenance schedules will appear here once added.</p>
+        </div>
       ) : filtered.length === 0 ? (
-        <div className="empty-state"><p>No events in the next 90 days.</p></div>
+        <div className="empty-state">
+          <p>No events match the selected filters.</p>
+          <button className="btn-secondary" style={{ marginTop: '0.75rem' }}
+            onClick={() => { setTypeFilter('all'); setStatusFilter('all') }}>
+            Clear filters
+          </button>
+        </div>
       ) : (
         <div className="table-wrapper">
           <table className="data-table">
@@ -263,7 +277,7 @@ function ListView({ onCreateWO, onEditWO }) {
                         piano: String(ev.piano_id),
                         order_type: 'Preventive',
                         description: ev.description,
-                      })}>Create WO</button>
+                      }, ev)}>Create WO</button>
                     )}
                   </td>
                 </tr>
@@ -284,24 +298,33 @@ export default function SchedulePage() {
   const [editingWO, setEditingWO] = useState(null)
   const [prefillWO, setPrefillWO] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  // Tracks the schedule_id that triggered a "Create WO" — so we can delete it after save
+  const [sourceScheduleId, setSourceScheduleId] = useState(null)
 
-  function openCreate(prefill = {}) {
+  function openCreate(prefill = {}, schedEv = null) {
     setEditingWO(null)
     setPrefillWO(prefill)
+    setSourceScheduleId(schedEv?.schedule_id ?? null)
     setWoModal(true)
   }
 
   function openEdit(ev) {
     // ev is a calendar event shape; fetch the real WO from API
     if (ev.work_order_id) {
-      fetch(`/api/work-orders/${ev.work_order_id}/`)
+      apiFetch(`/api/work-orders/${ev.work_order_id}/`)
         .then(r => r.json())
         .then(wo => { setEditingWO(wo); setPrefillWO(null); setWoModal(true) })
     }
   }
 
-  function handleSaved() {
+  async function handleSaved() {
     setWoModal(false)
+    // If the WO was created from a schedule, delete that schedule so it never reappears
+    if (sourceScheduleId) {
+      await apiFetch(`/api/schedules/${sourceScheduleId}/`, { method: 'DELETE' })
+      setSourceScheduleId(null)
+    }
+    // Reload the calendar/list by remounting the tab content
     setRefreshKey(k => k + 1)
   }
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import PianoFormModal from '../components/PianoFormModal'
 import WorkOrderFormModal from '../components/WorkOrderFormModal'
+import { apiFetch } from '../api'
 import './PianoProfilePage.css'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -88,7 +89,7 @@ function PhotosTab({ pianoId, photos, onPhotosChanged }) {
     fd.append('image', file)
     fd.append('caption', caption)
     try {
-      const res = await fetch('/api/photos/', { method: 'POST', body: fd })
+      const res = await apiFetch('/api/photos/', { method: 'POST', body: fd })
       if (!res.ok) {
         const d = await res.json()
         setError(JSON.stringify(d))
@@ -106,12 +107,12 @@ function PhotosTab({ pianoId, photos, onPhotosChanged }) {
 
   async function handleDelete(photo) {
     if (!window.confirm('Delete this photo?')) return
-    await fetch(`/api/photos/${photo.id}/`, { method: 'DELETE' })
+    await apiFetch(`/api/photos/${photo.id}/`, { method: 'DELETE' })
     onPhotosChanged()
   }
 
   async function handleSetProfile(photo) {
-    await fetch(`/api/photos/${photo.id}/set_profile/`, { method: 'POST' })
+    await apiFetch(`/api/photos/${photo.id}/set_profile/`, { method: 'POST' })
     onPhotosChanged()
   }
 
@@ -180,13 +181,20 @@ function PhotosTab({ pianoId, photos, onPhotosChanged }) {
 
 // ─── Tab: Work History ────────────────────────────────────────────────────
 
-function WorkHistoryTab({ workOrders, onWorkOrderSaved }) {
+function WorkHistoryTab({ workOrders, pianoId, onWorkOrderSaved }) {
   const [editingWO, setEditingWO] = useState(null)
+  const [createOpen, setCreateOpen] = useState(false)
 
   return (
     <div className="work-history-tab">
       {workOrders.length === 0 ? (
-        <div className="empty-tab">No work orders for this piano yet.</div>
+        <div className="empty-tab">
+          <p>No work orders for this piano yet.</p>
+          <button className="btn-primary" style={{ marginTop: '0.75rem' }}
+            onClick={() => setCreateOpen(true)}>
+            Create First Work Order
+          </button>
+        </div>
       ) : (
         <div className="table-wrapper">
           <table className="profile-table">
@@ -226,11 +234,12 @@ function WorkHistoryTab({ workOrders, onWorkOrderSaved }) {
         </div>
       )}
 
-      {editingWO && (
+      {(editingWO || createOpen) && (
         <WorkOrderFormModal
-          workOrder={editingWO}
-          onClose={() => setEditingWO(null)}
-          onSaved={() => { setEditingWO(null); onWorkOrderSaved() }}
+          workOrder={editingWO ?? null}
+          prefill={createOpen && !editingWO ? { piano: String(pianoId) } : null}
+          onClose={() => { setEditingWO(null); setCreateOpen(false) }}
+          onSaved={() => { setEditingWO(null); setCreateOpen(false); onWorkOrderSaved() }}
         />
       )}
     </div>
@@ -250,7 +259,7 @@ function UpcomingTasksTab({ pianoId }) {
     endDate.setDate(endDate.getDate() + 90)
     const end = endDate.toISOString().slice(0, 10)
 
-    fetch(`/api/calendar-events/?start=${start}&end=${end}`)
+    apiFetch(`/api/calendar-events/?start=${start}&end=${end}`)
       .then(r => r.json())
       .then(data => {
         const filtered = data.filter(ev => String(ev.piano_id) === String(pianoId))
@@ -313,7 +322,12 @@ function SchedulesTab({ schedules }) {
   return (
     <div className="schedules-tab">
       {schedules.length === 0 ? (
-        <div className="empty-tab">No active maintenance schedules for this piano.</div>
+        <div className="empty-tab">
+          <p>No active maintenance schedules for this piano.</p>
+          <p className="meta" style={{ marginTop: '0.4rem' }}>
+            Go to <Link to="/maintenance">Maintenance</Link> to add a schedule or apply a template.
+          </p>
+        </div>
       ) : (
         <div className="table-wrapper">
           <table className="profile-table">
@@ -365,7 +379,7 @@ export default function PianoProfilePage() {
 
   const loadProfile = useCallback(() => {
     setLoading(true)
-    fetch(`/api/pianos/${id}/profile/`)
+    apiFetch(`/api/pianos/${id}/profile/`)
       .then(r => {
         if (!r.ok) throw new Error('Not found')
         return r.json()
@@ -475,6 +489,7 @@ export default function PianoProfilePage() {
         {activeTab === 'Work History' && (
           <WorkHistoryTab
             workOrders={work_orders}
+            pianoId={id}
             onWorkOrderSaved={loadProfile}
           />
         )}

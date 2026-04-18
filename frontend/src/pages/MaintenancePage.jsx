@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import ScheduleFormModal from '../components/ScheduleFormModal'
 import TemplateFormModal from '../components/TemplateFormModal'
 import ApplyTemplateModal from '../components/ApplyTemplateModal'
+import { apiFetch } from '../api'
 import './MaintenancePage.css'
 
 const TASK_TYPE_COLORS = {
@@ -34,7 +35,7 @@ function SchedulesTab() {
 
   const load = useCallback(() => {
     setLoading(true)
-    fetch('/api/schedules/')
+    apiFetch('/api/schedules/')
       .then(r => r.json())
       .then(data => { setSchedules(data.results ?? data); setLoading(false) })
       .catch(() => { setError('Failed to load schedules.'); setLoading(false) })
@@ -43,9 +44,20 @@ function SchedulesTab() {
   useEffect(() => { load() }, [load])
 
   async function handleDelete(s) {
-    await fetch(`/api/schedules/${s.id}/`, { method: 'DELETE' })
-    setDeleteConfirm(null)
-    load()
+    try {
+      const res = await apiFetch(`/api/schedules/${s.id}/`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.detail || 'Failed to delete schedule.')
+        setDeleteConfirm(null)
+        return
+      }
+      setDeleteConfirm(null)
+      load()
+    } catch {
+      setError('Network error — could not delete schedule.')
+      setDeleteConfirm(null)
+    }
   }
 
   return (
@@ -61,33 +73,39 @@ function SchedulesTab() {
 
       {error && <div className="page-error">{error}</div>}
 
-      {loading ? (
-        <div className="loading">Loading…</div>
-      ) : schedules.length === 0 ? (
-        <div className="empty-state">
-          <p>No schedules yet.</p>
-          <button className="btn-primary" onClick={() => { setEditing(null); setModalOpen(true) }}>
-            Add your first schedule
-          </button>
-        </div>
-      ) : (
-        <div className="table-wrapper">
-          <table className="data-table">
-            <thead>
+      <div className="table-wrapper">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Piano</th>
+              <th>Location</th>
+              <th>Task</th>
+              <th>Type</th>
+              <th>Every</th>
+              <th>Warn</th>
+              <th>Source</th>
+              <th>Active</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
               <tr>
-                <th>Piano</th>
-                <th>Location</th>
-                <th>Task</th>
-                <th>Type</th>
-                <th>Every</th>
-                <th>Warn</th>
-                <th>Source</th>
-                <th>Active</th>
-                <th>Actions</th>
+                <td colSpan={9} className="td-loading">
+                  <span className="td-loading-inner"><span className="spinner" />Loading schedules…</span>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {schedules.map(s => (
+            ) : schedules.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="td-empty">
+                  No schedules yet.{' '}
+                  <button className="btn-link" onClick={() => { setEditing(null); setModalOpen(true) }}>
+                    Add your first schedule
+                  </button>
+                </td>
+              </tr>
+            ) : (
+              schedules.map(s => (
                 <tr key={s.id}>
                   <td className="fw-medium">{s.piano_name}<br /><span className="meta">{s.piano_brand}</span></td>
                   <td>{s.piano_location}</td>
@@ -109,11 +127,10 @@ function SchedulesTab() {
                     <button className="btn-delete" onClick={() => setDeleteConfirm(s)}>Delete</button>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            )))}
+          </tbody>
+        </table>
+      </div>
 
       {modalOpen && (
         <ScheduleFormModal
@@ -152,7 +169,7 @@ function TemplatesTab() {
 
   const load = useCallback(() => {
     setLoading(true)
-    fetch('/api/schedule-templates/')
+    apiFetch('/api/schedule-templates/')
       .then(r => r.json())
       .then(data => { setTemplates(data.results ?? data); setLoading(false) })
       .catch(() => { setError('Failed to load templates.'); setLoading(false) })
@@ -161,9 +178,20 @@ function TemplatesTab() {
   useEffect(() => { load() }, [load])
 
   async function handleDelete(t) {
-    await fetch(`/api/schedule-templates/${t.id}/`, { method: 'DELETE' })
-    setDeleteConfirm(null)
-    load()
+    try {
+      const res = await apiFetch(`/api/schedule-templates/${t.id}/`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.detail || 'Failed to delete template.')
+        setDeleteConfirm(null)
+        return
+      }
+      setDeleteConfirm(null)
+      load()
+    } catch {
+      setError('Network error — could not delete template.')
+      setDeleteConfirm(null)
+    }
   }
 
   return (
@@ -180,7 +208,9 @@ function TemplatesTab() {
       {error && <div className="page-error">{error}</div>}
 
       {loading ? (
-        <div className="loading">Loading…</div>
+        <div className="loading">
+          <span className="td-loading-inner"><span className="spinner" />Loading templates…</span>
+        </div>
       ) : templates.length === 0 ? (
         <div className="empty-state">
           <p>No templates yet.</p>

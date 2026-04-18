@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, Technician, Photo
+from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, Technician, Photo, MaintenanceLog
 
 
 class LocationSerializer(serializers.ModelSerializer):
@@ -84,11 +84,34 @@ class TechnicianMinimalSerializer(serializers.ModelSerializer):
         return obj.get_full_name() or obj.username
 
 
+class MaintenanceLogSerializer(serializers.ModelSerializer):
+    technician_name = serializers.SerializerMethodField(read_only=True)
+    piano           = serializers.PrimaryKeyRelatedField(source='work_order.piano', read_only=True)
+    piano_name      = serializers.CharField(source='work_order.piano.name', read_only=True)
+
+    class Meta:
+        model = MaintenanceLog
+        fields = [
+            'id', 'work_order', 'technician', 'technician_name',
+            'piano', 'piano_name',
+            'hours_worked', 'work_performed', 'notes', 'logged_at',
+        ]
+        read_only_fields = ['logged_at']
+
+    def get_technician_name(self, obj):
+        return obj.technician.get_full_name() or obj.technician.username
+
+
 class WorkOrderSerializer(serializers.ModelSerializer):
-    piano_name          = serializers.CharField(source='piano.name',          read_only=True)
-    piano_brand         = serializers.CharField(source='piano.brand',         read_only=True)
-    piano_location      = serializers.CharField(source='piano.location.name', read_only=True)
-    assigned_tech_name  = serializers.CharField(source='assigned_tech.get_full_name', read_only=True)
+    piano_name         = serializers.CharField(source='piano.name',          read_only=True)
+    piano_brand        = serializers.CharField(source='piano.brand',         read_only=True)
+    piano_location     = serializers.CharField(source='piano.location.name', read_only=True)
+    assigned_tech_name = serializers.SerializerMethodField(read_only=True)
+
+    def get_assigned_tech_name(self, obj):
+        if obj.assigned_tech:
+            return obj.assigned_tech.get_full_name() or obj.assigned_tech.username
+        return None
 
     class Meta:
         model = WorkOrder

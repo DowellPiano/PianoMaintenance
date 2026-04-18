@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { apiFetch } from '../api'
+import { parseApiErrors } from '../formUtils'
 import './FormModal.css'
 
 const TASK_TYPES = ['Tuning', 'Regulation', 'Voicing', 'Cleaning', 'Inspection', 'Other']
@@ -16,12 +18,16 @@ export default function ScheduleFormModal({ schedule, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY)
   const [pianos, setPianos] = useState([])
   const [saving, setSaving] = useState(false)
+  const [loadingPianos, setLoadingPianos] = useState(true)
   const [error, setError] = useState(null)
+  const [fieldErrors, setFieldErrors] = useState({})
 
   useEffect(() => {
-    fetch('/api/pianos/')
+    setLoadingPianos(true)
+    apiFetch('/api/pianos/')
       .then(r => r.json())
-      .then(data => setPianos(data.results ?? data))
+      .then(data => { setPianos(data.results ?? data); setLoadingPianos(false) })
+      .catch(() => setLoadingPianos(false))
   }, [])
 
   useEffect(() => {
@@ -42,23 +48,27 @@ export default function ScheduleFormModal({ schedule, onClose, onSaved }) {
   function handleChange(e) {
     const { name, value, type, checked } = e.target
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
+    if (fieldErrors[name]) setFieldErrors(fe => ({ ...fe, [name]: undefined }))
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
     setError(null)
+    setFieldErrors({})
     const url = schedule ? `/api/schedules/${schedule.id}/` : '/api/schedules/'
     const method = schedule ? 'PUT' : 'POST'
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, piano: Number(form.piano) }),
       })
       if (!res.ok) {
         const data = await res.json()
-        setError(JSON.stringify(data))
+        const { fields, banner } = parseApiErrors(data)
+        setFieldErrors(fields)
+        setError(banner)
       } else {
         onSaved(await res.json())
       }
@@ -80,39 +90,77 @@ export default function ScheduleFormModal({ schedule, onClose, onSaved }) {
         <form onSubmit={handleSubmit} className="piano-form">
           <label>
             Piano *
-            <select name="piano" value={form.piano} onChange={handleChange} required>
-              <option value="">— Select piano —</option>
+            <select
+              name="piano"
+              value={form.piano}
+              onChange={handleChange}
+              required
+              disabled={loadingPianos}
+              className={fieldErrors.piano ? 'input-error' : undefined}
+            >
+              <option value="">{loadingPianos ? 'Loading…' : '— Select piano —'}</option>
               {pianos.map(p => (
                 <option key={p.id} value={p.id}>
                   {p.name} — {p.brand} ({p.location_name})
                 </option>
               ))}
             </select>
+            {fieldErrors.piano && <span className="field-error">{fieldErrors.piano}</span>}
           </label>
 
           <div className="form-row">
             <label>
               Task Name *
-              <input name="task_name" value={form.task_name} onChange={handleChange} required />
+              <input
+                name="task_name"
+                value={form.task_name}
+                onChange={handleChange}
+                required
+                className={fieldErrors.task_name ? 'input-error' : undefined}
+              />
+              {fieldErrors.task_name && <span className="field-error">{fieldErrors.task_name}</span>}
             </label>
             <label>
               Task Type *
-              <select name="task_type" value={form.task_type} onChange={handleChange} required>
+              <select
+                name="task_type"
+                value={form.task_type}
+                onChange={handleChange}
+                required
+                className={fieldErrors.task_type ? 'input-error' : undefined}
+              >
                 {TASK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
+              {fieldErrors.task_type && <span className="field-error">{fieldErrors.task_type}</span>}
             </label>
           </div>
 
           <div className="form-row">
             <label>
               Interval (days) *
-              <input type="number" name="interval_days" value={form.interval_days}
-                onChange={handleChange} min={1} required />
+              <input
+                type="number"
+                name="interval_days"
+                value={form.interval_days}
+                onChange={handleChange}
+                min={1}
+                required
+                className={fieldErrors.interval_days ? 'input-error' : undefined}
+              />
+              {fieldErrors.interval_days && <span className="field-error">{fieldErrors.interval_days}</span>}
             </label>
             <label>
               Warning (days before) *
-              <input type="number" name="warning_days_before" value={form.warning_days_before}
-                onChange={handleChange} min={0} required />
+              <input
+                type="number"
+                name="warning_days_before"
+                value={form.warning_days_before}
+                onChange={handleChange}
+                min={0}
+                required
+                className={fieldErrors.warning_days_before ? 'input-error' : undefined}
+              />
+              {fieldErrors.warning_days_before && <span className="field-error">{fieldErrors.warning_days_before}</span>}
             </label>
           </div>
 

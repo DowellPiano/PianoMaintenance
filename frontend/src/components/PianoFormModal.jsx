@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { apiFetch } from '../api'
+import { parseApiErrors } from '../formUtils'
 import './PianoFormModal.css'
 
 const EMPTY_FORM = {
@@ -17,13 +19,16 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [locations, setLocations] = useState([])
   const [saving, setSaving] = useState(false)
+  const [loadingLocations, setLoadingLocations] = useState(true)
   const [error, setError] = useState(null)
+  const [fieldErrors, setFieldErrors] = useState({})
 
   useEffect(() => {
-    fetch('/api/locations/')
+    setLoadingLocations(true)
+    apiFetch('/api/locations/')
       .then(r => r.json())
-      .then(data => setLocations(data.results ?? data))
-      .catch(() => setError('Failed to load locations.'))
+      .then(data => { setLocations(data.results ?? data); setLoadingLocations(false) })
+      .catch(() => { setError('Failed to load locations.'); setLoadingLocations(false) })
   }, [])
 
   useEffect(() => {
@@ -47,18 +52,20 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
   function handleChange(e) {
     const { name, value } = e.target
     setForm(f => ({ ...f, [name]: value }))
+    if (fieldErrors[name]) setFieldErrors(fe => ({ ...fe, [name]: undefined }))
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
     setError(null)
+    setFieldErrors({})
 
     const url = piano ? `/api/pianos/${piano.id}/` : '/api/pianos/'
     const method = piano ? 'PUT' : 'POST'
 
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -70,7 +77,9 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
       })
       if (!res.ok) {
         const data = await res.json()
-        setError(JSON.stringify(data))
+        const { fields, banner } = parseApiErrors(data)
+        setFieldErrors(fields)
+        setError(banner)
       } else {
         const saved = await res.json()
         onSaved(saved)
@@ -96,42 +105,83 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
           <div className="form-row">
             <label>
               Name *
-              <input name="name" value={form.name} onChange={handleChange} required />
+              <input
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                required
+                className={fieldErrors.name ? 'input-error' : undefined}
+              />
+              {fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
             </label>
             <label>
               Brand *
-              <input name="brand" value={form.brand} onChange={handleChange} required />
+              <input
+                name="brand"
+                value={form.brand}
+                onChange={handleChange}
+                required
+                className={fieldErrors.brand ? 'input-error' : undefined}
+              />
+              {fieldErrors.brand && <span className="field-error">{fieldErrors.brand}</span>}
             </label>
           </div>
 
           <div className="form-row">
             <label>
               Model
-              <input name="model" value={form.model} onChange={handleChange} />
+              <input
+                name="model"
+                value={form.model}
+                onChange={handleChange}
+                className={fieldErrors.model ? 'input-error' : undefined}
+              />
+              {fieldErrors.model && <span className="field-error">{fieldErrors.model}</span>}
             </label>
             <label>
               Serial Number
-              <input name="serial_number" value={form.serial_number} onChange={handleChange} />
+              <input
+                name="serial_number"
+                value={form.serial_number}
+                onChange={handleChange}
+                className={fieldErrors.serial_number ? 'input-error' : undefined}
+              />
+              {fieldErrors.serial_number && <span className="field-error">{fieldErrors.serial_number}</span>}
             </label>
           </div>
 
           <div className="form-row">
             <label>
               Type *
-              <select name="piano_type" value={form.piano_type} onChange={handleChange} required>
+              <select
+                name="piano_type"
+                value={form.piano_type}
+                onChange={handleChange}
+                required
+                className={fieldErrors.piano_type ? 'input-error' : undefined}
+              >
                 <option value="Grand">Grand</option>
                 <option value="Upright">Upright</option>
                 <option value="Digital">Digital</option>
               </select>
+              {fieldErrors.piano_type && <span className="field-error">{fieldErrors.piano_type}</span>}
             </label>
             <label>
               Location *
-              <select name="location" value={form.location} onChange={handleChange} required>
-                <option value="">— Select location —</option>
+              <select
+                name="location"
+                value={form.location}
+                onChange={handleChange}
+                required
+                disabled={loadingLocations}
+                className={fieldErrors.location ? 'input-error' : undefined}
+              >
+                <option value="">{loadingLocations ? 'Loading…' : '— Select location —'}</option>
                 {locations.map(l => (
                   <option key={l.id} value={l.id}>{l.name}</option>
                 ))}
               </select>
+              {fieldErrors.location && <span className="field-error">{fieldErrors.location}</span>}
             </label>
           </div>
 
@@ -147,7 +197,9 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
                 min="1700"
                 max="2100"
                 step="1"
+                className={fieldErrors.year_built ? 'input-error' : undefined}
               />
+              {fieldErrors.year_built && <span className="field-error">{fieldErrors.year_built}</span>}
             </label>
             <label>
               Year Acquired
@@ -160,13 +212,22 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
                 min="1700"
                 max="2100"
                 step="1"
+                className={fieldErrors.year_acquired ? 'input-error' : undefined}
               />
+              {fieldErrors.year_acquired && <span className="field-error">{fieldErrors.year_acquired}</span>}
             </label>
           </div>
 
           <label>
             Notes
-            <textarea name="notes" value={form.notes} onChange={handleChange} rows={3} />
+            <textarea
+              name="notes"
+              value={form.notes}
+              onChange={handleChange}
+              rows={3}
+              className={fieldErrors.notes ? 'input-error' : undefined}
+            />
+            {fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
           </label>
 
           <div className="modal-actions">

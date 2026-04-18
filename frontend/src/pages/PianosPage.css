@@ -39,6 +39,16 @@
   text-align: center;
 }
 
+.btn-link {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
