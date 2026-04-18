@@ -174,3 +174,24 @@
   cursor: pointer;
 }
 .btn-danger:hover { background: #b91c1c; }
+
+/* Inline field validation errors */
+.field-error {
+  font-size: 0.78rem;
+  color: #b91c1c;
+  font-weight: 400;
+  margin-top: -0.15rem;
+}
+
+.piano-form input.input-error,
+.piano-form select.input-error,
+.piano-form textarea.input-error {
+  border-color: #f87171;
+  background: #fff8f8;
+}
+
+.piano-form input.input-error:focus,
+.piano-form select.input-error:focus,
+.piano-form textarea.input-error:focus {
+  border-color: #ef4444;
+}

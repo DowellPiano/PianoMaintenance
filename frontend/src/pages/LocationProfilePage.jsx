@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import LocationFormModal from '../components/LocationFormModal'
 import PianoFormModal from '../components/PianoFormModal'
+import { apiFetch } from '../api'
 import './LocationProfilePage.css'
 
 const TYPE_CLASS = { Grand: 'grand', Upright: 'upright', Digital: 'digital' }
@@ -20,7 +21,7 @@ export default function LocationProfilePage() {
 
   function loadProfile() {
     setLoading(true)
-    fetch(`/api/locations/${id}/profile/`)
+    apiFetch(`/api/locations/${id}/profile/`)
       .then(r => { if (!r.ok) throw new Error('Not found'); return r.json() })
       .then(d  => { setData(d); setLoading(false) })
       .catch(()  => { setError('Could not load location.'); setLoading(false) })
@@ -41,7 +42,7 @@ export default function LocationProfilePage() {
   async function handleDeletePiano(piano) {
     setDeleteError(null)
     try {
-      const res = await fetch(`/api/pianos/${piano.id}/`, { method: 'DELETE' })
+      const res = await apiFetch(`/api/pianos/${piano.id}/`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed.')
       setDeleteConfirm(null)
       loadProfile()
@@ -85,7 +86,12 @@ export default function LocationProfilePage() {
         </div>
 
         {pianos.length === 0 ? (
-          <div className="lp-empty">No pianos assigned to this location yet.</div>
+          <div className="lp-empty">
+            <p>No pianos at this location yet.</p>
+            <p className="meta" style={{ marginTop: '0.35rem' }}>
+              Add a piano on the <Link to="/pianos">Pianos</Link> page and assign it here.
+            </p>
+          </div>
         ) : (
           <div className="lp-piano-grid">
             {pianos.map(piano => (

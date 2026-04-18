@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
+import { apiFetch } from '../api'
+import { parseApiErrors } from '../formUtils'
 import './FormModal.css'
 
 export default function LocationFormModal({ location, onClose, onSaved }) {
   const [form, setForm] = useState({ name: '', building: '', address: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
+  const [fieldErrors, setFieldErrors] = useState({})
 
   useEffect(() => {
     if (location) {
@@ -13,35 +16,42 @@ export default function LocationFormModal({ location, onClose, onSaved }) {
         building: location.building || '',
         address:  location.address  || '',
       })
+    } else {
+      setForm({ name: '', building: '', address: '' })
     }
   }, [location])
 
   function handleChange(e) {
-    setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+    const { name, value } = e.target
+    setForm(f => ({ ...f, [name]: value }))
+    if (fieldErrors[name]) setFieldErrors(fe => ({ ...fe, [name]: undefined }))
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.name.trim()) { setError('Name is required.'); return }
     setSaving(true)
     setError(null)
+    setFieldErrors({})
 
     const url    = location ? `/api/locations/${location.id}/` : '/api/locations/'
     const method = location ? 'PUT' : 'POST'
 
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(Object.values(data).flat().join(' ') || 'Save failed.')
+        const { fields, banner } = parseApiErrors(data)
+        setFieldErrors(fields)
+        setError(banner)
+      } else {
+        onSaved()
       }
-      onSaved()
-    } catch (err) {
-      setError(err.message)
+    } catch {
+      setError('Network error — is Django running?')
     } finally {
       setSaving(false)
     }
@@ -66,7 +76,9 @@ export default function LocationFormModal({ location, onClose, onSaved }) {
               onChange={handleChange}
               placeholder="e.g. Main Hall"
               required
+              className={fieldErrors.name ? 'input-error' : undefined}
             />
+            {fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
           </label>
 
           <label>
@@ -76,7 +88,9 @@ export default function LocationFormModal({ location, onClose, onSaved }) {
               value={form.building}
               onChange={handleChange}
               placeholder="e.g. Smith Music Center"
+              className={fieldErrors.building ? 'input-error' : undefined}
             />
+            {fieldErrors.building && <span className="field-error">{fieldErrors.building}</span>}
           </label>
 
           <label>
@@ -87,7 +101,9 @@ export default function LocationFormModal({ location, onClose, onSaved }) {
               onChange={handleChange}
               placeholder="123 Main St, City, State 12345"
               rows={3}
+              className={fieldErrors.address ? 'input-error' : undefined}
             />
+            {fieldErrors.address && <span className="field-error">{fieldErrors.address}</span>}
           </label>
 
           <div className="modal-actions">

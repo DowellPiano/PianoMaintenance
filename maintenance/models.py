@@ -127,7 +127,7 @@ class MaintenanceSchedule(models.Model):
         ordering = ["piano", "task_type"]
 
     def __str__(self):
-        return f"{self.piano} — {self.task_name} (every {self.interval_days}d)"
+        return f"{self.task_name} — every {self.interval_days}d"
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +184,7 @@ class WorkOrder(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"WO-{self.pk} | {self.piano} | {self.status}"
+        return f"WO-{self.pk} · {self.order_type} · {self.status}"
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +209,7 @@ class MaintenanceLog(models.Model):
         ordering = ["-logged_at"]
 
     def __str__(self):
-        return f"Log {self.pk} — {self.piano} by {self.technician}"
+        return f"Log #{self.pk} ({self.logged_at:%Y-%m-%d})"
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +251,7 @@ class ConditionReading(models.Model):
         ordering = ["-recorded_at"]
 
     def __str__(self):
-        return f"Reading {self.pk} — {self.piano} @ {self.recorded_at:%Y-%m-%d}"
+        return f"Reading #{self.pk} ({self.recorded_at:%Y-%m-%d})"
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +298,7 @@ class PartUsed(models.Model):
         verbose_name_plural = "Parts Used"
 
     def __str__(self):
-        return f"{self.quantity_used}x {self.part} (Log {self.log_id})"
+        return f"{self.quantity_used}× Part #{self.part_id} (Log #{self.log_id})"
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +334,7 @@ class MaintenanceRequest(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Request {self.pk} — {self.piano} [{self.status}]"
+        return f"Request #{self.pk} · {self.status}"
 
 
 # ---------------------------------------------------------------------------
@@ -352,4 +352,8 @@ class Photo(models.Model):
         ordering = ['-uploaded_at']
 
     def __str__(self):
-        return f"Photo {self.pk}"
+        if self.piano_id:
+            return f"Photo #{self.pk} (Piano #{self.piano_id})"
+        if self.work_order_id:
+            return f"Photo #{self.pk} (WO #{self.work_order_id})"
+        return f"Photo #{self.pk}"

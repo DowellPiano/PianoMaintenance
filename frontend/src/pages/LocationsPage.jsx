@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import LocationFormModal from '../components/LocationFormModal'
+import { apiFetch } from '../api'
 import './LocationsPage.css'
 
 export default function LocationsPage() {
@@ -14,7 +15,7 @@ export default function LocationsPage() {
 
   const loadLocations = useCallback(() => {
     setLoading(true)
-    fetch('/api/locations/')
+    apiFetch('/api/locations/')
       .then(r => r.json())
       .then(data => { setLocations(data.results ?? data); setLoading(false) })
       .catch(() => { setError('Failed to load locations — is Django running?'); setLoading(false) })
@@ -34,7 +35,7 @@ export default function LocationsPage() {
   async function handleDelete(loc) {
     setDeleteError(null)
     try {
-      const res = await fetch(`/api/locations/${loc.id}/`, { method: 'DELETE' })
+      const res = await apiFetch(`/api/locations/${loc.id}/`, { method: 'DELETE' })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.detail || 'Delete failed — this location may have pianos assigned to it.')

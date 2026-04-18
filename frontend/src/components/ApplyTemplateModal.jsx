@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { apiFetch } from '../api'
 import './FormModal.css'
 import './ApplyTemplateModal.css'
 
@@ -6,13 +7,16 @@ export default function ApplyTemplateModal({ template, onClose, onApplied }) {
   const [pianos, setPianos] = useState([])
   const [selected, setSelected] = useState(new Set())
   const [applying, setApplying] = useState(false)
+  const [loadingPianos, setLoadingPianos] = useState(true)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
 
   useEffect(() => {
-    fetch('/api/pianos/')
+    setLoadingPianos(true)
+    apiFetch('/api/pianos/')
       .then(r => r.json())
-      .then(data => setPianos(data.results ?? data))
+      .then(data => { setPianos(data.results ?? data); setLoadingPianos(false) })
+      .catch(() => setLoadingPianos(false))
   }, [])
 
   function togglePiano(id) {
@@ -36,7 +40,7 @@ export default function ApplyTemplateModal({ template, onClose, onApplied }) {
     setApplying(true)
     setError(null)
     try {
-      const res = await fetch(`/api/schedule-templates/${template.id}/apply_to_pianos/`, {
+      const res = await apiFetch(`/api/schedule-templates/${template.id}/apply_to_pianos/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ piano_ids: [...selected] }),
@@ -47,7 +51,7 @@ export default function ApplyTemplateModal({ template, onClose, onApplied }) {
       } else {
         const data = await res.json()
         setSuccess(`Created ${data.created} schedule${data.created !== 1 ? 's' : ''}.`)
-        setTimeout(() => { onApplied(); onClose() }, 1200)
+        onApplied()
       }
     } catch {
       setError('Network error — is Django running?')
@@ -91,7 +95,12 @@ export default function ApplyTemplateModal({ template, onClose, onApplied }) {
           </div>
 
           <div className="piano-checklist">
-            {Object.entries(byLocation).map(([loc, lPianos]) => (
+            {loadingPianos ? (
+              <div className="td-loading" style={{ justifyContent: 'center', padding: '1.5rem 0' }}>
+                <span className="td-loading-inner"><span className="spinner" />Loading pianos…</span>
+              </div>
+            ) : null}
+            {!loadingPianos && Object.entries(byLocation).map(([loc, lPianos]) => (
               <div key={loc} className="location-group">
                 <div className="location-label">{loc}</div>
                 {lPianos.map(p => (
@@ -107,21 +116,27 @@ export default function ApplyTemplateModal({ template, onClose, onApplied }) {
                 ))}
               </div>
             ))}
-            {pianos.length === 0 && (
+            {!loadingPianos && pianos.length === 0 && (
               <p className="empty-note">No pianos found. Add pianos first.</p>
             )}
           </div>
         </div>
 
         <div className="modal-actions apply-actions">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button
-            className="btn-primary"
-            onClick={handleApply}
-            disabled={selected.size === 0 || applying}
-          >
-            {applying ? 'Applying…' : `Apply to ${selected.size} Piano${selected.size !== 1 ? 's' : ''}`}
-          </button>
+          {success ? (
+            <button className="btn-primary" onClick={onClose}>Done</button>
+          ) : (
+            <>
+              <button className="btn-secondary" onClick={onClose}>Cancel</button>
+              <button
+                className="btn-primary"
+                onClick={handleApply}
+                disabled={selected.size === 0 || applying}
+              >
+                {applying ? 'Applying…' : `Apply to ${selected.size} Piano${selected.size !== 1 ? 's' : ''}`}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

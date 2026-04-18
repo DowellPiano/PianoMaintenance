@@ -11,6 +11,9 @@ from .api import (
     calendar_events,
     piano_profile,
     location_profile,
+    auth_login,
+    auth_logout,
+    auth_me,
 )
 
 router = DefaultRouter()
@@ -27,4 +30,8 @@ urlpatterns = [
     path('calendar-events/', calendar_events, name='calendar-events'),
     path('pianos/<int:piano_id>/profile/',       piano_profile,    name='piano-profile'),
     path('locations/<int:location_id>/profile/', location_profile, name='location-profile'),
+    # Auth
+    path('auth/login/',  auth_login,  name='auth-login'),
+    path('auth/logout/', auth_logout, name='auth-logout'),
+    path('auth/me/',     auth_me,     name='auth-me'),
 ]

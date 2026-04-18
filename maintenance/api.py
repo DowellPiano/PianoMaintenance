@@ -1,8 +1,12 @@
 from datetime import date, timedelta
 
-from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view
+from django.contrib.auth import authenticate
+from rest_framework import viewsets, status, filters as drf_filters
+from rest_framework.authtoken.models import Token
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, Technician, Photo
 from .serializers import (
@@ -26,6 +30,13 @@ class LocationViewSet(viewsets.ModelViewSet):
 class PianoViewSet(viewsets.ModelViewSet):
     queryset = Piano.objects.select_related('location').prefetch_related('photos').order_by('location__name', 'name')
     serializer_class = PianoSerializer
+
+    # Filtering: GET /api/pianos/?location=3&piano_type=Grand
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_fields  = ['location', 'piano_type']
+    # Search: GET /api/pianos/?search=steinway  (matches name, brand, serial_number)
+    search_fields     = ['name', 'brand', 'serial_number']
+    ordering_fields   = ['name', 'brand', 'piano_type', 'location__name', 'year_built', 'year_acquired']
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
@@ -64,6 +75,13 @@ class ScheduleTemplateViewSet(viewsets.ModelViewSet):
 
 class MaintenanceScheduleViewSet(viewsets.ModelViewSet):
     serializer_class = MaintenanceScheduleSerializer
+
+    # Filtering: GET /api/schedules/?piano=5&is_active=true&task_type=Tuning
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_fields  = ['piano', 'is_active', 'task_type']
+    # Search: GET /api/schedules/?search=tuning  (matches task_name and piano name)
+    search_fields     = ['task_name', 'piano__name']
+    ordering_fields   = ['piano__name', 'task_type', 'interval_days']
 
     def get_queryset(self):
         return MaintenanceSchedule.objects.select_related(
@@ -280,4 +298,63 @@ def location_profile(request, location_id):
     return Response({
         'location': location_data,
         'pianos':   piano_data,
+    })
+
+
+# ── Authentication endpoints ────────────────────────────────────────────────
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def auth_login(request):
+    """
+    POST { username, password } → { token, user }
+    The only endpoint that does not require an existing token.
+    """
+    username = request.data.get('username', '').strip()
+    password = request.data.get('password', '')
+    user = authenticate(request, username=username, password=password)
+    if not user:
+        return Response({'error': 'Invalid username or password.'}, status=status.HTTP_401_UNAUTHORIZED)
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response({
+        'token': token.key,
+        'user': {
+            'id':         user.id,
+            'username':   user.username,
+            'first_name': user.first_name,
+            'last_name':  user.last_name,
+            'email':      user.email,
+            'is_staff':   user.is_staff,
+        },
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def auth_logout(request):
+    """
+    POST (with token header) — deletes the token so it can no longer be used.
+    """
+    try:
+        request.user.auth_token.delete()
+    except Token.DoesNotExist:
+        pass
+    return Response({'ok': True})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def auth_me(request):
+    """
+    GET — returns the currently authenticated user's info.
+    Useful for the frontend to restore session on page refresh.
+    """
+    user = request.user
+    return Response({
+        'id':         user.id,
+        'username':   user.username,
+        'first_name': user.first_name,
+        'last_name':  user.last_name,
+        'email':      user.email,
+        'is_staff':   user.is_staff,
     })
