@@ -6,6 +6,7 @@ from .models import (
     Location,
     Piano,
     Technician,
+    Team,
     ScheduleTemplate,
     MaintenanceSchedule,
     WorkOrder,
@@ -279,3 +280,22 @@ class MaintenanceRequestAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         # piano + work_order columns; piano__location for list_filter
         return super().get_queryset(request).select_related("piano__location", "work_order")
+
+
+# ---------------------------------------------------------------------------
+# Team
+# ---------------------------------------------------------------------------
+@admin.register(Team)
+class TeamAdmin(admin.ModelAdmin):
+    list_display  = ("name", "manager", "member_count", "created_at")
+    search_fields = ("name",)
+    readonly_fields = ("created_at",)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("manager").annotate(
+            _member_count=Count("members")
+        )
+
+    @admin.display(description="Members")
+    def member_count(self, obj):
+        return obj._member_count

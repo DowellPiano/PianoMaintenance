@@ -62,6 +62,12 @@ class Technician(AbstractUser):
     explicitly to satisfy the spec and set the default clearly.
     """
     is_active = models.BooleanField(default=True)
+    team = models.ForeignKey(
+        'Team',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='members',
+    )
 
     class Meta:
         verbose_name = "Technician"
@@ -70,6 +76,23 @@ class Technician(AbstractUser):
     def __str__(self):
         full = self.get_full_name()
         return full if full else self.username
+
+
+# ---------------------------------------------------------------------------
+# Team
+# ---------------------------------------------------------------------------
+class Team(models.Model):
+    name = models.CharField(max_length=200, unique=True)
+    manager = models.ForeignKey(
+        'Technician',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='managed_teams',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
 
 
 # ---------------------------------------------------------------------------

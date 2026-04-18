@@ -10,7 +10,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import (
     Location, Piano, MaintenanceSchedule, ScheduleTemplate,
-    WorkOrder, MaintenanceLog, Technician, Photo,
+    WorkOrder, MaintenanceLog, Technician, Team, Photo,
     ConditionReading, Part, PartUsed, MaintenanceRequest,
 )
 from .serializers import (
@@ -22,6 +22,7 @@ from .serializers import (
     MaintenanceLogSerializer,
     TechnicianMinimalSerializer,
     TechnicianSerializer,
+    TeamSerializer,
     PhotoSerializer,
     ConditionReadingSerializer,
     PartSerializer,
@@ -165,6 +166,8 @@ class TechnicianViewSet(viewsets.ModelViewSet):
     queryset = Technician.objects.all().order_by('first_name', 'last_name')
 
     def get_serializer_class(self):
+        if self.action in ('list', 'retrieve'):
+            return TechnicianMinimalSerializer
         return TechnicianSerializer
 
     def get_permissions(self):
@@ -172,11 +175,50 @@ class TechnicianViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsStaffPermission()]
         return [IsAuthenticated()]
 
+    def destroy(self, request, *args, **kwargs):
+        technician = self.get_object()
+        has_work_orders = WorkOrder.objects.filter(assigned_tech=technician).exists()
+        has_logs        = MaintenanceLog.objects.filter(technician=technician).exists()
+        if has_work_orders or has_logs:
+            return Response(
+                {'error': 'Cannot delete technician with linked work orders or logs. Deactivate instead.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return super().destroy(request, *args, **kwargs)
+
 
 class IsStaffPermission(IsAuthenticated):
     """Extends IsAuthenticated: also requires is_staff=True."""
     def has_permission(self, request, view):
         return super().has_permission(request, view) and request.user.is_staff
+
+
+# ---------------------------------------------------------------------------
+# TeamViewSet
+# ---------------------------------------------------------------------------
+class TeamViewSet(viewsets.ModelViewSet):
+    queryset = Team.objects.select_related('manager').order_by('name')
+    serializer_class = TeamSerializer
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAuthenticated(), IsStaffPermission()]
+        return [IsAuthenticated()]
+
+    def retrieve(self, request, *args, **kwargs):
+        team = self.get_object()
+        data = TeamSerializer(team).data
+        members = team.members.all().order_by('first_name', 'last_name')
+        data['members'] = [
+            {
+                'id':        m.id,
+                'username':  m.username,
+                'full_name': m.get_full_name() or m.username,
+                'is_active': m.is_active,
+            }
+            for m in members
+        ]
+        return Response(data)
 
 
 # ---------------------------------------------------------------------------

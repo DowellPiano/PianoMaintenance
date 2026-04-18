@@ -8,6 +8,7 @@ from .api import (
     WorkOrderViewSet,
     MaintenanceLogViewSet,
     TechnicianViewSet,
+    TeamViewSet,
     PhotoViewSet,
     ConditionReadingViewSet,
     PartViewSet,
@@ -29,6 +30,7 @@ router.register(r'schedules',          MaintenanceScheduleViewSet, basename='sch
 router.register(r'schedule-templates', ScheduleTemplateViewSet,    basename='schedule-template')
 router.register(r'work-orders',        WorkOrderViewSet,           basename='work-order')
 router.register(r'technicians',        TechnicianViewSet,          basename='technician')
+router.register(r'teams',              TeamViewSet,                basename='team')
 router.register(r'photos',             PhotoViewSet,               basename='photo')
 router.register(r'maintenance-logs',   MaintenanceLogViewSet,      basename='maintenance-log')
 router.register(r'condition-readings', ConditionReadingViewSet,    basename='condition-reading')

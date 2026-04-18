@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Location, Piano, MaintenanceSchedule, ScheduleTemplate,
-    WorkOrder, Technician, Photo, MaintenanceLog,
+    WorkOrder, Technician, Team, Photo, MaintenanceLog,
     ConditionReading, Part, PartUsed, MaintenanceRequest,
 )
 
@@ -172,12 +172,14 @@ class PartUsedSerializer(serializers.ModelSerializer):
 class TechnicianSerializer(serializers.ModelSerializer):
     password  = serializers.CharField(write_only=True, required=False, allow_blank=True)
     full_name = serializers.SerializerMethodField(read_only=True)
+    team_name = serializers.CharField(source='team.name', read_only=True)
 
     class Meta:
         model = Technician
         fields = [
             'id', 'username', 'full_name', 'email', 'first_name', 'last_name',
             'is_active', 'is_staff', 'date_joined', 'password',
+            'team', 'team_name',
         ]
         read_only_fields = ['date_joined']
 
@@ -200,6 +202,26 @@ class TechnicianSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
+
+# ---------------------------------------------------------------------------
+# Team
+# ---------------------------------------------------------------------------
+class TeamSerializer(serializers.ModelSerializer):
+    manager_name = serializers.SerializerMethodField(read_only=True)
+    member_count = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Team
+        fields = ['id', 'name', 'manager', 'manager_name', 'member_count']
+
+    def get_manager_name(self, obj):
+        if obj.manager:
+            return obj.manager.get_full_name() or obj.manager.username
+        return None
+
+    def get_member_count(self, obj):
+        return obj.members.count()
 
 
 # ---------------------------------------------------------------------------
