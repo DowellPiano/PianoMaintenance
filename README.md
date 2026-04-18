@@ -179,31 +179,31 @@ All endpoints are under `/api/` and served by Django REST Framework.
 - [x] Overdue work order highlighting
 - [x] Technician assignment on work orders
 
+### P1 — Operations ✅ Complete
+- [x] Condition readings on log entry — pitch before (¢), pitch after (¢), humidity, temperature, overall rating
+- [x] Parts inventory CRUD — name, part #, supplier, unit cost, stock qty, reorder threshold, low-stock alerts
+- [x] Parts used on work orders — attach parts to log entry, stock auto-decrements
+- [x] Technician management — create, deactivate, reactivate, safe hard delete
+- [x] Team management — create teams, assign manager, assign technicians
+- [x] Maintenance request queue — list, filter, one-click assign to work order, live nav badge
+
 ---
 
 ## Feature Roadmap — What's Needed for Full CMMS
 
 ### ~~P0 — Core Workflow~~ ✅ Complete
+### ~~P1 — Operations~~ ✅ Complete
 
-### P1 — Operations (High Value)
-
-| # | Feature | Notes |
-|---|---------|-------|
-| 7 | **Condition Readings UI** | Log pitch before/after tuning (¢), humidity, temperature, and overall rating when completing a work order. |
-| 8 | **Piano Detail Page** | Full history: work order timeline, condition trend charts, schedule overview, recent logs. |
-| 9 | **Parts Inventory Management** | CRUD for parts stock, unit cost, reorder thresholds. Show low-stock alerts. |
-| 10 | **Parts Usage on Work Orders** | Attach parts consumed (and qty) to a maintenance log; auto-decrement stock. |
-| 11 | **Technician Management** | Admin can create/deactivate technicians, set roles, view workload. |
-| 12 | **Maintenance Request Queue** | List incoming public requests, assign them to a work order, mark resolved. |
+### P2 — Scheduling Intelligence
 
 ### P2 — Scheduling Intelligence
 
 | # | Feature | Notes |
 |---|---------|-------|
-| 14 | **Automated WO Generation (scheduled)** | Replace manual CLI command with a Django-Q / Celery beat task running on a cron. |
-| 15 | **Overdue & Upcoming Alerts** | Email or in-app notifications when a task enters the warning window or goes overdue. |
-| 16 | **Due Date Calendar View** | Calendar UI showing upcoming and overdue scheduled tasks. |
-| 17 | **Schedule Pause / Skip** | Pause a schedule (e.g., piano out of service) or skip one cycle without deleting. |
+| 13 | **Automated WO Generation (scheduled)** | Replace manual CLI command with a Django-Q / Celery beat task running on a cron. |
+| 14 | **Overdue & Upcoming Alerts** | Email or in-app notifications when a task enters the warning window or goes overdue. |
+| 15 | **Due Date Calendar View** | Calendar UI showing upcoming and overdue scheduled tasks. Already scaffolded — needs polish and full integration. |
+| 16 | **Schedule Pause / Skip** | Pause a schedule (e.g., piano out of service) or skip one cycle without deleting. |
 
 ### P3 — Reporting & Analytics
 
