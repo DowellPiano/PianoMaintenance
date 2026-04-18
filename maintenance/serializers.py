@@ -103,10 +103,15 @@ class MaintenanceLogSerializer(serializers.ModelSerializer):
 
 
 class WorkOrderSerializer(serializers.ModelSerializer):
-    piano_name          = serializers.CharField(source='piano.name',          read_only=True)
-    piano_brand         = serializers.CharField(source='piano.brand',         read_only=True)
-    piano_location      = serializers.CharField(source='piano.location.name', read_only=True)
-    assigned_tech_name  = serializers.CharField(source='assigned_tech.get_full_name', read_only=True)
+    piano_name         = serializers.CharField(source='piano.name',          read_only=True)
+    piano_brand        = serializers.CharField(source='piano.brand',         read_only=True)
+    piano_location     = serializers.CharField(source='piano.location.name', read_only=True)
+    assigned_tech_name = serializers.SerializerMethodField(read_only=True)
+
+    def get_assigned_tech_name(self, obj):
+        if obj.assigned_tech:
+            return obj.assigned_tech.get_full_name() or obj.assigned_tech.username
+        return None
 
     class Meta:
         model = WorkOrder
