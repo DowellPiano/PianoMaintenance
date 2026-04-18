@@ -8,7 +8,12 @@ from .api import (
     WorkOrderViewSet,
     MaintenanceLogViewSet,
     TechnicianViewSet,
+    TeamViewSet,
     PhotoViewSet,
+    ConditionReadingViewSet,
+    PartViewSet,
+    PartUsedViewSet,
+    MaintenanceRequestViewSet,
     dashboard_stats,
     calendar_events,
     piano_profile,
@@ -25,8 +30,13 @@ router.register(r'schedules',          MaintenanceScheduleViewSet, basename='sch
 router.register(r'schedule-templates', ScheduleTemplateViewSet,    basename='schedule-template')
 router.register(r'work-orders',        WorkOrderViewSet,           basename='work-order')
 router.register(r'technicians',        TechnicianViewSet,          basename='technician')
+router.register(r'teams',              TeamViewSet,                basename='team')
 router.register(r'photos',             PhotoViewSet,               basename='photo')
 router.register(r'maintenance-logs',   MaintenanceLogViewSet,      basename='maintenance-log')
+router.register(r'condition-readings', ConditionReadingViewSet,    basename='condition-reading')
+router.register(r'parts',             PartViewSet,                 basename='part')
+router.register(r'parts-used',        PartUsedViewSet,             basename='parts-used')
+router.register(r'maintenance-requests', MaintenanceRequestViewSet, basename='maintenance-request')
 
 urlpatterns = [
     path('', include(router.urls)),

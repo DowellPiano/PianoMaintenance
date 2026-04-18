@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
 
@@ -61,6 +62,12 @@ class Technician(AbstractUser):
     explicitly to satisfy the spec and set the default clearly.
     """
     is_active = models.BooleanField(default=True)
+    team = models.ForeignKey(
+        'Team',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='members',
+    )
 
     class Meta:
         verbose_name = "Technician"
@@ -69,6 +76,23 @@ class Technician(AbstractUser):
     def __str__(self):
         full = self.get_full_name()
         return full if full else self.username
+
+
+# ---------------------------------------------------------------------------
+# Team
+# ---------------------------------------------------------------------------
+class Team(models.Model):
+    name = models.CharField(max_length=200, unique=True)
+    manager = models.ForeignKey(
+        'Technician',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='managed_teams',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
 
 
 # ---------------------------------------------------------------------------
@@ -232,8 +256,12 @@ class ConditionReading(models.Model):
         on_delete=models.SET_NULL,
         related_name="condition_readings",
     )
-    pitch_offset_cents = models.DecimalField(
-        max_digits=6, decimal_places=2, null=True, blank=True
+    pitch_before_cents = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        db_column='pitch_before_cents',
+    )
+    pitch_after_cents = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
     )
     humidity_pct = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True
@@ -245,7 +273,7 @@ class ConditionReading(models.Model):
         max_length=10, choices=OverallRating.choices, blank=True
     )
     notes = models.TextField(blank=True)
-    recorded_at = models.DateTimeField(auto_now_add=True)
+    recorded_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ["-recorded_at"]
