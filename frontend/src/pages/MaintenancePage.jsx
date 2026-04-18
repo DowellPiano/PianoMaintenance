@@ -127,7 +127,7 @@ function SchedulesTab() {
                     <button className="btn-delete" onClick={() => setDeleteConfirm(s)}>Delete</button>
                   </td>
                 </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

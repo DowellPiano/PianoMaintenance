@@ -117,7 +117,7 @@ export default function PianosPage() {
                     <button className="btn-delete" onClick={() => setDeleteConfirm(piano)}>Delete</button>
                   </td>
                 </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

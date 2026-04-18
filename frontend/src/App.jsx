@@ -7,16 +7,9 @@ import LocationProfilePage from './pages/LocationProfilePage'
 import MaintenancePage from './pages/MaintenancePage'
 import SchedulePage from './pages/SchedulePage'
 import LoginPage from './pages/LoginPage'
+import WorkOrdersPage from './pages/WorkOrdersPage'
+import DashboardPage from './pages/DashboardPage'
 import './App.css'
-
-function Dashboard() {
-  return (
-    <div className="app-main">
-      <h2>Welcome to Piano Maintainer</h2>
-      <p>Track and manage piano maintenance records, schedules, and technicians.</p>
-    </div>
-  )
-}
 
 // Shared chrome (header + nav) for all authenticated pages.
 // <Outlet /> is where React Router renders the matched child route.
@@ -31,6 +24,7 @@ function AppShell() {
           <NavLink to="/" end>Dashboard</NavLink>
           <NavLink to="/pianos">Pianos</NavLink>
           <NavLink to="/locations">Locations</NavLink>
+          <NavLink to="/work-orders">Work Orders</NavLink>
           <NavLink to="/maintenance">Maintenance</NavLink>
           <NavLink to="/schedule">Schedule</NavLink>
         </nav>
@@ -65,11 +59,12 @@ function App() {
           <Route element={<RequireAuth />}>
             {/* App chrome wraps every protected page */}
             <Route element={<AppShell />}>
-              <Route index element={<Dashboard />} />
+              <Route index element={<DashboardPage />} />
               <Route path="pianos"        element={<PianosPage />} />
               <Route path="pianos/:id"    element={<PianoProfilePage />} />
               <Route path="locations"     element={<LocationsPage />} />
               <Route path="locations/:id" element={<LocationProfilePage />} />
+              <Route path="work-orders"   element={<WorkOrdersPage />} />
               <Route path="maintenance"   element={<MaintenancePage />} />
               <Route path="schedule"      element={<SchedulePage />} />
             </Route>
