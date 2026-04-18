@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import PianosPage from './pages/PianosPage'
 import MaintenancePage from './pages/MaintenancePage'
+import SchedulePage from './pages/SchedulePage'
 import './App.css'
 
 function Dashboard() {
@@ -30,6 +31,7 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/pianos" element={<PianosPage />} />
           <Route path="/maintenance" element={<MaintenancePage />} />
+          <Route path="/schedule"    element={<SchedulePage />} />
         </Routes>
       </div>
     </BrowserRouter>
