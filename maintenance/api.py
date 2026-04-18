@@ -8,13 +8,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, Technician, Photo
+from .models import Location, Piano, MaintenanceSchedule, ScheduleTemplate, WorkOrder, MaintenanceLog, Technician, Photo
 from .serializers import (
     LocationSerializer,
     PianoSerializer,
     MaintenanceScheduleSerializer,
     ScheduleTemplateSerializer,
     WorkOrderSerializer,
+    MaintenanceLogSerializer,
     TechnicianMinimalSerializer,
     PhotoSerializer,
 )
@@ -92,10 +93,63 @@ class MaintenanceScheduleViewSet(viewsets.ModelViewSet):
 class WorkOrderViewSet(viewsets.ModelViewSet):
     serializer_class = WorkOrderSerializer
 
+    filter_backends   = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_fields  = ['status', 'priority', 'order_type', 'piano', 'assigned_tech']
+    search_fields     = ['description', 'piano__name']
+    ordering_fields   = ['due_date', 'created_at', 'priority', 'status']
+    ordering          = ['-due_date']
+
     def get_queryset(self):
         return WorkOrder.objects.select_related(
             'piano__location', 'assigned_tech', 'schedule'
-        ).order_by('-created_at')
+        ).order_by('-due_date')
+
+    @action(detail=True, methods=['post'])
+    def start(self, request, pk=None):
+        wo = self.get_object()
+        if wo.status != 'Open':
+            return Response({'error': 'Only Open work orders can be started.'}, status=status.HTTP_400_BAD_REQUEST)
+        wo.status = 'In Progress'
+        wo.save()
+        return Response(WorkOrderSerializer(wo).data)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        wo = self.get_object()
+        if wo.status in ('Complete', 'Cancelled'):
+            return Response({'error': f'Work order is already {wo.status}.'}, status=status.HTTP_400_BAD_REQUEST)
+        hours_worked    = request.data.get('hours_worked')
+        work_performed  = request.data.get('work_performed')
+        if not hours_worked or not work_performed:
+            return Response({'error': 'hours_worked and work_performed are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        log = MaintenanceLog.objects.create(
+            work_order=wo,
+            technician=request.user,
+            piano=wo.piano,
+            hours_worked=hours_worked,
+            work_performed=work_performed,
+            notes=request.data.get('notes', ''),
+        )
+        wo.status = 'Complete'
+        wo.completed_date = date.today()
+        wo.save()
+        return Response({
+            'work_order': WorkOrderSerializer(wo).data,
+            'log':        MaintenanceLogSerializer(log).data,
+        })
+
+
+class MaintenanceLogViewSet(viewsets.ModelViewSet):
+    serializer_class = MaintenanceLogSerializer
+
+    filter_backends  = [DjangoFilterBackend]
+    filterset_fields = ['work_order']
+
+    def get_queryset(self):
+        return MaintenanceLog.objects.select_related('work_order__piano', 'technician').order_by('-logged_at')
+
+    def perform_create(self, serializer):
+        serializer.save(technician=self.request.user)
 
 
 class TechnicianViewSet(viewsets.ReadOnlyModelViewSet):
@@ -131,6 +185,49 @@ class PhotoViewSet(viewsets.ModelViewSet):
         photo.is_profile_photo = True
         photo.save()
         return Response({'ok': True})
+
+
+@api_view(['GET'])
+def dashboard_stats(request):
+    today = date.today()
+    active_statuses = ('Open', 'In Progress')
+    month_start = today.replace(day=1)
+
+    open_count      = WorkOrder.objects.filter(status='Open').count()
+    in_progress     = WorkOrder.objects.filter(status='In Progress').count()
+    overdue         = WorkOrder.objects.filter(due_date__lt=today).exclude(status__in=('Complete', 'Cancelled')).count()
+    due_soon        = WorkOrder.objects.filter(
+        due_date__gte=today, due_date__lte=today + timedelta(days=7)
+    ).exclude(status__in=('Complete', 'Cancelled')).count()
+    completed_month = WorkOrder.objects.filter(
+        status='Complete', completed_date__gte=month_start, completed_date__lte=today
+    ).count()
+
+    urgent_qs = WorkOrder.objects.select_related('piano__location', 'assigned_tech').filter(
+        status__in=active_statuses
+    ).order_by('due_date')[:10]
+    urgent_open = [
+        {
+            'id':               wo.id,
+            'piano_name':       wo.piano.name,
+            'piano_location':   wo.piano.location.name,
+            'order_type':       wo.order_type,
+            'priority':         wo.priority,
+            'status':           wo.status,
+            'due_date':         wo.due_date,
+            'assigned_tech_name': wo.assigned_tech.get_full_name() if wo.assigned_tech else None,
+        }
+        for wo in urgent_qs
+    ]
+
+    return Response({
+        'open':                open_count,
+        'in_progress':         in_progress,
+        'overdue':             overdue,
+        'due_soon':            due_soon,
+        'completed_this_month': completed_month,
+        'urgent_open':         urgent_open,
+    })
 
 
 @api_view(['GET'])
