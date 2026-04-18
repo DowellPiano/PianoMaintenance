@@ -66,6 +66,7 @@ REST_FRAMEWORK = {
 
 # Comma-separated in .env, e.g. CORS_ALLOWED_ORIGINS=http://localhost:5173,https://myapp.com
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173', cast=Csv())
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:5173', cast=Csv())
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
