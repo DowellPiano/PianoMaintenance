@@ -1,8 +1,9 @@
+from datetime import date, timedelta
 from rest_framework import serializers
 from .models import (
     Location, Piano, MaintenanceSchedule, ScheduleTemplate,
     WorkOrder, Technician, Team, Photo, MaintenanceLog,
-    ConditionReading, Part, PartUsed, MaintenanceRequest,
+    ConditionReading, Part, PartUsed, MaintenanceRequest, Alert,
 )
 
 
@@ -67,6 +68,19 @@ class MaintenanceScheduleSerializer(serializers.ModelSerializer):
     piano_brand    = serializers.CharField(source='piano.brand',         read_only=True)
     piano_location = serializers.CharField(source='piano.location.name', read_only=True)
     template_name  = serializers.CharField(source='template.name',       read_only=True)
+    next_due       = serializers.SerializerMethodField()
+
+    def get_next_due(self, obj):
+        today = date.today()
+        last = (
+            WorkOrder.objects
+            .filter(schedule=obj, status='Complete', completed_date__isnull=False)
+            .order_by('-completed_date')
+            .values_list('completed_date', flat=True)
+            .first()
+        )
+        anchor = last if last else (today - timedelta(days=obj.interval_days))
+        return str(anchor + timedelta(days=obj.interval_days))
 
     class Meta:
         model = MaintenanceSchedule
@@ -74,6 +88,7 @@ class MaintenanceScheduleSerializer(serializers.ModelSerializer):
             'id', 'piano', 'piano_name', 'piano_brand', 'piano_location',
             'template', 'template_name', 'task_name', 'task_type',
             'interval_days', 'warning_days_before', 'is_active',
+            'is_paused', 'skip_next', 'next_due',
         ]
 
 
@@ -242,3 +257,21 @@ class MaintenanceRequestSerializer(serializers.ModelSerializer):
             'issue_description', 'status', 'work_order', 'created_at',
         ]
         read_only_fields = ['created_at']
+
+
+# ---------------------------------------------------------------------------
+# Alert
+# ---------------------------------------------------------------------------
+class AlertSerializer(serializers.ModelSerializer):
+    piano_name     = serializers.CharField(source='work_order.piano.name',          read_only=True)
+    piano_location = serializers.CharField(source='work_order.piano.location.name', read_only=True)
+    due_date       = serializers.DateField(source='work_order.due_date',            read_only=True)
+    priority       = serializers.CharField(source='work_order.priority',            read_only=True)
+
+    class Meta:
+        model = Alert
+        fields = [
+            'id', 'work_order', 'alert_type', 'sent_at', 'acknowledged',
+            'piano_name', 'piano_location', 'due_date', 'priority',
+        ]
+        read_only_fields = ['sent_at']

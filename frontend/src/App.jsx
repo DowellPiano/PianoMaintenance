@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './AuthContext'
 import { apiFetch } from './api'
+import AlertDrawer from './components/AlertDrawer'
 import PianosPage from './pages/PianosPage'
 import PianoProfilePage from './pages/PianoProfilePage'
 import LocationsPage from './pages/LocationsPage'
@@ -20,6 +21,8 @@ import './App.css'
 function AppShell() {
   const { user, logout } = useAuth()
   const [newRequestCount, setNewRequestCount] = useState(0)
+  const [alertCount,      setAlertCount]      = useState(0)
+  const [drawerOpen,      setDrawerOpen]      = useState(false)
 
   // Poll for new request count so the badge stays fresh
   useEffect(() => {
@@ -38,6 +41,23 @@ function AppShell() {
     return () => {
       clearInterval(id)
       window.removeEventListener('requests-badge-changed', fetchCount)
+    }
+  }, [])
+
+  // Poll for unacknowledged alert count
+  useEffect(() => {
+    function fetchAlerts() {
+      apiFetch('/api/alerts/unread-count/')
+        .then(r => r.json())
+        .then(data => setAlertCount(data.total ?? 0))
+        .catch(() => {})
+    }
+    fetchAlerts()
+    const id = setInterval(fetchAlerts, 60_000)
+    window.addEventListener('alerts-changed', fetchAlerts)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('alerts-changed', fetchAlerts)
     }
   }, [])
 
@@ -61,11 +81,25 @@ function AppShell() {
           <NavLink to="/maintenance">Maintenance</NavLink>
           <NavLink to="/schedule">Schedule</NavLink>
         </nav>
-        <div className="header-user">
-          <span className="header-username">{user?.first_name || user?.username}</span>
-          <button className="btn-logout" onClick={logout}>Sign Out</button>
+        <div className="header-right">
+          <button
+            className="bell-btn"
+            onClick={() => setDrawerOpen(d => !d)}
+            aria-label="Notifications"
+          >
+            🔔
+            {alertCount > 0 && (
+              <span className="bell-badge">{alertCount > 99 ? '99+' : alertCount}</span>
+            )}
+          </button>
+          <div className="header-user">
+            <span className="header-username">{user?.first_name || user?.username}</span>
+            <button className="btn-logout" onClick={logout}>Sign Out</button>
+          </div>
         </div>
       </header>
+
+      {drawerOpen && <AlertDrawer onClose={() => setDrawerOpen(false)} />}
 
       <Outlet />
     </div>
