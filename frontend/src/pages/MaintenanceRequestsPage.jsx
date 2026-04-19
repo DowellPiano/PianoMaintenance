@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '../api'
+import WorkOrderFormModal from '../components/WorkOrderFormModal'
 import './MaintenanceRequestsPage.css'
 
 const STATUS_STYLE = {
@@ -10,12 +10,13 @@ const STATUS_STYLE = {
 }
 
 export default function MaintenanceRequestsPage() {
-  const navigate = useNavigate()
-  const [requests, setRequests]       = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [error, setError]             = useState(null)
+  const [requests, setRequests]         = useState([])
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
-  const [assigning, setAssigning]     = useState(null)  // id being assigned
+  const [assigning, setAssigning]       = useState(null)   // request id being assigned
+  const [editingWO, setEditingWO]       = useState(null)   // full WO object for modal
+  const [woLoading, setWoLoading]       = useState(null)   // request id whose WO is loading
 
   const load = useCallback(() => {
     setLoading(true)
@@ -28,6 +29,19 @@ export default function MaintenanceRequestsPage() {
   }, [statusFilter])
 
   useEffect(() => { load() }, [load])
+
+  async function handleViewWO(req) {
+    setWoLoading(req.id)
+    try {
+      const res  = await apiFetch(`/api/work-orders/${req.work_order}/`)
+      const data = await res.json()
+      setEditingWO(data)
+    } catch {
+      setError('Failed to load work order.')
+    } finally {
+      setWoLoading(null)
+    }
+  }
 
   async function handleAssign(req) {
     setAssigning(req.id)
@@ -124,9 +138,10 @@ export default function MaintenanceRequestsPage() {
                   {req.status === 'Assigned' && req.work_order && (
                     <button
                       className="btn-view-wo"
-                      onClick={() => navigate('/work-orders')}
+                      onClick={() => handleViewWO(req)}
+                      disabled={woLoading === req.id}
                     >
-                      View Work Order
+                      {woLoading === req.id ? 'Loading…' : 'View Work Order'}
                     </button>
                   )}
                 </td>
@@ -135,6 +150,13 @@ export default function MaintenanceRequestsPage() {
           </tbody>
         </table>
       </div>
+      {editingWO && (
+        <WorkOrderFormModal
+          workOrder={editingWO}
+          onClose={() => setEditingWO(null)}
+          onSaved={() => { setEditingWO(null); load() }}
+        />
+      )}
     </div>
   )
 }
