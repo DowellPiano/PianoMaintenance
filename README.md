@@ -80,7 +80,7 @@ frontend/
 
 ```bash
 cd piano_maintainer
-pip install -r requirements.txt
+pip3 install -r requirements.txt   # run this every time you pull a new branch
 python manage.py migrate
 python manage.py createsuperuser   # creates your first Technician account
 python manage.py runserver         # http://localhost:8000
@@ -90,19 +90,38 @@ python manage.py runserver         # http://localhost:8000
 
 ```bash
 cd frontend
-npm install
+npm install                        # run this every time you pull a new branch
 npm run dev                        # http://localhost:5173
 ```
 
-### Generate Work Orders (CLI)
+### Task Queue (required for scheduled automation)
 
-Run this on a schedule (e.g., daily cron) to auto-create work orders for overdue maintenance:
+P2+ features use `django-q2` for automated work order generation and alerts.
+Run this in a third terminal alongside the backend:
+
+```bash
+python manage.py qcluster
+```
+
+Without `qcluster` running, scheduled tasks (daily WO generation, alert creation)
+will not fire. Manual work order generation still works via CLI:
 
 ```bash
 python manage.py generate_work_orders
 ```
 
-The command checks every active `MaintenanceSchedule`, calculates when the task is next due (based on `interval_days` and the date of the last completed work order), and creates a new open `WorkOrder` if none exists yet.
+### Pulling a new branch — checklist
+
+Every time you switch branches or pull new changes:
+
+```bash
+pip3 install -r requirements.txt   # picks up any new Python packages
+python manage.py migrate           # applies any new database migrations
+cd frontend && npm install         # picks up any new JS packages
+```
+
+Skipping these steps is the most common cause of "missing package" or
+"table does not exist" errors after a branch switch.
 
 ---
 
@@ -236,4 +255,7 @@ All endpoints are under `/api/` and served by Django REST Framework.
 - The React dev server (`localhost:5173`) proxies API calls to Django (`localhost:8000`). CORS is pre-configured.
 - `Technician` is the custom `AUTH_USER_MODEL`. Never reference Django's built-in `User` directly.
 - `generate_work_orders` uses `warning_days_before` to set `due_date` on the work order so it surfaces before the actual deadline.
-- `MaintenanceRequest` submissions require only the piano's `qr_code_token` — no login — making public reporting safe and easy.
+- `MaintenanceRequest` submissions require only the piano's `qr_code_token` — no login — making public reporting safe and easy. On submission, a Work Order is created automatically — technicians never need to manually convert requests.
+- **New Python package added to a branch?** Always run `pip3 install -r requirements.txt` after pulling. Forgetting this is the #1 cause of `ModuleNotFoundError` on server start.
+- **New migration added to a branch?** Always run `python manage.py migrate` after pulling. Forgetting this causes `OperationalError: no such table` or `column does not exist` errors.
+- **Running scheduled tasks locally?** Start `python manage.py qcluster` in a separate terminal. Without it, automated WO generation and alerts will queue but never execute.
