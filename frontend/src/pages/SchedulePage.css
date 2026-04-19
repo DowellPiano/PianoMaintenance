@@ -38,10 +38,13 @@
   grid-template-columns: 1fr;
   gap: 1.25rem;
   transition: grid-template-columns 0.2s;
+  /* Prevent the grid from ever exceeding the page content width */
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .cal-layout.with-sidebar {
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
 
 .cal-main { position: relative; }

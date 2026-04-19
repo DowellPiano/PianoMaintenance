@@ -30,8 +30,8 @@ export default function AlertDrawer({ onClose }) {
     window.dispatchEvent(new CustomEvent('alerts-changed'))
   }
 
-  const overdue = alerts.filter(a => a.alert_type === 'OVERDUE')
-  const dueSoon = alerts.filter(a => a.alert_type === 'DUE_SOON')
+  const overdue = alerts.filter(a => a.alert_type === 'overdue')
+  const dueSoon = alerts.filter(a => a.alert_type === 'due_soon')
 
   return (
     <>
