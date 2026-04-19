@@ -64,7 +64,7 @@ export default function LocationProfilePage() {
 
       {/* ── Hero ── */}
       <div className="lp-hero">
-        <div className="lp-hero-icon">📍</div>
+        <div className="lp-hero-icon"></div>
         <div className="lp-hero-info">
           <h2 className="lp-name">{location.name}</h2>
           {location.building && <p className="lp-building">{location.building}</p>}
@@ -100,7 +100,7 @@ export default function LocationProfilePage() {
                 <div className="lp-piano-photo">
                   {piano.profile_photo_url
                     ? <img src={piano.profile_photo_url} alt={piano.name} />
-                    : <div className="lp-piano-photo-placeholder">🎹</div>
+                    : <div className="lp-piano-photo-placeholder"></div>
                   }
                 </div>
 

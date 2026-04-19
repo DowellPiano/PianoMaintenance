@@ -53,7 +53,7 @@ export default function AlertDrawer({ onClose }) {
           <div className="drawer-loading">Loading…</div>
         ) : alerts.length === 0 ? (
           <div className="drawer-empty">
-            <span className="drawer-empty-icon">🔔</span>
+            <span className="drawer-empty-icon">—</span>
             <p>All caught up!</p>
             <p className="drawer-empty-sub">No unacknowledged alerts.</p>
           </div>
@@ -61,7 +61,7 @@ export default function AlertDrawer({ onClose }) {
           <div className="drawer-sections">
             {overdue.length > 0 && (
               <section>
-                <h4 className="drawer-section-title overdue-title">⚠ Overdue</h4>
+                <h4 className="drawer-section-title overdue-title">Overdue</h4>
                 {overdue.map(a => (
                   <AlertCard key={a.id} alert={a} onAck={() => acknowledge(a.id)} />
                 ))}
@@ -69,7 +69,7 @@ export default function AlertDrawer({ onClose }) {
             )}
             {dueSoon.length > 0 && (
               <section>
-                <h4 className="drawer-section-title due-soon-title">🕐 Due Soon</h4>
+                <h4 className="drawer-section-title due-soon-title">Due Soon</h4>
                 {dueSoon.map(a => (
                   <AlertCard key={a.id} alert={a} onAck={() => acknowledge(a.id)} />
                 ))}

@@ -411,7 +411,7 @@ export default function PianoProfilePage() {
           {piano.profile_photo_url ? (
             <img src={piano.profile_photo_url} alt={piano.name} className="hero-photo" />
           ) : (
-            <div className="hero-photo hero-photo-placeholder">🎹</div>
+            <div className="hero-photo hero-photo-placeholder"></div>
           )}
         </div>
 
@@ -421,9 +421,7 @@ export default function PianoProfilePage() {
             <span className={`badge ${typeClass(piano.piano_type)}`}>{piano.piano_type}</span>
           </div>
           <p className="hero-sub">{piano.brand}{piano.model ? ` — ${piano.model}` : ''}</p>
-          <p className="hero-location">
-            <span className="location-icon">📍</span> {piano.location_name}
-          </p>
+          <p className="hero-location">{piano.location_name}</p>
 
           <div className="hero-stats">
             <div className="stat-pill">

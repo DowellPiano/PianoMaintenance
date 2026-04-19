@@ -59,7 +59,7 @@ function AppShell() {
             onClick={() => setDrawerOpen(d => !d)}
             aria-label="Notifications"
           >
-            🔔
+            Alerts
             {alertCount > 0 && (
               <span className="bell-badge">{alertCount > 99 ? '99+' : alertCount}</span>
             )}

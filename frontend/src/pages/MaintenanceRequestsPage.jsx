@@ -166,7 +166,7 @@ export default function MaintenanceRequestsPage() {
                       <div>
                         <span className="badge" style={STATUS_STYLE[label]}>{label}</span>
                         {req.wo_assigned_tech && (
-                          <div className="req-tech-name">👤 {req.wo_assigned_tech}</div>
+                          <div className="req-tech-name">{req.wo_assigned_tech}</div>
                         )}
                       </div>
                     )

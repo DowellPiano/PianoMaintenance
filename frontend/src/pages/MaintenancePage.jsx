@@ -114,7 +114,7 @@ function SchedulesTab() {
                   <td>{s.interval_days}d</td>
                   <td>{s.warning_days_before}d</td>
                   <td>{s.template_name
-                    ? <span className="template-pill">📋 {s.template_name}</span>
+                    ? <span className="template-pill">{s.template_name}</span>
                     : <span className="meta">Manual</span>}
                   </td>
                   <td>

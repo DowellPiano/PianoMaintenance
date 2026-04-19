@@ -76,14 +76,14 @@ function DaySidebar({ date, events, onCreateWO, onEditWO, onClose }) {
               style={{ borderLeft: `4px solid ${ev.color}` }}
             >
               <div className="sev-top">
-                <span className="sev-type">{ev.type === 'work_order' ? '🔧 Work Order' : '📅 Schedule'}</span>
+                <span className="sev-type">{ev.type === 'work_order' ? 'Work Order' : 'Schedule'}</span>
                 <StatusBadge status={ev.status} />
               </div>
               <p className="sev-title">{ev.title}</p>
               {ev.piano_location && <p className="sev-meta">{ev.piano_location}</p>}
               {ev.description    && <p className="sev-desc">{ev.description}</p>}
               {ev.priority       && <PriorityBadge priority={ev.priority} />}
-              {ev.assigned_tech  && <p className="sev-meta">👤 {ev.assigned_tech}</p>}
+              {ev.assigned_tech  && <p className="sev-meta">{ev.assigned_tech}</p>}
               {ev.type === 'work_order' && (
                 <div className="sev-actions">
                   <button className="sev-edit-btn" onClick={() => onEditWO(ev)}>Edit</button>
@@ -167,8 +167,8 @@ function CalendarView({ onCreateWO, onEditWO }) {
         <div className="filter-group">
           {[
             { val: 'both',       label: 'Both' },
-            { val: 'work_order', label: '🔧 Work Orders' },
-            { val: 'schedule',   label: '📅 Schedules' },
+            { val: 'work_order', label: 'Work Orders' },
+            { val: 'schedule',   label: 'Schedules' },
           ].map(({ val, label }) => (
             <button
               key={val}
@@ -310,7 +310,7 @@ function ListView({ onCreateWO, onEditWO }) {
                   <td className="ev-date">{ev.date}</td>
                   <td>
                     <span className={`type-tag type-${ev.type}`}>
-                      {ev.type === 'work_order' ? '🔧 Work Order' : '📅 Schedule'}
+                      {ev.type === 'work_order' ? 'Work Order' : 'Schedule'}
                     </span>
                   </td>
                   <td className="fw-medium">{ev.piano_name}<br /><span className="meta">{ev.piano_brand}</span></td>
