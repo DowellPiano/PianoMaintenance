@@ -206,23 +206,23 @@ All endpoints are under `/api/` and served by Django REST Framework.
 - [x] Team management — create teams, assign manager, assign technicians
 - [x] Maintenance request queue — list, filter, one-click assign to work order, live nav badge
 
+### P2 — Scheduling Intelligence ✅ Complete
+- [x] Automated WO generation via django-q2 — daily scheduled task, no manual CLI required
+- [x] In-app alert system — overdue and due-soon alerts with bell icon, badge count, and drawer
+- [x] Per-alert acknowledge and Acknowledge All — badge clears immediately
+- [x] Schedule pause / resume — paused schedules excluded from WO generation
+- [x] Schedule skip next — skips one cycle then auto-clears
+- [x] Calendar polish — filter by type and location, Today button, overdue day indicators
+- [x] QR maintenance request flow fixed — submissions auto-create a Work Order immediately
+- [x] Request-type Work Orders surfaced with distinct orange badge in work order list
+
 ---
 
 ## Feature Roadmap — What's Needed for Full CMMS
 
 ### ~~P0 — Core Workflow~~ ✅ Complete
 ### ~~P1 — Operations~~ ✅ Complete
-
-### P2 — Scheduling Intelligence
-
-### P2 — Scheduling Intelligence
-
-| # | Feature | Notes |
-|---|---------|-------|
-| 13 | **Automated WO Generation (scheduled)** | Replace manual CLI command with a Django-Q / Celery beat task running on a cron. |
-| 14 | **Overdue & Upcoming Alerts** | Email or in-app notifications when a task enters the warning window or goes overdue. |
-| 15 | **Due Date Calendar View** | Calendar UI showing upcoming and overdue scheduled tasks. Already scaffolded — needs polish and full integration. |
-| 16 | **Schedule Pause / Skip** | Pause a schedule (e.g., piano out of service) or skip one cycle without deleting. |
+### ~~P2 — Scheduling Intelligence~~ ✅ Complete
 
 ### P3 — Reporting & Analytics
 
