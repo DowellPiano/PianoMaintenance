@@ -313,26 +313,17 @@ class MaintenanceRequestViewSet(viewsets.ModelViewSet):
             'piano', 'work_order', 'work_order__assigned_tech'
         ).order_by('-created_at')
 
-    @action(detail=True, methods=['post'])
-    def assign(self, request, pk=None):
-        mr = self.get_object()
-        if mr.status == 'Assigned':
-            return Response({'error': 'Already assigned.'}, status=status.HTTP_400_BAD_REQUEST)
-
+    def perform_create(self, serializer):
+        mr = serializer.save(status='Assigned')
         wo = WorkOrder.objects.create(
             piano=mr.piano,
-            order_type='Request',
-            status='Open',
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
             description=mr.issue_description,
         )
         mr.work_order = wo
-        mr.status = 'Assigned'
-        mr.save()
-
-        return Response({
-            'maintenance_request': MaintenanceRequestSerializer(mr).data,
-            'work_order':          WorkOrderSerializer(wo).data,
-        })
+        mr.save(update_fields=['work_order'])
 
 
 class PhotoViewSet(viewsets.ModelViewSet):
