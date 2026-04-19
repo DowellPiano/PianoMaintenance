@@ -14,35 +14,13 @@ import WorkOrdersPage from './pages/WorkOrdersPage'
 import DashboardPage from './pages/DashboardPage'
 import PartsPage from './pages/PartsPage'
 import TechniciansPage from './pages/TechniciansPage'
-import MaintenanceRequestsPage from './pages/MaintenanceRequestsPage'
 import './App.css'
 
 // Shared chrome (header + nav) for all authenticated pages.
 function AppShell() {
   const { user, logout } = useAuth()
-  const [newRequestCount, setNewRequestCount] = useState(0)
-  const [alertCount,      setAlertCount]      = useState(0)
-  const [drawerOpen,      setDrawerOpen]      = useState(false)
-
-  // Poll for new request count so the badge stays fresh
-  useEffect(() => {
-    function fetchCount() {
-      apiFetch('/api/maintenance-requests/?status=New')
-        .then(r => r.json())
-        .then(data => {
-          const list = data.results ?? data
-          setNewRequestCount(Array.isArray(list) ? list.length : 0)
-        })
-        .catch(() => {})
-    }
-    fetchCount()
-    const id = setInterval(fetchCount, 60_000)
-    window.addEventListener('requests-badge-changed', fetchCount)
-    return () => {
-      clearInterval(id)
-      window.removeEventListener('requests-badge-changed', fetchCount)
-    }
-  }, [])
+  const [alertCount, setAlertCount] = useState(0)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   // Poll for unacknowledged alert count
   useEffect(() => {
@@ -72,12 +50,6 @@ function AppShell() {
           <NavLink to="/work-orders">Work Orders</NavLink>
           <NavLink to="/parts">Parts</NavLink>
           {user?.is_staff && <NavLink to="/technicians">Technicians</NavLink>}
-          <NavLink to="/requests" className="nav-requests">
-            Requests
-            {newRequestCount > 0 && (
-              <span className="nav-badge">{newRequestCount}</span>
-            )}
-          </NavLink>
           <NavLink to="/maintenance">Maintenance</NavLink>
           <NavLink to="/schedule">Schedule</NavLink>
         </nav>
@@ -138,7 +110,6 @@ function App() {
               <Route path="work-orders"   element={<WorkOrdersPage />} />
               <Route path="parts"         element={<PartsPage />} />
               <Route path="technicians"   element={<TechniciansPage />} />
-              <Route path="requests"      element={<MaintenanceRequestsPage />} />
               <Route path="maintenance"   element={<MaintenancePage />} />
               <Route path="schedule"      element={<SchedulePage />} />
             </Route>
