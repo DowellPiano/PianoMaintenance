@@ -246,15 +246,22 @@ class TeamSerializer(serializers.ModelSerializer):
 # MaintenanceRequest
 # ---------------------------------------------------------------------------
 class MaintenanceRequestSerializer(serializers.ModelSerializer):
-    piano_name     = serializers.CharField(source='piano.name',          read_only=True)
-    piano_location = serializers.CharField(source='piano.location.name', read_only=True)
+    piano_name          = serializers.CharField(source='piano.name',          read_only=True)
+    piano_location      = serializers.CharField(source='piano.location.name', read_only=True)
+    wo_assigned_tech    = serializers.SerializerMethodField()
+
+    def get_wo_assigned_tech(self, obj):
+        if obj.work_order and obj.work_order.assigned_tech:
+            return obj.work_order.assigned_tech.get_full_name() or obj.work_order.assigned_tech.username
+        return None
 
     class Meta:
         model = MaintenanceRequest
         fields = [
             'id', 'piano', 'piano_name', 'piano_location',
             'reported_by_name', 'reported_by_email',
-            'issue_description', 'status', 'work_order', 'created_at',
+            'issue_description', 'status', 'work_order',
+            'wo_assigned_tech', 'created_at',
         ]
         read_only_fields = ['created_at']
 

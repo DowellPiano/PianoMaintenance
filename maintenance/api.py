@@ -11,7 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import (
     Location, Piano, MaintenanceSchedule, ScheduleTemplate,
     WorkOrder, MaintenanceLog, Technician, Team, Photo,
-    ConditionReading, Part, PartUsed, MaintenanceRequest,
+    ConditionReading, Part, PartUsed, MaintenanceRequest, Alert,
 )
 from .serializers import (
     LocationSerializer,
@@ -28,6 +28,7 @@ from .serializers import (
     PartSerializer,
     PartUsedSerializer,
     MaintenanceRequestSerializer,
+    AlertSerializer,
 )
 
 
@@ -308,7 +309,9 @@ class MaintenanceRequestViewSet(viewsets.ModelViewSet):
     ordering         = ['-created_at']
 
     def get_queryset(self):
-        return MaintenanceRequest.objects.select_related('piano', 'work_order').order_by('-created_at')
+        return MaintenanceRequest.objects.select_related(
+            'piano', 'work_order', 'work_order__assigned_tech'
+        ).order_by('-created_at')
 
     @action(detail=True, methods=['post'])
     def assign(self, request, pk=None):
@@ -360,6 +363,46 @@ class PhotoViewSet(viewsets.ModelViewSet):
         photo.is_profile_photo = True
         photo.save()
         return Response({'ok': True})
+
+
+# ---------------------------------------------------------------------------
+# AlertViewSet
+# ---------------------------------------------------------------------------
+class AlertViewSet(viewsets.ModelViewSet):
+    serializer_class = AlertSerializer
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
+
+    filter_backends  = [DjangoFilterBackend, drf_filters.OrderingFilter]
+    filterset_fields = ['alert_type']
+    ordering         = ['-sent_at']
+
+    def get_queryset(self):
+        return (
+            Alert.objects
+            .filter(acknowledged=False)
+            .select_related('work_order__piano__location')
+            .order_by('-sent_at')
+        )
+
+    @action(detail=True, methods=['post'])
+    def acknowledge(self, request, pk=None):
+        alert = self.get_object()
+        alert.acknowledged = True
+        alert.save()
+        return Response(AlertSerializer(alert).data)
+
+
+@api_view(['GET'])
+def alert_unread_count(request):
+    """GET /api/alerts/unread-count/ — counts of unacknowledged alerts by type."""
+    base = Alert.objects.filter(acknowledged=False)
+    overdue  = base.filter(alert_type=Alert.AlertType.OVERDUE).count()
+    due_soon = base.filter(alert_type=Alert.AlertType.DUE_SOON).count()
+    return Response({
+        'overdue':  overdue,
+        'due_soon': due_soon,
+        'total':    overdue + due_soon,
+    })
 
 
 @api_view(['GET'])

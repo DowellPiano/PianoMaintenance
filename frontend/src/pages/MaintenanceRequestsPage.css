@@ -80,6 +80,8 @@
 .reporter-name  { font-weight: 500; }
 .reporter-email { font-size: 0.78rem; color: #9ca3af; }
 
+.req-tech-name  { font-size: 0.76rem; color: #6b7280; margin-top: 3px; }
+
 .empty { color: #d1d5db; }
 
 .badge {

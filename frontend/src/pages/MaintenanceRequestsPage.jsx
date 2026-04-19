@@ -4,9 +4,17 @@ import WorkOrderFormModal from '../components/WorkOrderFormModal'
 import './MaintenanceRequestsPage.css'
 
 const STATUS_STYLE = {
-  'New':      { background: '#fef2f2', color: '#b91c1c' },
-  'Assigned': { background: '#fffbeb', color: '#b45309' },
-  'Resolved': { background: '#f0fdf4', color: '#166534' },
+  'New':                { background: '#fef2f2', color: '#b91c1c' },
+  'Pending Assignment': { background: '#eff6ff', color: '#1d4ed8' },
+  'Assigned':           { background: '#f0fdf4', color: '#166534' },
+  'Resolved':           { background: '#f0fdf4', color: '#166534' },
+}
+
+// A work order was created ("Assigned" on the model) but may or may not
+// have a technician assigned to it yet.
+function requestStatusLabel(req) {
+  if (req.status !== 'Assigned') return req.status
+  return req.wo_assigned_tech ? 'Assigned' : 'Pending Assignment'
 }
 
 export default function MaintenanceRequestsPage() {
@@ -122,7 +130,17 @@ export default function MaintenanceRequestsPage() {
                     : req.issue_description}
                 </td>
                 <td>
-                  <span className="badge" style={STATUS_STYLE[req.status]}>{req.status}</span>
+                  {(() => {
+                    const label = requestStatusLabel(req)
+                    return (
+                      <div>
+                        <span className="badge" style={STATUS_STYLE[label]}>{label}</span>
+                        {req.wo_assigned_tech && (
+                          <div className="req-tech-name">👤 {req.wo_assigned_tech}</div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </td>
                 <td className="req-date">{req.created_at?.slice(0, 10)}</td>
                 <td className="actions">
