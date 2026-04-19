@@ -15,16 +15,42 @@
 .page-header h2 { font-size: 1.5rem; font-weight: 600; margin: 0 0 0.2rem; }
 .page-subtitle   { font-size: 0.85rem; color: #6b7280; margin: 0; }
 
-.status-filter {
-  padding: 0.45rem 0.65rem;
-  border: 1px solid #d1d5db;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  font-family: inherit;
-  background: #fff;
-  cursor: pointer;
+/* ── Filter pill bar ─────────────────────────────────────────────────────── */
+.req-filter-bar {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
 }
-.status-filter:focus { outline: none; border-color: #1a1a2e; }
+
+.req-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.8rem;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
+}
+.req-filter-btn:hover  { background: #e5e7eb; }
+.req-filter-btn.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+
+.req-filter-count {
+  background: rgba(0,0,0,0.12);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0 5px;
+  min-width: 18px;
+  text-align: center;
+  line-height: 1.5;
+}
+.req-filter-btn.active .req-filter-count { background: rgba(255,255,255,0.2); }
 
 .page-error {
   padding: 0.75rem 1rem;
@@ -71,6 +97,7 @@
 
 .requests-table tbody tr:last-child td { border-bottom: none; }
 .requests-table tbody tr:hover td      { background: #f9fafb; }
+.row-resolved td                       { color: #9ca3af; }
 
 .req-id     { color: #6b7280; font-size: 0.8rem; white-space: nowrap; }
 .req-piano  { font-weight: 500; }
