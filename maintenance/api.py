@@ -471,15 +471,21 @@ def calendar_events(request):
         'Normal': '🔵',
         'Low':    '⚪',
     }
+    today = date.today()
     for wo in work_orders:
+        is_overdue = (
+            wo.due_date is not None and
+            wo.due_date < today and
+            wo.status not in ('Complete', 'Cancelled')
+        )
         events.append({
             'id':            f'wo_{wo.id}',
             'type':          'work_order',
             'title':         f'{wo.piano.name} — {wo.order_type}',
             'date':          str(wo.due_date),
-            'status':        wo.status,
+            'status':        'Overdue' if is_overdue else wo.status,
             'priority':      wo.priority,
-            'color':         STATUS_COLOR.get(wo.status, '#3b82f6'),
+            'color':         '#ef4444' if is_overdue else STATUS_COLOR.get(wo.status, '#3b82f6'),
             'priority_dot':  PRIORITY_DOT.get(wo.priority, '🔵'),
             'piano_name':    wo.piano.name,
             'piano_brand':   wo.piano.brand,

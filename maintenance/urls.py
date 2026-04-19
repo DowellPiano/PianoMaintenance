@@ -14,6 +14,8 @@ from .api import (
     PartViewSet,
     PartUsedViewSet,
     MaintenanceRequestViewSet,
+    AlertViewSet,
+    alert_unread_count,
     dashboard_stats,
     calendar_events,
     piano_profile,
@@ -37,8 +39,11 @@ router.register(r'condition-readings', ConditionReadingViewSet,    basename='con
 router.register(r'parts',             PartViewSet,                 basename='part')
 router.register(r'parts-used',        PartUsedViewSet,             basename='parts-used')
 router.register(r'maintenance-requests', MaintenanceRequestViewSet, basename='maintenance-request')
+router.register(r'alerts',              AlertViewSet,              basename='alert')
 
 urlpatterns = [
+    # Fixed paths BEFORE router.urls so they are not swallowed by /<id>/ detail routes
+    path('alerts/unread-count/', alert_unread_count, name='alert-unread-count'),
     path('', include(router.urls)),
     path('dashboard/', dashboard_stats, name='dashboard-stats'),
     path('calendar-events/', calendar_events, name='calendar-events'),
