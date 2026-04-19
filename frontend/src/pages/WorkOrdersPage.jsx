@@ -20,6 +20,12 @@ const STATUS_STYLE = {
   'Cancelled':   { background: '#f3f4f6', color: '#6b7280' },
 }
 
+const TYPE_STYLE = {
+  'Preventive': { background: '#ede9fe', color: '#5b21b6' },
+  'Request':    { background: '#fff7ed', color: '#c2410c' },
+  'Emergency':  { background: '#fef2f2', color: '#b91c1c' },
+}
+
 function isOverdue(wo) {
   return wo.due_date && wo.due_date < TODAY &&
     wo.status !== 'Complete' && wo.status !== 'Cancelled'
@@ -31,10 +37,11 @@ export default function WorkOrdersPage() {
   const [error, setError] = useState(null)
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState('')
+  const [statusFilter,   setStatusFilter]   = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
+  const [typeFilter,     setTypeFilter]     = useState('')
+  const [searchInput,    setSearchInput]    = useState('')
+  const [searchQuery,    setSearchQuery]    = useState('')
   const debounceRef = useRef(null)
 
   // Modals
@@ -46,15 +53,16 @@ export default function WorkOrdersPage() {
   const load = useCallback(() => {
     setLoading(true)
     const params = new URLSearchParams({ ordering: '-due_date' })
-    if (statusFilter)   params.set('status',   statusFilter)
-    if (priorityFilter) params.set('priority', priorityFilter)
-    if (searchQuery)    params.set('search',   searchQuery)
+    if (statusFilter)   params.set('status',     statusFilter)
+    if (priorityFilter) params.set('priority',   priorityFilter)
+    if (typeFilter)     params.set('order_type', typeFilter)
+    if (searchQuery)    params.set('search',     searchQuery)
 
     apiFetch(`/api/work-orders/?${params}`)
       .then(r => r.json())
       .then(data => { setWorkOrders(data.results ?? data); setLoading(false) })
       .catch(() => { setError('Failed to load work orders.'); setLoading(false) })
-  }, [statusFilter, priorityFilter, searchQuery])
+  }, [statusFilter, priorityFilter, typeFilter, searchQuery])
 
   useEffect(() => { load() }, [load])
 
@@ -125,6 +133,12 @@ export default function WorkOrdersPage() {
           <option value="Complete">Complete</option>
           <option value="Cancelled">Cancelled</option>
         </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+          <option value="">All Types</option>
+          <option value="Preventive">Preventive</option>
+          <option value="Request">Request</option>
+          <option value="Emergency">Emergency</option>
+        </select>
         <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
           <option value="">All Priorities</option>
           <option value="Urgent">Urgent</option>
@@ -160,7 +174,7 @@ export default function WorkOrdersPage() {
             ) : workOrders.length === 0 ? (
               <tr>
                 <td colSpan={10} className="td-empty">
-                  {statusFilter || priorityFilter || searchQuery
+                  {statusFilter || priorityFilter || typeFilter || searchQuery
                     ? 'No work orders match your filters.'
                     : 'No work orders found.'}
                 </td>
@@ -171,7 +185,11 @@ export default function WorkOrdersPage() {
                   <td className="wo-id">#{wo.id}</td>
                   <td className="wo-piano">{wo.piano_name}</td>
                   <td>{wo.piano_location}</td>
-                  <td>{wo.order_type}</td>
+                  <td>
+                    <span className="badge" style={TYPE_STYLE[wo.order_type] ?? {}}>
+                      {wo.order_type}
+                    </span>
+                  </td>
                   <td className="wo-desc" title={wo.description}>
                     {wo.description
                       ? wo.description.length > 60

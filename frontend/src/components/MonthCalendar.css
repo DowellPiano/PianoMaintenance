@@ -14,11 +14,30 @@
   background: #f9fafb;
 }
 
+.cal-nav-center {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .cal-title {
   font-size: 1rem;
   font-weight: 600;
   color: #111827;
 }
+
+.cal-today-btn {
+  padding: 0.2rem 0.65rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.cal-today-btn:hover { background: #dbeafe; }
 
 .cal-nav-btn {
   background: none;
@@ -84,7 +103,7 @@
   border-radius: 50%;
   width: 24px;
   height: 24px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
 }
@@ -98,6 +117,13 @@
   font-weight: 700;
 }
 
+.cal-day-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
 .cal-day-num {
   font-size: 0.82rem;
   font-weight: 500;
@@ -107,7 +133,15 @@
   height: 24px;
   align-items: center;
   justify-content: center;
-  margin-bottom: 2px;
+}
+
+.cal-overdue-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
 }
 
 .cal-events {

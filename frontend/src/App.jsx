@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './AuthContext'
 import { apiFetch } from './api'
+import AlertDrawer from './components/AlertDrawer'
 import PianosPage from './pages/PianosPage'
 import PianoProfilePage from './pages/PianoProfilePage'
 import LocationsPage from './pages/LocationsPage'
@@ -13,31 +14,28 @@ import WorkOrdersPage from './pages/WorkOrdersPage'
 import DashboardPage from './pages/DashboardPage'
 import PartsPage from './pages/PartsPage'
 import TechniciansPage from './pages/TechniciansPage'
-import MaintenanceRequestsPage from './pages/MaintenanceRequestsPage'
 import './App.css'
 
 // Shared chrome (header + nav) for all authenticated pages.
 function AppShell() {
   const { user, logout } = useAuth()
-  const [newRequestCount, setNewRequestCount] = useState(0)
+  const [alertCount, setAlertCount] = useState(0)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
-  // Poll for new request count so the badge stays fresh
+  // Poll for unacknowledged alert count
   useEffect(() => {
-    function fetchCount() {
-      apiFetch('/api/maintenance-requests/?status=New')
+    function fetchAlerts() {
+      apiFetch('/api/alerts/unread-count/')
         .then(r => r.json())
-        .then(data => {
-          const list = data.results ?? data
-          setNewRequestCount(Array.isArray(list) ? list.length : 0)
-        })
+        .then(data => setAlertCount(data.total ?? 0))
         .catch(() => {})
     }
-    fetchCount()
-    const id = setInterval(fetchCount, 60_000)
-    window.addEventListener('requests-badge-changed', fetchCount)
+    fetchAlerts()
+    const id = setInterval(fetchAlerts, 60_000)
+    window.addEventListener('alerts-changed', fetchAlerts)
     return () => {
       clearInterval(id)
-      window.removeEventListener('requests-badge-changed', fetchCount)
+      window.removeEventListener('alerts-changed', fetchAlerts)
     }
   }, [])
 
@@ -52,20 +50,31 @@ function AppShell() {
           <NavLink to="/work-orders">Work Orders</NavLink>
           <NavLink to="/parts">Parts</NavLink>
           {user?.is_staff && <NavLink to="/technicians">Technicians</NavLink>}
-          <NavLink to="/requests" className="nav-requests">
-            Requests
-            {newRequestCount > 0 && (
-              <span className="nav-badge">{newRequestCount}</span>
-            )}
-          </NavLink>
           <NavLink to="/maintenance">Maintenance</NavLink>
           <NavLink to="/schedule">Schedule</NavLink>
         </nav>
-        <div className="header-user">
-          <span className="header-username">{user?.first_name || user?.username}</span>
-          <button className="btn-logout" onClick={logout}>Sign Out</button>
+        <div className="header-right">
+          <button
+            className="bell-btn"
+            onClick={() => setDrawerOpen(d => !d)}
+            aria-label="Notifications"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            {alertCount > 0 && (
+              <span className="bell-badge">{alertCount > 99 ? '99+' : alertCount}</span>
+            )}
+          </button>
+          <div className="header-user">
+            <span className="header-username">{user?.first_name || user?.username}</span>
+            <button className="btn-logout" onClick={logout}>Sign Out</button>
+          </div>
         </div>
       </header>
+
+      {drawerOpen && <AlertDrawer onClose={() => setDrawerOpen(false)} />}
 
       <Outlet />
     </div>
@@ -104,7 +113,6 @@ function App() {
               <Route path="work-orders"   element={<WorkOrdersPage />} />
               <Route path="parts"         element={<PartsPage />} />
               <Route path="technicians"   element={<TechniciansPage />} />
-              <Route path="requests"      element={<MaintenanceRequestsPage />} />
               <Route path="maintenance"   element={<MaintenancePage />} />
               <Route path="schedule"      element={<SchedulePage />} />
             </Route>

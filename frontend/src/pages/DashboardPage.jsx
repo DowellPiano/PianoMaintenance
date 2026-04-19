@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '../api'
+import WorkOrderFormModal from '../components/WorkOrderFormModal'
 import './DashboardPage.css'
 
 const PRIORITY_STYLE = {
@@ -24,17 +24,39 @@ const KPI_CONFIG = [
 ]
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const navigate = useNavigate()
+  const [stats,      setStats]      = useState(null)
+  const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState(null)
+  const [editingWO,  setEditingWO]  = useState(null)   // full WO object for modal
+  const [woLoading,  setWoLoading]  = useState(null)   // id currently being fetched
 
-  useEffect(() => {
+  function loadStats() {
     apiFetch('/api/dashboard/')
       .then(r => r.json())
       .then(data => { setStats(data); setLoading(false) })
       .catch(() => { setError('Failed to load dashboard.'); setLoading(false) })
-  }, [])
+  }
+
+  useEffect(() => { loadStats() }, [])
+
+  async function handleRowClick(wo) {
+    setWoLoading(wo.id)
+    try {
+      const res  = await apiFetch(`/api/work-orders/${wo.id}/`)
+      const data = await res.json()
+      setEditingWO(data)
+    } catch {
+      setError('Failed to load work order.')
+    } finally {
+      setWoLoading(null)
+    }
+  }
+
+  function handleSaved() {
+    setEditingWO(null)
+    setLoading(true)
+    loadStats()
+  }
 
   return (
     <div className="dashboard-page">
@@ -79,9 +101,9 @@ export default function DashboardPage() {
                     {stats.urgent_open.map(wo => (
                       <tr
                         key={wo.id}
-                        className="urgent-row"
-                        onClick={() => navigate('/work-orders')}
-                        title="Go to Work Orders"
+                        className={`urgent-row${woLoading === wo.id ? ' urgent-row--loading' : ''}`}
+                        onClick={() => handleRowClick(wo)}
+                        title="Edit work order"
                       >
                         <td className="urgent-piano">{wo.piano_name}</td>
                         <td>{wo.piano_location}</td>
@@ -97,7 +119,7 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td>{wo.due_date || <span className="empty">—</span>}</td>
-                        <td>{wo.assigned_tech_name || <span className="empty">—</span>}</td>
+                                        <td>{wo.assigned_tech_name || <span className="empty">—</span>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -106,6 +128,14 @@ export default function DashboardPage() {
             )}
           </div>
         </>
+      )}
+
+      {editingWO && (
+        <WorkOrderFormModal
+          workOrder={editingWO}
+          onClose={() => setEditingWO(null)}
+          onSaved={handleSaved}
+        />
       )}
     </div>
   )

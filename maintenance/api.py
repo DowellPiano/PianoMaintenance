@@ -11,7 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import (
     Location, Piano, MaintenanceSchedule, ScheduleTemplate,
     WorkOrder, MaintenanceLog, Technician, Team, Photo,
-    ConditionReading, Part, PartUsed, MaintenanceRequest,
+    ConditionReading, Part, PartUsed, MaintenanceRequest, Alert,
 )
 from .serializers import (
     LocationSerializer,
@@ -28,6 +28,7 @@ from .serializers import (
     PartSerializer,
     PartUsedSerializer,
     MaintenanceRequestSerializer,
+    AlertSerializer,
 )
 
 
@@ -308,28 +309,21 @@ class MaintenanceRequestViewSet(viewsets.ModelViewSet):
     ordering         = ['-created_at']
 
     def get_queryset(self):
-        return MaintenanceRequest.objects.select_related('piano', 'work_order').order_by('-created_at')
+        return MaintenanceRequest.objects.select_related(
+            'piano', 'work_order', 'work_order__assigned_tech'
+        ).order_by('-created_at')
 
-    @action(detail=True, methods=['post'])
-    def assign(self, request, pk=None):
-        mr = self.get_object()
-        if mr.status == 'Assigned':
-            return Response({'error': 'Already assigned.'}, status=status.HTTP_400_BAD_REQUEST)
-
+    def perform_create(self, serializer):
+        mr = serializer.save(status='Assigned')
         wo = WorkOrder.objects.create(
             piano=mr.piano,
-            order_type='Request',
-            status='Open',
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
             description=mr.issue_description,
         )
         mr.work_order = wo
-        mr.status = 'Assigned'
-        mr.save()
-
-        return Response({
-            'maintenance_request': MaintenanceRequestSerializer(mr).data,
-            'work_order':          WorkOrderSerializer(wo).data,
-        })
+        mr.save(update_fields=['work_order'])
 
 
 class PhotoViewSet(viewsets.ModelViewSet):
@@ -360,6 +354,46 @@ class PhotoViewSet(viewsets.ModelViewSet):
         photo.is_profile_photo = True
         photo.save()
         return Response({'ok': True})
+
+
+# ---------------------------------------------------------------------------
+# AlertViewSet
+# ---------------------------------------------------------------------------
+class AlertViewSet(viewsets.ModelViewSet):
+    serializer_class = AlertSerializer
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
+
+    filter_backends  = [DjangoFilterBackend, drf_filters.OrderingFilter]
+    filterset_fields = ['alert_type']
+    ordering         = ['-sent_at']
+
+    def get_queryset(self):
+        return (
+            Alert.objects
+            .filter(acknowledged=False)
+            .select_related('work_order__piano__location')
+            .order_by('-sent_at')
+        )
+
+    @action(detail=True, methods=['post'])
+    def acknowledge(self, request, pk=None):
+        alert = self.get_object()
+        alert.acknowledged = True
+        alert.save()
+        return Response(AlertSerializer(alert).data)
+
+
+@api_view(['GET'])
+def alert_unread_count(request):
+    """GET /api/alerts/unread-count/ — counts of unacknowledged alerts by type."""
+    base = Alert.objects.filter(acknowledged=False)
+    overdue  = base.filter(alert_type=Alert.AlertType.OVERDUE).count()
+    due_soon = base.filter(alert_type=Alert.AlertType.DUE_SOON).count()
+    return Response({
+        'overdue':  overdue,
+        'due_soon': due_soon,
+        'total':    overdue + due_soon,
+    })
 
 
 @api_view(['GET'])
@@ -437,15 +471,21 @@ def calendar_events(request):
         'Normal': '🔵',
         'Low':    '⚪',
     }
+    today = date.today()
     for wo in work_orders:
+        is_overdue = (
+            wo.due_date is not None and
+            wo.due_date < today and
+            wo.status not in ('Complete', 'Cancelled')
+        )
         events.append({
             'id':            f'wo_{wo.id}',
             'type':          'work_order',
             'title':         f'{wo.piano.name} — {wo.order_type}',
             'date':          str(wo.due_date),
-            'status':        wo.status,
+            'status':        'Overdue' if is_overdue else wo.status,
             'priority':      wo.priority,
-            'color':         STATUS_COLOR.get(wo.status, '#3b82f6'),
+            'color':         '#ef4444' if is_overdue else STATUS_COLOR.get(wo.status, '#3b82f6'),
             'priority_dot':  PRIORITY_DOT.get(wo.priority, '🔵'),
             'piano_name':    wo.piano.name,
             'piano_brand':   wo.piano.brand,

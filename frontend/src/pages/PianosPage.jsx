@@ -96,7 +96,7 @@ export default function PianosPage() {
                     <div className="piano-name-cell">
                       {piano.profile_photo_url
                         ? <img src={piano.profile_photo_url} alt="" className="piano-thumb" />
-                        : <div className="piano-thumb piano-thumb-placeholder">🎹</div>
+                        : <div className="piano-thumb piano-thumb-placeholder"></div>
                       }
                       <Link to={`/pianos/${piano.id}`}>{piano.name}</Link>
                     </div>

@@ -22,6 +22,7 @@ body {
 .app-header h1 {
   font-size: 1.5rem;
   font-weight: 600;
+  color: #fff;
 }
 
 .app-header nav {
@@ -137,24 +138,46 @@ select:disabled {
   font-size: 1rem;
 }
 
-/* ── Nav badge (new requests count) ─────────────────────────────────────── */
-.nav-requests {
-  position: relative;
+/* ── Header right cluster (bell + user) ─────────────────────────────────── */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.nav-badge {
-  display: inline-flex;
+/* ── Alert bell ──────────────────────────────────────────────────────────── */
+.bell-btn {
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.15rem;
+  padding: 0.25rem 0.3rem;
+  border-radius: 5px;
+  display: flex;
   align-items: center;
-  justify-content: center;
+  transition: background 0.15s;
+  line-height: 1;
+  color: #fff;
+}
+.bell-btn:hover { background: rgba(255,255,255,0.1); }
+
+.bell-badge {
+  position: absolute;
+  top: -3px;
+  right: -4px;
   min-width: 16px;
   height: 16px;
-  padding: 0 4px;
+  padding: 0 3px;
   background: #ef4444;
   color: #fff;
   border-radius: 999px;
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
-  margin-left: 5px;
-  vertical-align: middle;
+  pointer-events: none;
 }
+

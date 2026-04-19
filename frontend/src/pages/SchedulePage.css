@@ -38,10 +38,13 @@
   grid-template-columns: 1fr;
   gap: 1.25rem;
   transition: grid-template-columns 0.2s;
+  /* Prevent the grid from ever exceeding the page content width */
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .cal-layout.with-sidebar {
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
 
 .cal-main { position: relative; }
@@ -297,4 +300,160 @@
   text-align: center;
   padding: 4rem 2rem;
   color: #6b7280;
+}
+
+/* ── Calendar filter bar ────────────────────────────────────────────────── */
+.cal-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.loc-select {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  background: #f3f4f6;
+  color: #374151;
+  cursor: pointer;
+}
+.loc-select:focus { outline: none; border-color: #1a1a2e; }
+
+/* ── Sidebar event action row ───────────────────────────────────────────── */
+.sev-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.sev-goto-btn {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+.sev-goto-btn:hover { background: #dbeafe; }
+
+/* ── Schedule management table ──────────────────────────────────────────── */
+.active-only-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #374151;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sort-label {
+  font-size: 0.82rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.btn-pause,
+.btn-resume,
+.btn-skip {
+  padding: 0.28rem 0.7rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.btn-pause {
+  background: #fff7ed;
+  color: #c2410c;
+  border-color: #fed7aa;
+}
+.btn-pause:hover { background: #ffedd5; }
+
+.btn-resume {
+  background: #f0fdf4;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+.btn-resume:hover { background: #dcfce7; }
+
+.btn-skip {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #d1d5db;
+}
+.btn-skip:hover { background: #e5e7eb; }
+
+.row-paused td { color: #9ca3af; }
+
+/* ── Confirm dialog (shared) ────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.confirm-dialog {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1.75rem;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.18);
+}
+
+.confirm-dialog h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.confirm-dialog p {
+  font-size: 0.9rem;
+  color: #374151;
+  line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.btn-secondary {
+  padding: 0.5rem 1.1rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.btn-secondary:hover { background: #e5e7eb; }
+
+.btn-danger {
+  padding: 0.5rem 1.1rem;
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.btn-danger:hover { background: #dc2626; }
+
+.page-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
 }

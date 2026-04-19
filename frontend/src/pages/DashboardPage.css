@@ -121,6 +121,11 @@
   background: #f0f9ff;
 }
 
+.urgent-row--loading td {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .urgent-piano {
   font-weight: 500;
 }

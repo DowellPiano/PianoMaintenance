@@ -29,7 +29,7 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-logo">🎹</div>
+        <div className="login-logo"></div>
         <h1 className="login-title">Piano Maintainer</h1>
         <p className="login-sub">Sign in to continue</p>
 

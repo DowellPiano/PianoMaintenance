@@ -12,13 +12,16 @@ function isoDate(y, m, d) {
 
 export default function MonthCalendar({
   year, month, events, selectedDate,
-  onPrev, onNext, onSelectDate,
+  onPrev, onNext, onSelectDate, onToday,
 }) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  const todayYear  = now.getFullYear()
+  const todayMonth = now.getMonth()
+  const isCurrentMonth = year === todayYear && month === todayMonth
 
   // Build grid: 6 rows × 7 cols
-  const firstDow = new Date(year, month, 1).getDay()   // 0=Sun
+  const firstDow    = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const daysInPrev  = new Date(year, month, 0).getDate()
 
@@ -28,17 +31,19 @@ export default function MonthCalendar({
     ;(byDate[ev.date] = byDate[ev.date] ?? []).push(ev)
   }
 
+  // Set of dates that have at least one Overdue event
+  const overdateDates = new Set(
+    events.filter(e => e.status === 'Overdue').map(e => e.date)
+  )
+
   const cells = []
-  // Leading blank days from previous month
   for (let i = firstDow - 1; i >= 0; i--) {
     cells.push({ day: daysInPrev - i, currentMonth: false, date: null })
   }
-  // Current month days
   for (let d = 1; d <= daysInMonth; d++) {
     const iso = isoDate(year, month, d)
     cells.push({ day: d, currentMonth: true, date: iso, evs: byDate[iso] ?? [] })
   }
-  // Trailing days to fill last row
   let trailing = 1
   while (cells.length % 7 !== 0) {
     cells.push({ day: trailing++, currentMonth: false, date: null })
@@ -52,7 +57,12 @@ export default function MonthCalendar({
       {/* Header */}
       <div className="cal-nav">
         <button className="cal-nav-btn" onClick={onPrev}>‹</button>
-        <span className="cal-title">{MONTHS[month]} {year}</span>
+        <div className="cal-nav-center">
+          <span className="cal-title">{MONTHS[month]} {year}</span>
+          {!isCurrentMonth && onToday && (
+            <button className="cal-today-btn" onClick={onToday}>Today</button>
+          )}
+        </div>
         <button className="cal-nav-btn" onClick={onNext}>›</button>
       </div>
 
@@ -68,13 +78,13 @@ export default function MonthCalendar({
             if (!cell.currentMonth) {
               return <div key={`${ri}-${ci}`} className="cal-cell other-month" />
             }
-            const cellDate = new Date(year, month, cell.day)
-            const isToday    = cellDate.getTime() === today.getTime()
+            const cellDate  = new Date(year, month, cell.day)
+            const isToday   = cellDate.getTime() === now.getTime()
             const isSelected = cell.date === selectedDate
-            const evs        = cell.evs ?? []
-            // Show up to 3 event chips, then "+N more"
-            const visible = evs.slice(0, 3)
-            const overflow = evs.length - visible.length
+            const evs       = cell.evs ?? []
+            const hasOverdue = overdateDates.has(cell.date)
+            const visible   = evs.slice(0, 3)
+            const overflow  = evs.length - visible.length
 
             return (
               <div
@@ -86,7 +96,10 @@ export default function MonthCalendar({
                 ].join(' ')}
                 onClick={() => onSelectDate(cell.date)}
               >
-                <span className="cal-day-num">{cell.day}</span>
+                <div className="cal-day-header">
+                  <span className="cal-day-num">{cell.day}</span>
+                  {hasOverdue && <span className="cal-overdue-dot" title="Overdue events" />}
+                </div>
                 <div className="cal-events">
                   {visible.map(ev => (
                     <div
