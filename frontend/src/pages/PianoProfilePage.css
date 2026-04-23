@@ -1,0 +1,349 @@
+/* ── Piano Profile Page ──────────────────────────────────────────────────────── */
+
+.pp-page {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.pp-breadcrumb {
+  margin-bottom: 1rem;
+}
+
+.pp-back {
+  font-size: 0.88rem;
+  color: #6b7280;
+  text-decoration: none;
+}
+.pp-back:hover { color: #111827; }
+
+/* ── Info Card ───────────────────────────────────────────────────────────────── */
+
+.pp-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pp-card-row {
+  display: flex;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.pp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 120px;
+}
+
+.pp-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pp-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid #f3f4f6;
+}
+.pp-notes p {
+  font-size: 0.9rem;
+  color: #374151;
+  white-space: pre-wrap;
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────────── */
+
+.pp-section {
+  margin-bottom: 2rem;
+}
+
+.pp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+
+.pp-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0.75rem;
+}
+
+.pp-section-header .pp-section-title {
+  margin-bottom: 0;
+}
+
+.pp-empty {
+  color: #9ca3af;
+  font-size: 0.9rem;
+  padding: 1.5rem 0;
+}
+
+.pp-error {
+  padding: 0.65rem 1rem;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #b91c1c;
+  font-size: 0.88rem;
+  margin-bottom: 0.75rem;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────────── */
+
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.pp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+.pp-table th {
+  text-align: left;
+  padding: 0.65rem 1rem;
+  background: #f9fafb;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.pp-table td {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  color: #111827;
+  vertical-align: middle;
+}
+
+.pp-table tbody tr:last-child td { border-bottom: none; }
+.pp-table tbody tr:hover td { background: #f9fafb; }
+
+.fw-medium  { font-weight: 500; }
+.pp-dim     { color: #9ca3af; }
+.pp-desc    { max-width: 280px; font-size: 0.85rem; }
+
+/* ── Badges ──────────────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.type-grand   { background: #ede9fe; color: #5b21b6; }
+.type-upright { background: #dbeafe; color: #1e40af; }
+.type-digital { background: #d1fae5; color: #065f46; }
+
+.status-overdue  { background: #fee2e2; color: #991b1b; }
+.status-due-soon { background: #fef9c3; color: #854d0e; }
+.status-on-track { background: #d1fae5; color: #065f46; }
+
+.priority-urgent { background: #fee2e2; color: #991b1b; }
+.priority-high   { background: #fef3c7; color: #92400e; }
+.priority-normal { background: #eff6ff; color: #1d4ed8; }
+.priority-low    { background: #f3f4f6; color: #374151; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────────── */
+
+.btn-start-wo {
+  padding: 0.3rem 0.75rem;
+  background: #1a1a2e;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-start-wo:hover { background: #2d2d4e; }
+
+.btn-complete-wo {
+  padding: 0.3rem 0.75rem;
+  background: #059669;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-complete-wo:hover { background: #047857; }
+
+/* ── Status select (inline in WO table) ──────────────────────────────────────── */
+
+.pp-status-select {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 0.85rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* ── Attachments ─────────────────────────────────────────────────────────────── */
+
+.btn-upload {
+  padding: 0.4rem 1rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-upload:hover { background: #e5e7eb; }
+
+.pp-attachment-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+
+.pp-attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.pp-attachment-link {
+  flex: 1;
+  font-size: 0.88rem;
+  color: #1d4ed8;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pp-attachment-link:hover { text-decoration: underline; }
+
+.pp-att-date { font-size: 0.82rem; white-space: nowrap; }
+
+.btn-delete-sm {
+  padding: 0.2rem 0.6rem;
+  background: #fff;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-delete-sm:hover { background: #fef2f2; }
+
+/* ── Shared confirm dialog (also in PianosPage.css — duplicated for isolation) ── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.confirm-dialog {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.confirm-dialog h3 { margin: 0 0 0.75rem; font-size: 1rem; }
+.confirm-dialog p  { margin: 0 0 1.25rem; font-size: 0.9rem; color: #374151; }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+/* Shared utility buttons (page level, not modal) */
+.btn-primary {
+  padding: 0.5rem 1.25rem;
+  background: #1a1a2e;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.btn-primary:hover { background: #2d2d4e; }
+
+.btn-secondary {
+  padding: 0.5rem 1.25rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.btn-secondary:hover { background: #e5e7eb; }
+
+.btn-danger {
+  padding: 0.5rem 1.25rem;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.btn-danger:hover { background: #b91c1c; }
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+.page-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 0.2rem;
+}
+.page-subtitle {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 0;
+}
+.loading {
+  color: #6b7280;
+  padding: 2rem 0;
+  text-align: center;
+}

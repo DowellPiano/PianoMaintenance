@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import PianoFormModal from '../components/PianoFormModal'
 import './PianosPage.css'
 
@@ -38,11 +39,17 @@ export default function PianosPage() {
 
   async function handleDelete(piano) {
     try {
-      await fetch(`/api/pianos/${piano.id}/`, { method: 'DELETE' })
+      const r = await fetch(`/api/pianos/${piano.id}/`, { method: 'DELETE' })
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}))
+        setError(data.detail || data.error || 'Delete failed. This piano may have existing work orders.')
+        setDeleteConfirm(null)
+        return
+      }
       setDeleteConfirm(null)
       loadPianos()
     } catch {
-      setError('Delete failed.')
+      setError('Delete failed — network error.')
     }
   }
 
@@ -83,7 +90,9 @@ export default function PianosPage() {
             <tbody>
               {pianos.map(piano => (
                 <tr key={piano.id}>
-                  <td className="piano-name">{piano.name}</td>
+                  <td className="piano-name">
+                    <Link to={`/pianos/${piano.id}`}>{piano.name}</Link>
+                  </td>
                   <td>{piano.brand}</td>
                   <td>{piano.model || <span className="empty">—</span>}</td>
                   <td>
@@ -96,7 +105,7 @@ export default function PianosPage() {
                   <td>{piano.date_acquired || <span className="empty">—</span>}</td>
                   <td className="actions">
                     <button className="btn-edit" onClick={() => openEdit(piano)}>Edit</button>
-                    <button className="btn-delete" onClick={() => setDeleteConfirm(piano)}>Delete</button>
+                    <button className="btn-delete" onClick={() => { setError(null); setDeleteConfirm(piano) }}>Delete</button>
                   </td>
                 </tr>
               ))}
