@@ -5,6 +5,7 @@ from django.db.models import Count, Max, Sum
 from django.db.models.deletion import ProtectedError
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -73,16 +74,21 @@ class TechnicianViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def reactivate(self, request, pk=None):
-        technician = self.get_object()
-        technician.is_active = True
-        technician.save()
+        # Fetch without filter_queryset so inactive users are never silently 404'd.
+        technician = get_object_or_404(Technician, pk=pk)
+        self.check_object_permissions(request, technician)
+        # Direct queryset UPDATE bypasses AbstractUser.save() side-effects.
+        Technician.objects.filter(pk=technician.pk).update(is_active=True)
+        # Reload from DB so the response reflects actual persisted state.
+        technician.refresh_from_db()
         return Response(TechnicianSerializer(technician).data)
 
     @action(detail=True, methods=['post'])
     def deactivate(self, request, pk=None):
-        technician = self.get_object()
-        technician.is_active = False
-        technician.save()
+        technician = get_object_or_404(Technician, pk=pk)
+        self.check_object_permissions(request, technician)
+        Technician.objects.filter(pk=technician.pk).update(is_active=False)
+        technician.refresh_from_db()
         return Response(TechnicianSerializer(technician).data)
 
 
