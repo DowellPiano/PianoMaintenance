@@ -118,6 +118,7 @@ class MaintenanceSchedule(models.Model):
     interval_days = models.IntegerField()
     warning_days_before = models.IntegerField(default=7)
     is_active = models.BooleanField(default=True)
+    last_service_date = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["piano", "task_type"]
@@ -331,3 +332,32 @@ class MaintenanceRequest(models.Model):
 
     def __str__(self):
         return f"Request {self.pk} — {self.piano} [{self.status}]"
+
+
+# ---------------------------------------------------------------------------
+# Attachment
+# ---------------------------------------------------------------------------
+class Attachment(models.Model):
+    piano = models.ForeignKey(
+        Piano,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    work_order = models.ForeignKey(
+        WorkOrder,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    file = models.FileField(upload_to="attachments/%Y/%m/")
+    filename = models.CharField(max_length=255)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+
+    def __str__(self):
+        return self.filename
