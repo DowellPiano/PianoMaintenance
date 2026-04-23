@@ -75,14 +75,14 @@ class TechnicianViewSet(viewsets.ModelViewSet):
     def reactivate(self, request, pk=None):
         technician = self.get_object()
         technician.is_active = True
-        technician.save(update_fields=['is_active'])
+        technician.save()
         return Response(TechnicianSerializer(technician).data)
 
     @action(detail=True, methods=['post'])
     def deactivate(self, request, pk=None):
         technician = self.get_object()
         technician.is_active = False
-        technician.save(update_fields=['is_active'])
+        technician.save()
         return Response(TechnicianSerializer(technician).data)
 
 
