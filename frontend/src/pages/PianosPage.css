@@ -110,6 +110,47 @@
 .type-upright  { background: #dbeafe; color: #1e40af; }
 .type-digital  { background: #d1fae5; color: #065f46; }
 
+/* Header actions group (toggle + add button) */
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* Active state for the toggle button */
+.btn-secondary.active {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+/* Inactive piano rows */
+.inactive-row { opacity: 0.65; }
+.inactive-row .piano-name { color: #888; }
+
+/* Banner shown above the inactive table */
+.inactive-banner {
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.75rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: #92400e;
+}
+
+/* Reactivate button (mirrors TechniciansPage) */
+.btn-reactivate {
+  padding: 0.3rem 0.75rem;
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+.btn-reactivate:hover { background: #a7f3d0; }
+
 .actions {
   display: flex;
   gap: 0.5rem;
