@@ -110,15 +110,33 @@ export default function TechniciansPage() {
   useEffect(() => { loadTechnicians() }, [loadTechnicians])
 
   async function handleReactivate(tech) {
-    const r = await fetch(`/api/technicians/${tech.id}/reactivate/`, { method: 'POST' })
-    if (r.ok) loadTechnicians()
-    else setError('Reactivate failed.')
+    setError(null)
+    try {
+      const r = await fetch(`/api/technicians/${tech.id}/reactivate/`, { method: 'POST' })
+      if (r.ok) {
+        loadTechnicians()
+      } else {
+        const data = await r.json().catch(() => ({}))
+        setError(data.detail || `Reactivate failed (HTTP ${r.status}).`)
+      }
+    } catch {
+      setError('Reactivate failed — network error.')
+    }
   }
 
   async function handleDeactivate(tech) {
-    const r = await fetch(`/api/technicians/${tech.id}/deactivate/`, { method: 'POST' })
-    if (r.ok) loadTechnicians()
-    else setError('Deactivate failed.')
+    setError(null)
+    try {
+      const r = await fetch(`/api/technicians/${tech.id}/deactivate/`, { method: 'POST' })
+      if (r.ok) {
+        loadTechnicians()
+      } else {
+        const data = await r.json().catch(() => ({}))
+        setError(data.detail || `Deactivate failed (HTTP ${r.status}).`)
+      }
+    } catch {
+      setError('Deactivate failed — network error.')
+    }
   }
 
   const active   = technicians.filter(t => t.is_active !== false)
