@@ -39,6 +39,7 @@ class PianoSerializer(serializers.ModelSerializer):
             'location_name',
             'date_acquired',
             'notes',
+            'is_active',
             'qr_code_token',
         ]
         read_only_fields = ['qr_code_token']

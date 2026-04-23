@@ -2,7 +2,6 @@ import csv
 from datetime import date
 
 from django.db.models import Count, Max, Sum
-from django.db.models.deletion import ProtectedError
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -42,25 +41,41 @@ class LocationViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 # ---------------------------------------------------------------------------
-# Piano  (Bug 1: catch ProtectedError on delete)
+# Piano  (soft-delete via is_active flag)
 # ---------------------------------------------------------------------------
 class PianoViewSet(viewsets.ModelViewSet):
-    queryset = Piano.objects.select_related('location').order_by('location__name', 'name')
     serializer_class = PianoSerializer
 
+    def get_queryset(self):
+        qs = Piano.objects.select_related('location').order_by('location__name', 'name')
+        # ?active=false → inactive only  |  ?active=all → everything  |  default → active only
+        active_param = self.request.query_params.get('active', 'true').lower()
+        if active_param == 'false':
+            return qs.filter(is_active=False)
+        elif active_param == 'all':
+            return qs
+        return qs.filter(is_active=True)
+
+    def get_object(self):
+        """Always look up by pk without the is_active filter so destroy/reactivate work on inactive pianos."""
+        queryset = Piano.objects.select_related('location')
+        obj = get_object_or_404(queryset, pk=self.kwargs['pk'])
+        self.check_object_permissions(self.request, obj)
+        return obj
+
     def destroy(self, request, *args, **kwargs):
-        try:
-            return super().destroy(request, *args, **kwargs)
-        except ProtectedError:
-            return Response(
-                {
-                    'error': (
-                        "Cannot delete this piano because it has existing work orders. "
-                        "Archive the piano instead, or delete its work orders first."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        """Soft-delete: set is_active=False instead of removing from the DB."""
+        piano = self.get_object()
+        Piano.objects.filter(pk=piano.pk).update(is_active=False)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'])
+    def reactivate(self, request, pk=None):
+        """Reactivate a previously deactivated piano."""
+        piano = self.get_object()
+        Piano.objects.filter(pk=piano.pk).update(is_active=True)
+        piano.refresh_from_db()
+        return Response(self.get_serializer(piano).data)
 
 
 # ---------------------------------------------------------------------------

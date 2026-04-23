@@ -37,6 +37,7 @@ class Piano(models.Model):
     piano_type = models.CharField(max_length=20, choices=PianoType.choices)
     date_acquired = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
     qr_code_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     class Meta:
