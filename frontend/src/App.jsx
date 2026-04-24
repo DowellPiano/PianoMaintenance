@@ -14,6 +14,7 @@ import WorkOrdersPage from './pages/WorkOrdersPage'
 import DashboardPage from './pages/DashboardPage'
 import PartsPage from './pages/PartsPage'
 import TechniciansPage from './pages/TechniciansPage'
+import ReportsPage from './pages/ReportsPage'
 import './App.css'
 
 // Shared chrome (header + nav) for all authenticated pages.
@@ -52,6 +53,7 @@ function AppShell() {
           {user?.is_staff && <NavLink to="/technicians">Technicians</NavLink>}
           <NavLink to="/maintenance">Maintenance</NavLink>
           <NavLink to="/schedule">Schedule</NavLink>
+          <NavLink to="/reports">Reports</NavLink>
         </nav>
         <div className="header-right">
           <button
@@ -115,6 +117,7 @@ function App() {
               <Route path="technicians"   element={<TechniciansPage />} />
               <Route path="maintenance"   element={<MaintenancePage />} />
               <Route path="schedule"      element={<SchedulePage />} />
+              <Route path="reports"       element={<ReportsPage />} />
             </Route>
           </Route>
         </Routes>

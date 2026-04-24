@@ -1,12 +1,27 @@
 from datetime import date, timedelta
 from rest_framework import serializers
 from .models import (
-    Location, Piano, MaintenanceSchedule, ScheduleTemplate,
-    WorkOrder, Technician, Team, Photo, MaintenanceLog,
-    ConditionReading, Part, PartUsed, MaintenanceRequest, Alert,
+    Attachment,
+    ConditionReading,
+    Location,
+    MaintenanceLog,
+    MaintenanceSchedule,
+    Piano,
+    ScheduleTemplate,
+    Technician,
+    Team,
+    Photo,
+    WorkOrder,
+    Part,
+    PartUsed,
+    MaintenanceRequest,
+    Alert,
 )
 
 
+# ---------------------------------------------------------------------------
+# Location
+# ---------------------------------------------------------------------------
 class LocationSerializer(serializers.ModelSerializer):
     piano_count = serializers.IntegerField(source='pianos.count', read_only=True)
 
@@ -15,6 +30,9 @@ class LocationSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'building', 'address', 'piano_count']
 
 
+# ---------------------------------------------------------------------------
+# Photo
+# ---------------------------------------------------------------------------
 class PhotoSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
 
@@ -30,6 +48,9 @@ class PhotoSerializer(serializers.ModelSerializer):
         return None
 
 
+# ---------------------------------------------------------------------------
+# Piano
+# ---------------------------------------------------------------------------
 class PianoSerializer(serializers.ModelSerializer):
     location_name     = serializers.CharField(source='location.name', read_only=True)
     profile_photo_url = serializers.SerializerMethodField()
@@ -39,7 +60,7 @@ class PianoSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'brand', 'model', 'serial_number',
             'piano_type', 'location', 'location_name',
-            'year_built', 'year_acquired', 'notes', 'qr_code_token',
+            'year_built', 'year_acquired', 'notes', 'is_active', 'qr_code_token',
             'profile_photo_url',
         ]
         read_only_fields = ['qr_code_token']
@@ -52,6 +73,9 @@ class PianoSerializer(serializers.ModelSerializer):
         return None
 
 
+# ---------------------------------------------------------------------------
+# ScheduleTemplate
+# ---------------------------------------------------------------------------
 class ScheduleTemplateSerializer(serializers.ModelSerializer):
     schedule_count = serializers.IntegerField(source='schedules.count', read_only=True)
 
@@ -63,6 +87,9 @@ class ScheduleTemplateSerializer(serializers.ModelSerializer):
         ]
 
 
+# ---------------------------------------------------------------------------
+# MaintenanceSchedule
+# ---------------------------------------------------------------------------
 class MaintenanceScheduleSerializer(serializers.ModelSerializer):
     piano_name     = serializers.CharField(source='piano.name',          read_only=True)
     piano_brand    = serializers.CharField(source='piano.brand',         read_only=True)
@@ -88,21 +115,35 @@ class MaintenanceScheduleSerializer(serializers.ModelSerializer):
             'id', 'piano', 'piano_name', 'piano_brand', 'piano_location',
             'template', 'template_name', 'task_name', 'task_type',
             'interval_days', 'warning_days_before', 'is_active',
-            'is_paused', 'skip_next', 'next_due',
+            'last_service_date', 'next_due',
         ]
 
 
+# ---------------------------------------------------------------------------
+# TechnicianMinimal  (for list/retrieve endpoints — no sensitive data)
+# ---------------------------------------------------------------------------
 class TechnicianMinimalSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
+    team_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Technician
-        fields = ['id', 'username', 'full_name']
+        fields = [
+            'id', 'username', 'full_name', 'first_name', 'last_name',
+            'email', 'is_active', 'is_staff', 'date_joined',
+            'team', 'team_name',
+        ]
 
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username
 
+    def get_team_name(self, obj):
+        return obj.team.name if obj.team_id else None
 
+
+# ---------------------------------------------------------------------------
+# MaintenanceLog
+# ---------------------------------------------------------------------------
 class MaintenanceLogSerializer(serializers.ModelSerializer):
     technician_name = serializers.SerializerMethodField(read_only=True)
     piano           = serializers.PrimaryKeyRelatedField(source='work_order.piano', read_only=True)
@@ -121,6 +162,9 @@ class MaintenanceLogSerializer(serializers.ModelSerializer):
         return obj.technician.get_full_name() or obj.technician.username
 
 
+# ---------------------------------------------------------------------------
+# WorkOrder
+# ---------------------------------------------------------------------------
 class WorkOrderSerializer(serializers.ModelSerializer):
     piano_name         = serializers.CharField(source='piano.name',          read_only=True)
     piano_brand        = serializers.CharField(source='piano.brand',         read_only=True)
@@ -182,7 +226,7 @@ class PartUsedSerializer(serializers.ModelSerializer):
 
 
 # ---------------------------------------------------------------------------
-# Technician (full)
+# Technician (full — for create/update)
 # ---------------------------------------------------------------------------
 class TechnicianSerializer(serializers.ModelSerializer):
     password  = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -213,7 +257,7 @@ class TechnicianSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
-        # username and password are not updatable
+        # username and password are not updatable via this serializer
         validated_data.pop('username', None)
         validated_data.pop('password', None)
         for attr, value in validated_data.items():
@@ -282,3 +326,20 @@ class AlertSerializer(serializers.ModelSerializer):
             'piano_name', 'piano_location', 'due_date', 'priority',
         ]
         read_only_fields = ['sent_at']
+
+
+# ---------------------------------------------------------------------------
+# Attachment  (legacy)
+# ---------------------------------------------------------------------------
+class AttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Attachment
+        fields = [
+            'id',
+            'piano',
+            'work_order',
+            'file',
+            'filename',
+            'uploaded_at',
+        ]
+        read_only_fields = ['uploaded_at']

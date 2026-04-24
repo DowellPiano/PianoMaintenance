@@ -6,12 +6,14 @@ Usage:
     python manage.py generate_work_orders --dry-run
 
 For every active MaintenanceSchedule this command:
-  1. Looks up the most recent MaintenanceLog for the piano whose
-     work_order__schedule matches the schedule (same task type is used
-     as a fallback when no schedule FK exists on the log).
-  2. Computes whether the interval has elapsed since that log.
-  3. Creates a new Open/Preventive WorkOrder if needed, unless one is
-     already Open or In Progress for that schedule.
+  1. Determines the anchor date in priority order:
+       a. schedule.last_service_date  (set whenever a work order is completed)
+       b. piano.date_acquired         (fallback when no service has ever occurred)
+       c. today                       (last resort)
+  2. Computes next_due = anchor + interval_days.
+  3. Creates a new Open/Preventive WorkOrder if:
+       - next_due <= today + warning_days_before (i.e. due or coming due soon), AND
+       - no Open or In-Progress WorkOrder already exists for this schedule.
 """
 
 import logging
@@ -19,7 +21,7 @@ from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
 
-from maintenance.models import MaintenanceSchedule, MaintenanceLog, WorkOrder
+from maintenance.models import MaintenanceSchedule, WorkOrder
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,8 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("--- DRY RUN — nothing will be saved ---"))
 
         active_schedules = (
-            MaintenanceSchedule.objects.filter(is_active=True)
+            MaintenanceSchedule.objects
+            .filter(is_active=True)
             .select_related("piano")
         )
 
@@ -55,8 +58,7 @@ class Command(BaseCommand):
             piano = schedule.piano
 
             # ------------------------------------------------------------------
-            # 1.  Check for an already-open / in-progress WorkOrder for this
-            #     schedule so we don't create duplicates.
+            # 1.  Skip if an open / in-progress WO already exists for this schedule.
             # ------------------------------------------------------------------
             open_statuses = [WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS]
             if WorkOrder.objects.filter(schedule=schedule, status__in=open_statuses).exists():
@@ -69,88 +71,71 @@ class Command(BaseCommand):
                 continue
 
             # ------------------------------------------------------------------
-            # 2.  Find the most recent MaintenanceLog for this piano & schedule.
-            #     Primary: logs tied to a WO that uses this schedule.
-            #     Fallback: any log for this piano whose WO matches the task type.
+            # 2.  Determine the anchor date for next-due calculation.
+            #     Priority: last_service_date > piano.date_acquired > today
             # ------------------------------------------------------------------
-            last_log = (
-                MaintenanceLog.objects.filter(
-                    piano=piano,
-                    work_order__schedule=schedule,
-                )
-                .order_by("-logged_at")
-                .first()
-            )
-
-            if last_log is None:
-                # Fallback: check logs for the same piano via task_type on the
-                # schedule linked to those WOs.
-                last_log = (
-                    MaintenanceLog.objects.filter(
-                        piano=piano,
-                        work_order__schedule__task_type=schedule.task_type,
-                    )
-                    .order_by("-logged_at")
-                    .first()
-                )
-
-            # ------------------------------------------------------------------
-            # 3.  Determine whether a new WorkOrder is needed.
-            # ------------------------------------------------------------------
-            needs_work_order = False
-
-            if last_log is None:
-                # Never serviced — create immediately.
-                needs_work_order = True
-                reason = "never serviced"
+            if schedule.last_service_date:
+                anchor = schedule.last_service_date
+                anchor_source = "last_service_date"
+            elif piano.date_acquired:
+                anchor = piano.date_acquired
+                anchor_source = "piano.date_acquired"
             else:
-                last_date = last_log.logged_at.date()
-                next_due = last_date + timedelta(days=schedule.interval_days)
-                warn_from = next_due - timedelta(days=schedule.warning_days_before)
+                anchor = today
+                anchor_source = "today (no history)"
 
-                if today >= warn_from:
-                    needs_work_order = True
-                    reason = (
-                        f"due {next_due} (warning window started {warn_from})"
-                    )
-                else:
-                    skipped_not_due += 1
-                    logger.debug(
-                        "Skipping schedule %s — not due until %s.", schedule.pk, next_due
-                    )
-                    continue
+            next_due = anchor + timedelta(days=schedule.interval_days)
+            warn_from = next_due - timedelta(days=schedule.warning_days_before)
+
+            # ------------------------------------------------------------------
+            # 3.  Decide whether to create a WorkOrder.
+            # ------------------------------------------------------------------
+            if today < warn_from:
+                skipped_not_due += 1
+                logger.debug(
+                    "Skipping schedule %s — not due until %s (warning from %s).",
+                    schedule.pk,
+                    next_due,
+                    warn_from,
+                )
+                continue
+
+            reason = (
+                f"anchor={anchor} ({anchor_source}), "
+                f"next_due={next_due}, warn_from={warn_from}"
+            )
 
             # ------------------------------------------------------------------
             # 4.  Create the WorkOrder.
             # ------------------------------------------------------------------
-            if needs_work_order:
-                description = (
-                    f"Auto-generated preventive work order for '{schedule.task_name}' "
-                    f"on {piano}. Reason: {reason}."
-                )
+            description = (
+                f"Auto-generated preventive work order for '{schedule.task_name}' "
+                f"on {piano}. Reason: {reason}."
+            )
 
-                if dry_run:
-                    self.stdout.write(
-                        self.style.SUCCESS(
-                            f"[DRY RUN] Would create WO — Piano: {piano} | "
-                            f"Schedule: {schedule.task_name} | Reason: {reason}"
-                        )
+            if dry_run:
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"[DRY RUN] Would create WO — Piano: {piano} | "
+                        f"Schedule: {schedule.task_name} | {reason}"
                     )
-                else:
-                    WorkOrder.objects.create(
-                        piano=piano,
-                        schedule=schedule,
-                        order_type=WorkOrder.OrderType.PREVENTIVE,
-                        status=WorkOrder.Status.OPEN,
-                        priority=WorkOrder.Priority.NORMAL,
-                        description=description,
+                )
+            else:
+                WorkOrder.objects.create(
+                    piano=piano,
+                    schedule=schedule,
+                    order_type=WorkOrder.OrderType.PREVENTIVE,
+                    status=WorkOrder.Status.OPEN,
+                    priority=WorkOrder.Priority.NORMAL,
+                    description=description,
+                    due_date=next_due,
+                )
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"Created WO — Piano: {piano} | Schedule: {schedule.task_name} | {reason}"
                     )
-                    self.stdout.write(
-                        self.style.SUCCESS(
-                            f"Created WO — Piano: {piano} | Schedule: {schedule.task_name} | {reason}"
-                        )
-                    )
-                created += 1
+                )
+            created += 1
 
         # ------------------------------------------------------------------
         # 5.  Summary

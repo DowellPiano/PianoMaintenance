@@ -42,6 +42,7 @@ class Piano(models.Model):
     year_built    = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
     year_acquired = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
     notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
     qr_code_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     class Meta:
@@ -146,6 +147,7 @@ class MaintenanceSchedule(models.Model):
     interval_days = models.IntegerField()
     warning_days_before = models.IntegerField(default=7)
     is_active = models.BooleanField(default=True)
+    last_service_date = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["piano", "task_type"]
@@ -385,3 +387,32 @@ class Photo(models.Model):
         if self.work_order_id:
             return f"Photo #{self.pk} (WO #{self.work_order_id})"
         return f"Photo #{self.pk}"
+
+
+# ---------------------------------------------------------------------------
+# Attachment  (legacy file attachment model)
+# ---------------------------------------------------------------------------
+class Attachment(models.Model):
+    piano = models.ForeignKey(
+        Piano,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    work_order = models.ForeignKey(
+        WorkOrder,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    file = models.FileField(upload_to="attachments/%Y/%m/")
+    filename = models.CharField(max_length=255)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+
+    def __str__(self):
+        return self.filename

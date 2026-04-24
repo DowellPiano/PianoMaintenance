@@ -175,6 +175,18 @@
 }
 .btn-danger:hover { background: #b91c1c; }
 
+.btn-complete {
+  padding: 0.5rem 1.25rem;
+  background: #059669;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.btn-complete:hover:not(:disabled) { background: #047857; }
+.btn-complete:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* Inline field validation errors */
 .field-error {
   font-size: 0.78rem;

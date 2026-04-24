@@ -1,6 +1,13 @@
+import csv
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.contrib.auth import authenticate
+from django.db.models import Count, DecimalField, F, Max, Sum
+from django.db.models.functions import Coalesce
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+
 from rest_framework import viewsets, status, filters as drf_filters
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action, api_view, authentication_classes, permission_classes
@@ -14,17 +21,18 @@ from .models import (
     ConditionReading, Part, PartUsed, MaintenanceRequest, Alert,
 )
 from .serializers import (
+    AttachmentSerializer,
+    ConditionReadingSerializer,
     LocationSerializer,
-    PianoSerializer,
+    MaintenanceLogSerializer,
     MaintenanceScheduleSerializer,
+    PianoSerializer,
     ScheduleTemplateSerializer,
     WorkOrderSerializer,
-    MaintenanceLogSerializer,
     TechnicianMinimalSerializer,
     TechnicianSerializer,
     TeamSerializer,
     PhotoSerializer,
-    ConditionReadingSerializer,
     PartSerializer,
     PartUsedSerializer,
     MaintenanceRequestSerializer,
@@ -32,6 +40,9 @@ from .serializers import (
 )
 
 
+# ---------------------------------------------------------------------------
+# Location
+# ---------------------------------------------------------------------------
 class LocationViewSet(viewsets.ModelViewSet):
     serializer_class = LocationSerializer
 
@@ -39,8 +50,10 @@ class LocationViewSet(viewsets.ModelViewSet):
         return Location.objects.prefetch_related('pianos').order_by('name')
 
 
+# ---------------------------------------------------------------------------
+# Piano  (soft-delete via is_active flag)
+# ---------------------------------------------------------------------------
 class PianoViewSet(viewsets.ModelViewSet):
-    queryset = Piano.objects.select_related('location').prefetch_related('photos').order_by('location__name', 'name')
     serializer_class = PianoSerializer
 
     # Filtering: GET /api/pianos/?location=3&piano_type=Grand
@@ -50,121 +63,54 @@ class PianoViewSet(viewsets.ModelViewSet):
     search_fields     = ['name', 'brand', 'serial_number']
     ordering_fields   = ['name', 'brand', 'piano_type', 'location__name', 'year_built', 'year_acquired']
 
+    def get_queryset(self):
+        qs = Piano.objects.select_related('location').prefetch_related('photos').order_by('location__name', 'name')
+        # ?active=false → inactive only  |  ?active=all → everything  |  default → active only
+        active_param = self.request.query_params.get('active', 'true').lower()
+        if active_param == 'false':
+            return qs.filter(is_active=False)
+        elif active_param == 'all':
+            return qs
+        return qs.filter(is_active=True)
+
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
         ctx['request'] = self.request
         return ctx
 
+    def get_object(self):
+        """Always look up by pk without the is_active filter so destroy/reactivate work on inactive pianos."""
+        queryset = Piano.objects.select_related('location')
+        obj = get_object_or_404(queryset, pk=self.kwargs['pk'])
+        self.check_object_permissions(self.request, obj)
+        return obj
 
-class ScheduleTemplateViewSet(viewsets.ModelViewSet):
-    serializer_class = ScheduleTemplateSerializer
-
-    def get_queryset(self):
-        return ScheduleTemplate.objects.prefetch_related('schedules').order_by('name')
-
-    @action(detail=True, methods=['post'])
-    def apply_to_pianos(self, request, pk=None):
-        template = self.get_object()
-        piano_ids = request.data.get('piano_ids', [])
-        if not piano_ids:
-            return Response({'error': 'No pianos selected.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        pianos = Piano.objects.filter(id__in=piano_ids)
-        created = []
-        for piano in pianos:
-            schedule = MaintenanceSchedule.objects.create(
-                piano=piano,
-                template=template,
-                task_name=template.task_name,
-                task_type=template.task_type,
-                interval_days=template.interval_days,
-                warning_days_before=template.warning_days_before,
-            )
-            created.append(schedule.id)
-
-        return Response({'created': len(created), 'schedule_ids': created})
-
-
-class MaintenanceScheduleViewSet(viewsets.ModelViewSet):
-    serializer_class = MaintenanceScheduleSerializer
-
-    # Filtering: GET /api/schedules/?piano=5&is_active=true&task_type=Tuning
-    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
-    filterset_fields  = ['piano', 'is_active', 'task_type']
-    # Search: GET /api/schedules/?search=tuning  (matches task_name and piano name)
-    search_fields     = ['task_name', 'piano__name']
-    ordering_fields   = ['piano__name', 'task_type', 'interval_days']
-
-    def get_queryset(self):
-        return MaintenanceSchedule.objects.select_related(
-            'piano__location', 'template'
-        ).order_by('piano__location__name', 'piano__name', 'task_type')
-
-
-class WorkOrderViewSet(viewsets.ModelViewSet):
-    serializer_class = WorkOrderSerializer
-
-    filter_backends   = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
-    filterset_fields  = ['status', 'priority', 'order_type', 'piano', 'assigned_tech']
-    search_fields     = ['description', 'piano__name']
-    ordering_fields   = ['due_date', 'created_at', 'priority', 'status']
-    ordering          = ['-due_date']
-
-    def get_queryset(self):
-        return WorkOrder.objects.select_related(
-            'piano__location', 'assigned_tech', 'schedule'
-        ).order_by('-due_date')
+    def destroy(self, request, *args, **kwargs):
+        """Soft-delete: set is_active=False instead of removing from the DB."""
+        piano = self.get_object()
+        Piano.objects.filter(pk=piano.pk).update(is_active=False)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'])
-    def start(self, request, pk=None):
-        wo = self.get_object()
-        if wo.status != 'Open':
-            return Response({'error': 'Only Open work orders can be started.'}, status=status.HTTP_400_BAD_REQUEST)
-        wo.status = 'In Progress'
-        wo.save()
-        return Response(WorkOrderSerializer(wo).data)
-
-    @action(detail=True, methods=['post'])
-    def complete(self, request, pk=None):
-        wo = self.get_object()
-        if wo.status in ('Complete', 'Cancelled'):
-            return Response({'error': f'Work order is already {wo.status}.'}, status=status.HTTP_400_BAD_REQUEST)
-        hours_worked    = request.data.get('hours_worked')
-        work_performed  = request.data.get('work_performed')
-        if not hours_worked or not work_performed:
-            return Response({'error': 'hours_worked and work_performed are required.'}, status=status.HTTP_400_BAD_REQUEST)
-        log = MaintenanceLog.objects.create(
-            work_order=wo,
-            technician=request.user,
-            piano=wo.piano,
-            hours_worked=hours_worked,
-            work_performed=work_performed,
-            notes=request.data.get('notes', ''),
-        )
-        wo.status = 'Complete'
-        wo.completed_date = date.today()
-        wo.save()
-        return Response({
-            'work_order': WorkOrderSerializer(wo).data,
-            'log':        MaintenanceLogSerializer(log).data,
-        })
+    def reactivate(self, request, pk=None):
+        """Reactivate a previously deactivated piano."""
+        piano = self.get_object()
+        Piano.objects.filter(pk=piano.pk).update(is_active=True)
+        piano.refresh_from_db()
+        return Response(self.get_serializer(piano).data)
 
 
-class MaintenanceLogViewSet(viewsets.ModelViewSet):
-    serializer_class = MaintenanceLogSerializer
-
-    filter_backends  = [DjangoFilterBackend]
-    filterset_fields = ['work_order']
-
-    def get_queryset(self):
-        return MaintenanceLog.objects.select_related('work_order__piano', 'technician').order_by('-logged_at')
-
-    def perform_create(self, serializer):
-        serializer.save(technician=self.request.user)
+# ---------------------------------------------------------------------------
+# Technician  (reactivate / deactivate actions)
+# ---------------------------------------------------------------------------
+class IsStaffPermission(IsAuthenticated):
+    """Extends IsAuthenticated: also requires is_staff=True."""
+    def has_permission(self, request, view):
+        return super().has_permission(request, view) and request.user.is_staff
 
 
 class TechnicianViewSet(viewsets.ModelViewSet):
-    queryset = Technician.objects.all().order_by('first_name', 'last_name')
+    queryset = Technician.objects.all().order_by('last_name', 'first_name')
 
     def get_serializer_class(self):
         if self.action in ('list', 'retrieve'):
@@ -187,11 +133,24 @@ class TechnicianViewSet(viewsets.ModelViewSet):
             )
         return super().destroy(request, *args, **kwargs)
 
+    @action(detail=True, methods=['post'])
+    def reactivate(self, request, pk=None):
+        # Fetch without filter_queryset so inactive users are never silently 404'd.
+        technician = get_object_or_404(Technician, pk=pk)
+        self.check_object_permissions(request, technician)
+        # Direct queryset UPDATE bypasses AbstractUser.save() side-effects.
+        Technician.objects.filter(pk=technician.pk).update(is_active=True)
+        # Reload from DB so the response reflects actual persisted state.
+        technician.refresh_from_db()
+        return Response(TechnicianSerializer(technician).data)
 
-class IsStaffPermission(IsAuthenticated):
-    """Extends IsAuthenticated: also requires is_staff=True."""
-    def has_permission(self, request, view):
-        return super().has_permission(request, view) and request.user.is_staff
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        technician = get_object_or_404(Technician, pk=pk)
+        self.check_object_permissions(request, technician)
+        Technician.objects.filter(pk=technician.pk).update(is_active=False)
+        technician.refresh_from_db()
+        return Response(TechnicianSerializer(technician).data)
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +182,165 @@ class TeamViewSet(viewsets.ModelViewSet):
 
 
 # ---------------------------------------------------------------------------
+# ScheduleTemplate
+# ---------------------------------------------------------------------------
+class ScheduleTemplateViewSet(viewsets.ModelViewSet):
+    serializer_class = ScheduleTemplateSerializer
+
+    def get_queryset(self):
+        return ScheduleTemplate.objects.prefetch_related('schedules').order_by('name')
+
+    @action(detail=True, methods=['post'])
+    def apply_to_pianos(self, request, pk=None):
+        template = self.get_object()
+        piano_ids = request.data.get('piano_ids', [])
+        if not piano_ids:
+            return Response({'error': 'No pianos selected.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        pianos = Piano.objects.filter(id__in=piano_ids)
+        created = []
+        for piano in pianos:
+            schedule = MaintenanceSchedule.objects.create(
+                piano=piano,
+                template=template,
+                task_name=template.task_name,
+                task_type=template.task_type,
+                interval_days=template.interval_days,
+                warning_days_before=template.warning_days_before,
+            )
+            created.append(schedule.id)
+
+        return Response({'created': len(created), 'schedule_ids': created})
+
+
+# ---------------------------------------------------------------------------
+# MaintenanceSchedule
+# ---------------------------------------------------------------------------
+class MaintenanceScheduleViewSet(viewsets.ModelViewSet):
+    serializer_class = MaintenanceScheduleSerializer
+
+    # Filtering: GET /api/schedules/?piano=5&is_active=true&task_type=Tuning
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_fields  = ['piano', 'is_active', 'task_type']
+    # Search: GET /api/schedules/?search=tuning  (matches task_name and piano name)
+    search_fields     = ['task_name', 'piano__name']
+    ordering_fields   = ['piano__name', 'task_type', 'interval_days']
+
+    def get_queryset(self):
+        return MaintenanceSchedule.objects.select_related(
+            'piano__location', 'template'
+        ).order_by('piano__location__name', 'piano__name', 'task_type')
+
+
+# ---------------------------------------------------------------------------
+# WorkOrder
+# ---------------------------------------------------------------------------
+class WorkOrderViewSet(viewsets.ModelViewSet):
+    serializer_class = WorkOrderSerializer
+
+    filter_backends   = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_fields  = ['status', 'priority', 'order_type', 'piano', 'assigned_tech']
+    search_fields     = ['description', 'piano__name']
+    ordering_fields   = ['due_date', 'created_at', 'priority', 'status']
+    ordering          = ['-due_date']
+
+    def get_queryset(self):
+        qs = WorkOrder.objects.select_related(
+            'piano__location', 'assigned_tech', 'schedule'
+        ).order_by('-due_date')
+        piano_id = self.request.query_params.get('piano')
+        if piano_id:
+            qs = qs.filter(piano_id=piano_id)
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def start(self, request, pk=None):
+        wo = self.get_object()
+        if wo.status != 'Open':
+            return Response({'error': 'Only Open work orders can be started.'}, status=status.HTTP_400_BAD_REQUEST)
+        wo.status = 'In Progress'
+        wo.save()
+        return Response(WorkOrderSerializer(wo).data)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        work_order = self.get_object()
+
+        if work_order.status in ('Complete', 'Cancelled'):
+            return Response(
+                {'error': f'Work order is already {work_order.status}.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        hours_worked   = request.data.get('hours_worked')
+        work_performed = request.data.get('work_performed', '').strip()
+
+        try:
+            hours_worked_val = float(hours_worked)
+        except (TypeError, ValueError):
+            hours_worked_val = 0
+
+        if hours_worked_val <= 0 or not work_performed:
+            return Response(
+                {'error': 'hours_worked must be greater than 0 and work_performed is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        notes = request.data.get('notes', '')
+
+        # Resolve technician
+        if request.user and request.user.is_authenticated:
+            technician = request.user
+        elif work_order.assigned_tech:
+            technician = work_order.assigned_tech
+        else:
+            return Response(
+                {'error': 'No technician could be determined. Assign a technician or authenticate.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        log = MaintenanceLog.objects.create(
+            work_order=work_order,
+            technician=technician,
+            piano=work_order.piano,
+            hours_worked=hours_worked_val,
+            work_performed=work_performed,
+            notes=notes,
+        )
+
+        today_date = date.today()
+        work_order.status = WorkOrder.Status.COMPLETE
+        work_order.completed_date = today_date
+        work_order.save(update_fields=['status', 'completed_date'])
+
+        # Update schedule's last_service_date
+        if work_order.schedule_id:
+            MaintenanceSchedule.objects.filter(pk=work_order.schedule_id).update(
+                last_service_date=today_date
+            )
+
+        return Response({
+            'work_order': WorkOrderSerializer(work_order).data,
+            'log':        MaintenanceLogSerializer(log).data,
+        })
+
+
+# ---------------------------------------------------------------------------
+# MaintenanceLog
+# ---------------------------------------------------------------------------
+class MaintenanceLogViewSet(viewsets.ModelViewSet):
+    serializer_class = MaintenanceLogSerializer
+
+    filter_backends  = [DjangoFilterBackend]
+    filterset_fields = ['work_order']
+
+    def get_queryset(self):
+        return MaintenanceLog.objects.select_related('work_order__piano', 'technician').order_by('-logged_at')
+
+    def perform_create(self, serializer):
+        serializer.save(technician=self.request.user)
+
+
+# ---------------------------------------------------------------------------
 # ConditionReadingViewSet
 # ---------------------------------------------------------------------------
 class ConditionReadingViewSet(viewsets.ModelViewSet):
@@ -234,7 +352,11 @@ class ConditionReadingViewSet(viewsets.ModelViewSet):
     ordering         = ['-recorded_at']
 
     def get_queryset(self):
-        return ConditionReading.objects.select_related('piano', 'log').order_by('-recorded_at')
+        qs = ConditionReading.objects.select_related('piano', 'log').order_by('-recorded_at')
+        piano_id = self.request.query_params.get('piano')
+        if piano_id:
+            qs = qs.filter(piano_id=piano_id)
+        return qs
 
     def perform_create(self, serializer):
         # Auto-derive piano from the linked log if not explicitly provided
@@ -261,8 +383,6 @@ class PartViewSet(viewsets.ModelViewSet):
         qs = Part.objects.all().order_by('name')
         needs_reorder = self.request.query_params.get('needs_reorder')
         if needs_reorder is not None:
-            # Filter rows where stock_quantity <= reorder_threshold
-            from django.db.models import F
             if needs_reorder.lower() in ('true', '1'):
                 qs = qs.filter(stock_quantity__lte=F('reorder_threshold'))
             else:
@@ -326,6 +446,9 @@ class MaintenanceRequestViewSet(viewsets.ModelViewSet):
         mr.save(update_fields=['work_order'])
 
 
+# ---------------------------------------------------------------------------
+# PhotoViewSet
+# ---------------------------------------------------------------------------
 class PhotoViewSet(viewsets.ModelViewSet):
     serializer_class = PhotoSerializer
 
@@ -382,6 +505,174 @@ class AlertViewSet(viewsets.ModelViewSet):
         alert.save()
         return Response(AlertSerializer(alert).data)
 
+
+# ---------------------------------------------------------------------------
+# Attachment  (legacy support)
+# ---------------------------------------------------------------------------
+class AttachmentViewSet(viewsets.ModelViewSet):
+    serializer_class = AttachmentSerializer
+
+    def get_queryset(self):
+        qs = Photo.objects.all()
+        piano_id = self.request.query_params.get('piano')
+        work_order_id = self.request.query_params.get('work_order')
+        if piano_id:
+            qs = qs.filter(piano_id=piano_id)
+        if work_order_id:
+            qs = qs.filter(work_order_id=work_order_id)
+        return qs
+
+
+# ---------------------------------------------------------------------------
+# Reports  (technician report + CSV exports)
+# ---------------------------------------------------------------------------
+class ReportsViewSet(viewsets.ViewSet):
+    """
+    Reporting endpoints. No model backing — all data is aggregated on-the-fly.
+
+    GET /api/reports/technicians/              — all-technician workload summary
+    GET /api/reports/technicians/export_csv/   — same data as CSV download
+    GET /api/reports/pianos/export_csv/        — piano service status CSV
+    """
+
+    def _build_log_filter(self, request):
+        """Return a filter kwargs dict for date range if supplied."""
+        filters = {}
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        if date_from:
+            filters['logs__logged_at__date__gte'] = date_from
+        if date_to:
+            filters['logs__logged_at__date__lte'] = date_to
+        return filters
+
+    @action(detail=False, methods=['get'], url_path='technicians')
+    def technicians(self, request):
+        log_filters = self._build_log_filter(request)
+        techs = (
+            Technician.objects
+            .annotate(
+                total_hours=Coalesce(
+                    Sum('logs__hours_worked', filter=self._q(log_filters)),
+                    Decimal('0'),
+                    output_field=DecimalField(),
+                ),
+                work_order_count=Count(
+                    'logs__work_order',
+                    distinct=True,
+                    filter=self._q(log_filters),
+                ),
+                last_logged_at=Max(
+                    'logs__logged_at',
+                    filter=self._q(log_filters),
+                ),
+            )
+            .order_by('last_name', 'first_name')
+        )
+        data = [
+            {
+                'id': t.pk,
+                'name': t.get_full_name() or t.username,
+                'total_hours': float(t.total_hours),
+                'work_order_count': t.work_order_count,
+                'last_logged_at': t.last_logged_at,
+            }
+            for t in techs
+        ]
+        return Response(data)
+
+    @action(detail=False, methods=['get'], url_path='technicians/export_csv')
+    def technicians_export_csv(self, request):
+        log_filters = self._build_log_filter(request)
+        techs = (
+            Technician.objects
+            .annotate(
+                total_hours=Coalesce(
+                    Sum('logs__hours_worked', filter=self._q(log_filters)),
+                    Decimal('0'),
+                    output_field=DecimalField(),
+                ),
+                work_order_count=Count(
+                    'logs__work_order',
+                    distinct=True,
+                    filter=self._q(log_filters),
+                ),
+                last_logged_at=Max(
+                    'logs__logged_at',
+                    filter=self._q(log_filters),
+                ),
+            )
+            .order_by('last_name', 'first_name')
+        )
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="technician_report.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['Technician', 'Total Hours', 'Work Orders Completed', 'Last Activity'])
+        for t in techs:
+            writer.writerow([
+                t.get_full_name() or t.username,
+                float(t.total_hours),
+                t.work_order_count,
+                t.last_logged_at.strftime('%Y-%m-%d %H:%M') if t.last_logged_at else '',
+            ])
+        return response
+
+    @action(detail=False, methods=['get'], url_path='pianos/export_csv')
+    def pianos_export_csv(self, request):
+        pianos = (
+            Piano.objects
+            .select_related('location')
+            .prefetch_related('schedules', 'work_orders')
+            .order_by('location__name', 'name')
+        )
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="piano_report.csv"'
+        writer = csv.writer(response)
+        writer.writerow([
+            'Piano', 'Location', 'Last Service Date', 'Next Due Date', 'Open Work Orders'
+        ])
+        today = date.today()
+        for piano in pianos:
+            open_wo_count = sum(
+                1 for wo in piano.work_orders.all()
+                if wo.status in (WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS)
+            )
+            next_due = None
+            for sched in piano.schedules.all():
+                if not sched.is_active:
+                    continue
+                anchor = sched.last_service_date
+                if anchor is None:
+                    anchor = piano.date_acquired or today
+                candidate = anchor + timedelta(days=sched.interval_days)
+                if next_due is None or candidate < next_due:
+                    next_due = candidate
+
+            last_service = max(
+                (s.last_service_date for s in piano.schedules.all() if s.last_service_date),
+                default=None,
+            )
+            writer.writerow([
+                str(piano),
+                piano.location.name,
+                last_service.strftime('%Y-%m-%d') if last_service else '',
+                next_due.strftime('%Y-%m-%d') if next_due else '',
+                open_wo_count,
+            ])
+        return response
+
+    @staticmethod
+    def _q(filter_dict):
+        from django.db.models import Q
+        q = Q()
+        for key, val in filter_dict.items():
+            q &= Q(**{key: val})
+        return q
+
+
+# ---------------------------------------------------------------------------
+# Function-based views
+# ---------------------------------------------------------------------------
 
 @api_view(['GET'])
 def alert_unread_count(request):
@@ -460,10 +751,10 @@ def calendar_events(request):
         due_date__gte=start, due_date__lte=end
     )
     STATUS_COLOR = {
-        'Open':        '#3b82f6',   # blue
-        'In Progress': '#f59e0b',   # amber
-        'Complete':    '#22c55e',   # green
-        'Cancelled':   '#9ca3af',   # grey
+        'Open':        '#3b82f6',
+        'In Progress': '#f59e0b',
+        'Complete':    '#22c55e',
+        'Cancelled':   '#9ca3af',
     }
     PRIORITY_DOT = {
         'Urgent': '🔴',
@@ -499,7 +790,6 @@ def calendar_events(request):
     # ── Upcoming Schedule Occurrences ─────────────────────────────────────────
     schedules = MaintenanceSchedule.objects.select_related('piano__location').filter(is_active=True)
 
-    # Build a map of schedule_id → last completed work-order date
     last_completed = {}
     completed_wos = WorkOrder.objects.filter(
         schedule__isnull=False,
@@ -525,7 +815,6 @@ def calendar_events(request):
     today = date.today()
     for sched in schedules:
         anchor = last_completed.get(sched.id, today - timedelta(days=sched.interval_days))
-        # Walk forward from anchor to generate occurrences within [start, end]
         occ = anchor + timedelta(days=sched.interval_days)
         while occ <= end:
             if occ >= start:
@@ -566,20 +855,16 @@ def piano_profile(request, piano_id):
     except Piano.DoesNotExist:
         return Response({'error': 'Piano not found.'}, status=404)
 
-    # Piano detail
     piano_data = PianoSerializer(piano, context={'request': request}).data
 
-    # Work orders for this piano
     work_orders = WorkOrder.objects.select_related('assigned_tech').filter(
         piano=piano
     ).order_by('-created_at')[:50]
     wo_data = WorkOrderSerializer(work_orders, many=True).data
 
-    # Active schedules for this piano
     schedules = MaintenanceSchedule.objects.filter(piano=piano, is_active=True)
     sched_data = MaintenanceScheduleSerializer(schedules, many=True).data
 
-    # Photos
     photos = Photo.objects.filter(piano=piano)
     photo_data = PhotoSerializer(photos, many=True, context={'request': request}).data
 

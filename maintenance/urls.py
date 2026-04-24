@@ -1,16 +1,18 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .api import (
+    AttachmentViewSet,
+    ConditionReadingViewSet,
     LocationViewSet,
-    PianoViewSet,
     MaintenanceScheduleViewSet,
-    ScheduleTemplateViewSet,
-    WorkOrderViewSet,
     MaintenanceLogViewSet,
+    PianoViewSet,
+    ReportsViewSet,
+    ScheduleTemplateViewSet,
     TechnicianViewSet,
     TeamViewSet,
     PhotoViewSet,
-    ConditionReadingViewSet,
+    WorkOrderViewSet,
     PartViewSet,
     PartUsedViewSet,
     MaintenanceRequestViewSet,
@@ -26,20 +28,22 @@ from .api import (
 )
 
 router = DefaultRouter()
-router.register(r'locations',          LocationViewSet,            basename='location')
-router.register(r'pianos',             PianoViewSet)
-router.register(r'schedules',          MaintenanceScheduleViewSet, basename='schedule')
-router.register(r'schedule-templates', ScheduleTemplateViewSet,    basename='schedule-template')
-router.register(r'work-orders',        WorkOrderViewSet,           basename='work-order')
-router.register(r'technicians',        TechnicianViewSet,          basename='technician')
-router.register(r'teams',              TeamViewSet,                basename='team')
-router.register(r'photos',             PhotoViewSet,               basename='photo')
-router.register(r'maintenance-logs',   MaintenanceLogViewSet,      basename='maintenance-log')
-router.register(r'condition-readings', ConditionReadingViewSet,    basename='condition-reading')
-router.register(r'parts',             PartViewSet,                 basename='part')
-router.register(r'parts-used',        PartUsedViewSet,             basename='parts-used')
+router.register(r'locations',            LocationViewSet,            basename='location')
+router.register(r'pianos',              PianoViewSet)
+router.register(r'technicians',         TechnicianViewSet,          basename='technician')
+router.register(r'teams',               TeamViewSet,                basename='team')
+router.register(r'schedules',           MaintenanceScheduleViewSet, basename='schedule')
+router.register(r'schedule-templates',  ScheduleTemplateViewSet,    basename='schedule-template')
+router.register(r'work-orders',         WorkOrderViewSet,           basename='work-order')
+router.register(r'maintenance-logs',    MaintenanceLogViewSet,      basename='maintenance-log')
+router.register(r'condition-readings',  ConditionReadingViewSet,    basename='condition-reading')
+router.register(r'attachments',         AttachmentViewSet,          basename='attachment')
+router.register(r'photos',              PhotoViewSet,               basename='photo')
+router.register(r'parts',              PartViewSet,                 basename='part')
+router.register(r'parts-used',         PartUsedViewSet,             basename='parts-used')
 router.register(r'maintenance-requests', MaintenanceRequestViewSet, basename='maintenance-request')
-router.register(r'alerts',              AlertViewSet,              basename='alert')
+router.register(r'alerts',              AlertViewSet,               basename='alert')
+router.register(r'reports',             ReportsViewSet,             basename='report')
 
 urlpatterns = [
     # Fixed paths BEFORE router.urls so they are not swallowed by /<id>/ detail routes
