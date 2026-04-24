@@ -1,0 +1,181 @@
+.month-cal {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.cal-nav-center {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.cal-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.cal-today-btn {
+  padding: 0.2rem 0.65rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.cal-today-btn:hover { background: #dbeafe; }
+
+.cal-nav-btn {
+  background: none;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  width: 30px;
+  height: 30px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cal-nav-btn:hover {
+  background: #f3f4f6;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.cal-dow {
+  text-align: center;
+  padding: 0.5rem 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #f3f4f6;
+  background: #f9fafb;
+}
+
+.cal-cell {
+  min-height: 100px;
+  padding: 0.4rem;
+  border-right: 1px solid #f3f4f6;
+  border-bottom: 1px solid #f3f4f6;
+  cursor: pointer;
+  transition: background 0.1s;
+  vertical-align: top;
+}
+
+.cal-cell:nth-child(7n) {
+  border-right: none;
+}
+
+.cal-cell:hover {
+  background: #f9fafb;
+}
+
+.cal-cell.other-month {
+  background: #fafafa;
+  cursor: default;
+}
+
+.cal-cell.today .cal-day-num {
+  background: #1a1a2e;
+  color: #fff;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cal-cell.selected {
+  background: #eff6ff;
+}
+
+.cal-cell.selected .cal-day-num {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.cal-day-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.cal-day-num {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #374151;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+}
+
+.cal-overdue-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+}
+
+.cal-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cal-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.cal-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cal-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #374151;
+}
+
+.cal-overflow {
+  font-size: 0.7rem;
+  color: #6b7280;
+  padding-left: 5px;
+}

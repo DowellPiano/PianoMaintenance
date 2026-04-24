@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import PianoFormModal from '../components/PianoFormModal'
+import { apiFetch } from '../api'
 import './PianosPage.css'
 
 export default function PianosPage() {
@@ -12,11 +13,11 @@ export default function PianosPage() {
   const [deactivateConfirm, setDeactivateConfirm] = useState(null)
   const [showInactive,  setShowInactive]  = useState(false)
 
-  // Change 1 — fetch the right list based on toggle
+  // Fetch the right list based on toggle
   const loadPianos = useCallback(() => {
     setLoading(true)
     const url = showInactive ? '/api/pianos/?active=false' : '/api/pianos/'
-    fetch(url)
+    apiFetch(url)
       .then(r => r.json())
       .then(data => { setPianos(data.results ?? data); setLoading(false) })
       .catch(() => { setError('Failed to load pianos — is Django running?'); setLoading(false) })
@@ -40,10 +41,10 @@ export default function PianosPage() {
     loadPianos()
   }
 
-  // Change 3 — soft-deactivate via DELETE (backend sets is_active=False, returns 204)
+  // Soft-deactivate via DELETE (backend sets is_active=False, returns 204)
   async function handleDeactivate(piano) {
     try {
-      const r = await fetch(`/api/pianos/${piano.id}/`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/pianos/${piano.id}/`, { method: 'DELETE' })
       if (!r.ok) {
         const data = await r.json().catch(() => ({}))
         setError(data.detail || data.error || 'Deactivate failed.')
@@ -57,10 +58,10 @@ export default function PianosPage() {
     }
   }
 
-  // Change 4 — reactivate via POST
+  // Reactivate via POST
   async function handleReactivate(piano) {
     try {
-      const r = await fetch(`/api/pianos/${piano.id}/reactivate/`, { method: 'POST' })
+      const r = await apiFetch(`/api/pianos/${piano.id}/reactivate/`, { method: 'POST' })
       if (r.ok) loadPianos()
       else setError('Reactivate failed.')
     } catch {
@@ -79,7 +80,6 @@ export default function PianosPage() {
           <h2>Pianos</h2>
           <p className="page-subtitle">{subtitle}</p>
         </div>
-        {/* Change 2 — toggle + add button */}
         <div className="header-actions">
           <button
             className={showInactive ? 'btn-secondary active' : 'btn-secondary'}
@@ -110,7 +110,6 @@ export default function PianosPage() {
         </div>
       ) : (
         <>
-          {/* Change 5 — banner when viewing inactive */}
           {showInactive && (
             <div className="inactive-banner">
               Showing inactive pianos — these are hidden from active views and scheduling.
@@ -127,7 +126,8 @@ export default function PianosPage() {
                   <th>Type</th>
                   <th>Location</th>
                   <th>Serial #</th>
-                  <th>Date Acquired</th>
+                  <th>Year Built</th>
+                  <th>Year Acquired</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -135,7 +135,13 @@ export default function PianosPage() {
                 {pianos.map(piano => (
                   <tr key={piano.id} className={showInactive ? 'inactive-row' : ''}>
                     <td className="piano-name">
-                      <Link to={`/pianos/${piano.id}`}>{piano.name}</Link>
+                      <div className="piano-name-cell">
+                        {piano.profile_photo_url
+                          ? <img src={piano.profile_photo_url} alt="" className="piano-thumb" />
+                          : <div className="piano-thumb piano-thumb-placeholder"></div>
+                        }
+                        <Link to={`/pianos/${piano.id}`}>{piano.name}</Link>
+                      </div>
                     </td>
                     <td>{piano.brand}</td>
                     <td>{piano.model || <span className="empty">—</span>}</td>
@@ -146,9 +152,9 @@ export default function PianosPage() {
                     </td>
                     <td>{piano.location_name}</td>
                     <td>{piano.serial_number || <span className="empty">—</span>}</td>
-                    <td>{piano.date_acquired || <span className="empty">—</span>}</td>
+                    <td>{piano.year_built    || <span className="empty">—</span>}</td>
+                    <td>{piano.year_acquired || <span className="empty">—</span>}</td>
                     <td className="actions">
-                      {/* Change 4 — inactive rows get Reactivate only */}
                       {showInactive ? (
                         <button className="btn-reactivate" onClick={() => handleReactivate(piano)}>
                           Reactivate
@@ -156,7 +162,6 @@ export default function PianosPage() {
                       ) : (
                         <>
                           <button className="btn-edit" onClick={() => openEdit(piano)}>Edit</button>
-                          {/* Change 3 — renamed from Delete to Deactivate */}
                           <button
                             className="btn-delete"
                             onClick={() => { setError(null); setDeactivateConfirm(piano) }}
@@ -182,7 +187,6 @@ export default function PianosPage() {
         />
       )}
 
-      {/* Change 3 — updated confirm dialog copy */}
       {deactivateConfirm && (
         <div className="modal-overlay" onClick={() => setDeactivateConfirm(null)}>
           <div className="confirm-dialog" onClick={e => e.stopPropagation()}>

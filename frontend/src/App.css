@@ -22,6 +22,7 @@ body {
 .app-header h1 {
   font-size: 1.5rem;
   font-weight: 600;
+  color: #fff;
 }
 
 .app-header nav {
@@ -47,6 +48,80 @@ body {
   border-bottom-color: white;
 }
 
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: 1.5rem;
+}
+
+.header-username {
+  color: #ccc;
+  font-size: 0.875rem;
+}
+
+.btn-logout {
+  background: transparent;
+  color: #9ca3af;
+  border: 1px solid #4b5563;
+  border-radius: 5px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.btn-logout:hover {
+  color: #fff;
+  border-color: #9ca3af;
+}
+
+/* ─── Global spinner ────────────────────────────────────────────────────────── */
+
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #e5e7eb;
+  border-top-color: #1a1a2e;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Table loading / empty rows ────────────────────────────────────────────── */
+
+.td-loading,
+.td-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.td-loading {
+  display: flex;           /* only works in a <td> with display:table-cell override */
+}
+
+/* Use a wrapper inside the <td> instead of flexing the td itself */
+.td-loading-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ─── Modal dropdown loading ────────────────────────────────────────────────── */
+
+select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .app-main {
   padding: 3rem 2rem;
   max-width: 900px;
@@ -62,3 +137,47 @@ body {
   color: #666;
   font-size: 1rem;
 }
+
+/* ── Header right cluster (bell + user) ─────────────────────────────────── */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ── Alert bell ──────────────────────────────────────────────────────────── */
+.bell-btn {
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.15rem;
+  padding: 0.25rem 0.3rem;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s;
+  line-height: 1;
+  color: #fff;
+}
+.bell-btn:hover { background: rgba(255,255,255,0.1); }
+
+.bell-badge {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+

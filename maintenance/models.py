@@ -1,6 +1,10 @@
 import uuid
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import MinValueValidator, MaxValueValidator
+
+YEAR_VALIDATORS = [MinValueValidator(1700), MaxValueValidator(2100)]
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +39,8 @@ class Piano(models.Model):
     model = models.CharField(max_length=100, blank=True)
     serial_number = models.CharField(max_length=100, blank=True)
     piano_type = models.CharField(max_length=20, choices=PianoType.choices)
-    date_acquired = models.DateField(null=True, blank=True)
+    year_built    = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
+    year_acquired = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     qr_code_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
@@ -58,6 +63,12 @@ class Technician(AbstractUser):
     explicitly to satisfy the spec and set the default clearly.
     """
     is_active = models.BooleanField(default=True)
+    team = models.ForeignKey(
+        'Team',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='members',
+    )
 
     class Meta:
         verbose_name = "Technician"
@@ -66,6 +77,23 @@ class Technician(AbstractUser):
     def __str__(self):
         full = self.get_full_name()
         return full if full else self.username
+
+
+# ---------------------------------------------------------------------------
+# Team
+# ---------------------------------------------------------------------------
+class Team(models.Model):
+    name = models.CharField(max_length=200, unique=True)
+    manager = models.ForeignKey(
+        'Technician',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='managed_teams',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +153,7 @@ class MaintenanceSchedule(models.Model):
         ordering = ["piano", "task_type"]
 
     def __str__(self):
-        return f"{self.piano} — {self.task_name} (every {self.interval_days}d)"
+        return f"{self.task_name} — every {self.interval_days}d"
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +210,7 @@ class WorkOrder(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"WO-{self.pk} | {self.piano} | {self.status}"
+        return f"WO-{self.pk} · {self.order_type} · {self.status}"
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +235,7 @@ class MaintenanceLog(models.Model):
         ordering = ["-logged_at"]
 
     def __str__(self):
-        return f"Log {self.pk} — {self.piano} by {self.technician}"
+        return f"Log #{self.pk} ({self.logged_at:%Y-%m-%d})"
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +259,11 @@ class ConditionReading(models.Model):
         related_name="condition_readings",
     )
     pitch_before_cents = models.DecimalField(
-        max_digits=6, decimal_places=2, null=True, blank=True
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        db_column='pitch_before_cents',
+    )
+    pitch_after_cents = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
     )
     humidity_pct = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True
@@ -243,13 +275,13 @@ class ConditionReading(models.Model):
         max_length=10, choices=OverallRating.choices, blank=True
     )
     notes = models.TextField(blank=True)
-    recorded_at = models.DateTimeField(auto_now_add=True)
+    recorded_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ["-recorded_at"]
 
     def __str__(self):
-        return f"Reading {self.pk} — {self.piano} @ {self.recorded_at:%Y-%m-%d}"
+        return f"Reading #{self.pk} ({self.recorded_at:%Y-%m-%d})"
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +328,7 @@ class PartUsed(models.Model):
         verbose_name_plural = "Parts Used"
 
     def __str__(self):
-        return f"{self.quantity_used}x {self.part} (Log {self.log_id})"
+        return f"{self.quantity_used}× Part #{self.part_id} (Log #{self.log_id})"
 
 
 # ---------------------------------------------------------------------------
@@ -332,11 +364,33 @@ class MaintenanceRequest(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Request {self.pk} — {self.piano} [{self.status}]"
+        return f"Request #{self.pk} · {self.status}"
 
 
 # ---------------------------------------------------------------------------
-# Attachment
+# Photo
+# ---------------------------------------------------------------------------
+class Photo(models.Model):
+    piano      = models.ForeignKey(Piano,     null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
+    work_order = models.ForeignKey(WorkOrder, null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
+    image      = models.ImageField(upload_to='photos/')
+    caption    = models.CharField(max_length=300, blank=True)
+    is_profile_photo = models.BooleanField(default=False)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        if self.piano_id:
+            return f"Photo #{self.pk} (Piano #{self.piano_id})"
+        if self.work_order_id:
+            return f"Photo #{self.pk} (WO #{self.work_order_id})"
+        return f"Photo #{self.pk}"
+
+
+# ---------------------------------------------------------------------------
+# Attachment  (legacy file attachment model)
 # ---------------------------------------------------------------------------
 class Attachment(models.Model):
     piano = models.ForeignKey(

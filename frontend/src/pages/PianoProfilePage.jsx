@@ -1,317 +1,177 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import StartWorkOrderModal from '../components/StartWorkOrderModal'
-import CompleteWorkOrderModal from '../components/CompleteWorkOrderModal'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import PianoFormModal from '../components/PianoFormModal'
+import WorkOrderFormModal from '../components/WorkOrderFormModal'
+import { apiFetch } from '../api'
 import './PianoProfilePage.css'
 
-// ─── Date helpers ─────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
-function today() {
-  return new Date().toISOString().slice(0, 10)
+function statusClass(s) {
+  const map = {
+    'Open': 'status-open',
+    'In Progress': 'status-inprogress',
+    'Complete': 'status-complete',
+    'Cancelled': 'status-cancelled',
+    'Overdue': 'status-overdue',
+    'Due Soon': 'status-duesoon',
+    'Upcoming': 'status-upcoming',
+  }
+  return map[s] ?? 'status-open'
 }
 
-function addDays(dateStr, days) {
-  const d = new Date(dateStr)
-  d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+function priorityClass(p) {
+  const map = { 'Urgent': 'pri-urgent', 'High': 'pri-high', 'Normal': 'pri-normal', 'Low': 'pri-low' }
+  return map[p] ?? ''
 }
 
-function calcNextDue(schedule) {
-  // If never serviced, treat today as the base (immediately due)
-  const base = schedule.last_service_date ?? today()
-  return addDays(base, schedule.interval_days)
+function typeClass(t) {
+  const map = { 'Grand': 'type-grand', 'Upright': 'type-upright', 'Digital': 'type-digital' }
+  return map[t] ?? ''
 }
 
-function scheduleStatus(schedule) {
-  const nextDue = calcNextDue(schedule)
-  const now     = today()
-  const warnBy  = addDays(nextDue, -schedule.warning_days_before)
-  if (nextDue < now)     return 'overdue'
-  if (now >= warnBy)     return 'due-soon'
-  return 'on-track'
+function fmt(val, fallback = '—') {
+  return val || fallback
 }
 
-const STATUS_LABELS = {
-  'overdue':  'Overdue',
-  'due-soon': 'Due Soon',
-  'on-track': 'On Track',
-}
+// ─── Tab: Details ──────────────────────────────────────────────────────────
 
-// ─── Piano Info Card ──────────────────────────────────────────────────────────
+function DetailsTab({ piano }) {
+  const rows = [
+    ['Brand',         fmt(piano.brand)],
+    ['Model',         fmt(piano.model)],
+    ['Piano Type',    piano.piano_type],
+    ['Serial Number', fmt(piano.serial_number)],
+    ['Year Built',    fmt(piano.year_built)],
+    ['Year Acquired', fmt(piano.year_acquired)],
+    ['QR Token',      piano.qr_code_token],
+    ['Notes',         fmt(piano.notes)],
+  ]
 
-function PianoCard({ piano }) {
   return (
-    <div className="pp-card">
-      <div className="pp-card-row">
-        <div className="pp-field"><span className="pp-label">Brand</span><span>{piano.brand}</span></div>
-        <div className="pp-field"><span className="pp-label">Model</span><span>{piano.model || '—'}</span></div>
-        <div className="pp-field"><span className="pp-label">Type</span>
-          <span className={`badge type-${piano.piano_type?.toLowerCase()}`}>{piano.piano_type}</span>
+    <div className="details-grid">
+      <div className="details-row" key="location">
+        <dt>Location</dt>
+        <dd>
+          {piano.location
+            ? <Link to={`/locations/${piano.location}`}>{piano.location_name}</Link>
+            : <span className="empty">—</span>
+          }
+        </dd>
+      </div>
+      {rows.map(([label, value]) => (
+        <div className="details-row" key={label}>
+          <dt>{label}</dt>
+          <dd className={value === '—' ? 'empty' : ''}>{value}</dd>
         </div>
-      </div>
-      <div className="pp-card-row">
-        <div className="pp-field"><span className="pp-label">Location</span><span>{piano.location_name}</span></div>
-        <div className="pp-field"><span className="pp-label">Serial #</span><span>{piano.serial_number || '—'}</span></div>
-        <div className="pp-field"><span className="pp-label">Acquired</span><span>{piano.date_acquired || '—'}</span></div>
-      </div>
-      {piano.notes && (
-        <div className="pp-notes"><span className="pp-label">Notes</span><p>{piano.notes}</p></div>
-      )}
+      ))}
     </div>
   )
 }
 
-// ─── Upcoming Tasks ───────────────────────────────────────────────────────────
+// ─── Tab: Photos ──────────────────────────────────────────────────────────
 
-function UpcomingTasks({ piano, schedules, onWorkOrderStarted }) {
-  const [startModal, setStartModal] = useState(null) // schedule or null
+function PhotosTab({ pianoId, photos, onPhotosChanged }) {
+  const [uploading, setUploading] = useState(false)
+  const [caption, setCaption] = useState('')
+  const [lightbox, setLightbox] = useState(null) // image_url string
+  const [error, setError] = useState(null)
+  const fileRef = useRef(null)
 
-  const active = schedules.filter(s => s.is_active)
-
-  if (active.length === 0) {
-    return (
-      <div className="pp-section">
-        <h3 className="pp-section-title">Upcoming Tasks</h3>
-        <p className="pp-empty">No active maintenance schedules. Add schedules via the Maintenance page.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="pp-section">
-      <h3 className="pp-section-title">Upcoming Tasks</h3>
-      <div className="table-wrapper">
-        <table className="pp-table">
-          <thead>
-            <tr>
-              <th>Task</th>
-              <th>Type</th>
-              <th>Interval</th>
-              <th>Last Service</th>
-              <th>Next Due</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {active.map(s => {
-              const status  = scheduleStatus(s)
-              const nextDue = calcNextDue(s)
-              return (
-                <tr key={s.id}>
-                  <td className="fw-medium">{s.task_name}</td>
-                  <td><span className="badge task-type">{s.task_type}</span></td>
-                  <td>Every {s.interval_days}d</td>
-                  <td>{s.last_service_date || <span className="pp-dim">Never</span>}</td>
-                  <td>{nextDue}</td>
-                  <td><span className={`badge status-${status}`}>{STATUS_LABELS[status]}</span></td>
-                  <td>
-                    <button
-                      className="btn-start-wo"
-                      onClick={() => setStartModal(s)}
-                    >
-                      Start Work Order
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {startModal && (
-        <StartWorkOrderModal
-          piano={piano}
-          schedule={startModal}
-          onClose={() => setStartModal(null)}
-          onSaved={() => { setStartModal(null); onWorkOrderStarted() }}
-        />
-      )}
-    </div>
-  )
-}
-
-// ─── Open Work Orders ─────────────────────────────────────────────────────────
-
-const EDITABLE_STATUSES = ['Open', 'In Progress', 'Cancelled']
-
-function OpenWorkOrders({ piano, workOrders, onChanged }) {
-  const [completeModal, setCompleteModal] = useState(null)
-  const [editStatus,    setEditStatus]    = useState({}) // id → value
-  const [error,         setError]         = useState(null)
-
-  const open = workOrders.filter(wo => wo.status === 'Open' || wo.status === 'In Progress')
-
-  async function handleStatusChange(wo, newStatus) {
-    setEditStatus(s => ({ ...s, [wo.id]: newStatus }))
-    const r = await fetch(`/api/work-orders/${wo.id}/`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    })
-    if (!r.ok) { setError('Status update failed.'); return }
-    onChanged()
-  }
-
-  if (open.length === 0) {
-    return (
-      <div className="pp-section">
-        <h3 className="pp-section-title">Open Work Orders</h3>
-        <p className="pp-empty">No open work orders for this piano.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="pp-section">
-      <h3 className="pp-section-title">Open Work Orders</h3>
-      {error && <div className="pp-error">{error}</div>}
-      <div className="table-wrapper">
-        <table className="pp-table">
-          <thead>
-            <tr>
-              <th>WO #</th>
-              <th>Type</th>
-              <th>Priority</th>
-              <th>Description</th>
-              <th>Status</th>
-              <th>Due Date</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {open.map(wo => (
-              <tr key={wo.id}>
-                <td className="fw-medium">#{wo.id}</td>
-                <td>{wo.order_type}</td>
-                <td><span className={`badge priority-${wo.priority?.toLowerCase()}`}>{wo.priority}</span></td>
-                <td className="pp-desc">{wo.description || <span className="pp-dim">—</span>}</td>
-                <td>
-                  <select
-                    value={editStatus[wo.id] ?? wo.status}
-                    onChange={e => handleStatusChange(wo, e.target.value)}
-                    className="pp-status-select"
-                  >
-                    {EDITABLE_STATUSES.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </td>
-                <td>{wo.due_date || <span className="pp-dim">—</span>}</td>
-                <td>
-                  <button
-                    className="btn-complete-wo"
-                    onClick={() => setCompleteModal(wo)}
-                  >
-                    Complete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {completeModal && (
-        <CompleteWorkOrderModal
-          workOrder={completeModal}
-          onClose={() => setCompleteModal(null)}
-          onCompleted={() => { setCompleteModal(null); onChanged() }}
-        />
-      )}
-    </div>
-  )
-}
-
-// ─── Attachments ──────────────────────────────────────────────────────────────
-
-function Attachments({ pianoId }) {
-  const [attachments,    setAttachments]    = useState([])
-  const [uploading,      setUploading]      = useState(false)
-  const [error,          setError]          = useState(null)
-  const [deleteConfirm,  setDeleteConfirm]  = useState(null)
-
-  const loadAttachments = useCallback(() => {
-    fetch(`/api/attachments/?piano=${pianoId}`)
-      .then(r => r.json())
-      .then(d => setAttachments(d.results ?? d))
-      .catch(() => setError('Failed to load attachments.'))
-  }, [pianoId])
-
-  useEffect(() => { loadAttachments() }, [loadAttachments])
-
-  async function handleFileUpload(e) {
-    const files = Array.from(e.target.files)
-    if (!files.length) return
+  async function handleUpload(e) {
+    e.preventDefault()
+    const file = fileRef.current?.files[0]
+    if (!file) return
     setUploading(true)
     setError(null)
+    const fd = new FormData()
+    fd.append('piano', pianoId)
+    fd.append('image', file)
+    fd.append('caption', caption)
     try {
-      const formData = new FormData()
-      files.forEach(f => formData.append('file', f))
-      formData.append('piano', pianoId)
-      const r = await fetch('/api/attachments/', { method: 'POST', body: formData })
-      if (!r.ok) { setError('Upload failed.'); return }
-      loadAttachments()
+      const res = await apiFetch('/api/photos/', { method: 'POST', body: fd })
+      if (!res.ok) {
+        const d = await res.json()
+        setError(JSON.stringify(d))
+      } else {
+        setCaption('')
+        if (fileRef.current) fileRef.current.value = ''
+        onPhotosChanged()
+      }
     } catch {
-      setError('Upload failed — network error.')
+      setError('Upload failed — is Django running?')
     } finally {
       setUploading(false)
-      e.target.value = ''
     }
   }
 
-  async function handleDelete(att) {
-    const r = await fetch(`/api/attachments/${att.id}/`, { method: 'DELETE' })
-    if (!r.ok) { setError('Delete failed.'); return }
-    setDeleteConfirm(null)
-    loadAttachments()
+  async function handleDelete(photo) {
+    if (!window.confirm('Delete this photo?')) return
+    await apiFetch(`/api/photos/${photo.id}/`, { method: 'DELETE' })
+    onPhotosChanged()
+  }
+
+  async function handleSetProfile(photo) {
+    await apiFetch(`/api/photos/${photo.id}/set_profile/`, { method: 'POST' })
+    onPhotosChanged()
   }
 
   return (
-    <div className="pp-section">
-      <div className="pp-section-header">
-        <h3 className="pp-section-title">Attachments</h3>
-        <label className="btn-upload">
-          {uploading ? 'Uploading…' : '+ Upload Files'}
-          <input
-            type="file"
-            multiple
-            onChange={handleFileUpload}
-            accept="image/*,application/pdf,.doc,.docx"
-            style={{ display: 'none' }}
-            disabled={uploading}
-          />
+    <div className="photos-tab">
+      <form className="photo-upload-form" onSubmit={handleUpload}>
+        <label className="upload-label">
+          <span>Choose photo</span>
+          <input type="file" ref={fileRef} accept="image/*" required />
         </label>
-      </div>
+        <input
+          type="text"
+          placeholder="Caption (optional)"
+          value={caption}
+          onChange={e => setCaption(e.target.value)}
+          className="caption-input"
+        />
+        <button type="submit" className="btn-primary" disabled={uploading}>
+          {uploading ? 'Uploading…' : 'Upload Photo'}
+        </button>
+      </form>
+      {error && <div className="tab-error">{error}</div>}
 
-      {error && <div className="pp-error">{error}</div>}
-
-      {attachments.length === 0 ? (
-        <p className="pp-empty">No attachments yet. Upload photos, PDFs, or documents.</p>
+      {photos.length === 0 ? (
+        <div className="empty-photos">No photos yet. Upload one above.</div>
       ) : (
-        <ul className="pp-attachment-list">
-          {attachments.map(att => (
-            <li key={att.id} className="pp-attachment-row">
-              <a href={att.file_url ?? att.file} target="_blank" rel="noreferrer" className="pp-attachment-link">
-                📎 {att.filename ?? att.original_name ?? att.file?.split('/').pop() ?? `Attachment ${att.id}`}
-              </a>
-              <span className="pp-dim pp-att-date">{att.uploaded_at?.slice(0, 10) ?? ''}</span>
-              <button className="btn-delete-sm" onClick={() => setDeleteConfirm(att)}>Delete</button>
-            </li>
+        <div className="photo-grid">
+          {photos.map(photo => (
+            <div key={photo.id} className={`photo-card${photo.is_profile_photo ? ' photo-card--profile' : ''}`}>
+              {photo.is_profile_photo && (
+                <div className="profile-badge">Profile Photo</div>
+              )}
+              <img
+                src={photo.image_url}
+                alt={photo.caption || 'Piano photo'}
+                className="photo-thumb"
+                onClick={() => setLightbox(photo.image_url)}
+              />
+              {photo.caption && <p className="photo-caption">{photo.caption}</p>}
+              <div className="photo-actions">
+                {!photo.is_profile_photo && (
+                  <button className="btn-sm btn-secondary" onClick={() => handleSetProfile(photo)}>
+                    Set as Profile
+                  </button>
+                )}
+                <button className="btn-sm btn-danger-sm" onClick={() => handleDelete(photo)}>
+                  Delete
+                </button>
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
 
-      {deleteConfirm && (
-        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
-          <div className="confirm-dialog" onClick={e => e.stopPropagation()}>
-            <h3>Delete Attachment</h3>
-            <p>Delete <strong>{deleteConfirm.filename ?? `Attachment ${deleteConfirm.id}`}</strong>? This cannot be undone.</p>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setDeleteConfirm(null)}>Cancel</button>
-              <button className="btn-danger"    onClick={() => handleDelete(deleteConfirm)}>Delete</button>
-            </div>
+      {lightbox && (
+        <div className="lightbox" onClick={() => setLightbox(null)}>
+          <div className="lightbox-inner" onClick={e => e.stopPropagation()}>
+            <button className="lightbox-close" onClick={() => setLightbox(null)}>×</button>
+            <img src={lightbox} alt="Full size" />
           </div>
         </div>
       )}
@@ -319,80 +179,330 @@ function Attachments({ pianoId }) {
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Tab: Work History ────────────────────────────────────────────────────
+
+function WorkHistoryTab({ workOrders, pianoId, onWorkOrderSaved }) {
+  const [editingWO, setEditingWO] = useState(null)
+  const [createOpen, setCreateOpen] = useState(false)
+
+  return (
+    <div className="work-history-tab">
+      {workOrders.length === 0 ? (
+        <div className="empty-tab">
+          <p>No work orders for this piano yet.</p>
+          <button className="btn-primary" style={{ marginTop: '0.75rem' }}
+            onClick={() => setCreateOpen(true)}>
+            Create First Work Order
+          </button>
+        </div>
+      ) : (
+        <div className="table-wrapper">
+          <table className="profile-table">
+            <thead>
+              <tr>
+                <th>WO #</th>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Assigned Tech</th>
+                <th>Description</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workOrders.map(wo => (
+                <tr key={wo.id}>
+                  <td className="wo-id">WO-{wo.id}</td>
+                  <td>{wo.due_date || <span className="empty">—</span>}</td>
+                  <td>{wo.order_type}</td>
+                  <td>
+                    <span className={`status-badge ${statusClass(wo.status)}`}>{wo.status}</span>
+                  </td>
+                  <td>
+                    <span className={`priority-badge ${priorityClass(wo.priority)}`}>{wo.priority}</span>
+                  </td>
+                  <td>{wo.assigned_tech_name || <span className="empty">Unassigned</span>}</td>
+                  <td className="desc-cell">{wo.description || <span className="empty">—</span>}</td>
+                  <td>
+                    <button className="btn-edit" onClick={() => setEditingWO(wo)}>Edit</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {(editingWO || createOpen) && (
+        <WorkOrderFormModal
+          workOrder={editingWO ?? null}
+          prefill={createOpen && !editingWO ? { piano: String(pianoId) } : null}
+          onClose={() => { setEditingWO(null); setCreateOpen(false) }}
+          onSaved={() => { setEditingWO(null); setCreateOpen(false); onWorkOrderSaved() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Tab: Upcoming Tasks ──────────────────────────────────────────────────
+
+function UpcomingTasksTab({ pianoId }) {
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const today = new Date()
+    const start = today.toISOString().slice(0, 10)
+    const endDate = new Date(today)
+    endDate.setDate(endDate.getDate() + 90)
+    const end = endDate.toISOString().slice(0, 10)
+
+    apiFetch(`/api/calendar-events/?start=${start}&end=${end}`)
+      .then(r => r.json())
+      .then(data => {
+        const filtered = data.filter(ev => String(ev.piano_id) === String(pianoId))
+        setEvents(filtered)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [pianoId])
+
+  if (loading) return <div className="loading">Loading…</div>
+
+  return (
+    <div className="upcoming-tasks-tab">
+      {events.length === 0 ? (
+        <div className="empty-tab">No upcoming tasks in the next 90 days.</div>
+      ) : (
+        <div className="table-wrapper">
+          <table className="profile-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Task</th>
+                <th>Status</th>
+                <th>Priority</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map(ev => (
+                <tr key={ev.id}>
+                  <td>{ev.date}</td>
+                  <td>
+                    <span className={`event-type-badge event-type-${ev.type}`}>
+                      {ev.type === 'work_order' ? 'Work Order' : 'Schedule'}
+                    </span>
+                  </td>
+                  <td>{ev.description || ev.title}</td>
+                  <td>
+                    <span className={`status-badge ${statusClass(ev.status)}`}>{ev.status}</span>
+                  </td>
+                  <td>
+                    {ev.priority
+                      ? <span className={`priority-badge ${priorityClass(ev.priority)}`}>{ev.priority}</span>
+                      : <span className="empty">—</span>
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Tab: Active Schedules ────────────────────────────────────────────────
+
+function SchedulesTab({ schedules }) {
+  return (
+    <div className="schedules-tab">
+      {schedules.length === 0 ? (
+        <div className="empty-tab">
+          <p>No active maintenance schedules for this piano.</p>
+          <p className="meta" style={{ marginTop: '0.4rem' }}>
+            Go to <Link to="/maintenance">Maintenance</Link> to add a schedule or apply a template.
+          </p>
+        </div>
+      ) : (
+        <div className="table-wrapper">
+          <table className="profile-table">
+            <thead>
+              <tr>
+                <th>Task</th>
+                <th>Type</th>
+                <th>Every (days)</th>
+                <th>Warning (days)</th>
+                <th>Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedules.map(s => (
+                <tr key={s.id}>
+                  <td>{s.task_name}</td>
+                  <td>{s.task_type}</td>
+                  <td>{s.interval_days}</td>
+                  <td>{s.warning_days_before}</td>
+                  <td>
+                    {s.template_name
+                      ? <span className="source-template">Template: {s.template_name}</span>
+                      : <span className="source-manual">Manual</span>
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────
+
+const TABS = ['Details', 'Photos', 'Work History', 'Upcoming Tasks', 'Schedules']
 
 export default function PianoProfilePage() {
   const { id } = useParams()
+  const navigate = useNavigate()
 
-  const [piano,     setPiano]     = useState(null)
-  const [schedules, setSchedules] = useState([])
-  const [workOrders,setWorkOrders]= useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState(null)
+  const [profile, setProfile] = useState(null)   // { piano, work_orders, schedules, photos }
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [activeTab, setActiveTab] = useState('Details')
+  const [editModalOpen, setEditModalOpen] = useState(false)
 
-  const loadSchedules = useCallback(() => {
-    // NOTE for backend engineer: GET /api/schedules/?piano=<id> requires a piano filter param
-    fetch(`/api/schedules/?piano=${id}`)
-      .then(r => r.json())
-      .then(d => setSchedules(d.results ?? d))
-      .catch(() => {})
-  }, [id])
-
-  const loadWorkOrders = useCallback(() => {
-    fetch(`/api/work-orders/?piano=${id}`)
-      .then(r => r.json())
-      .then(d => setWorkOrders(d.results ?? d))
-      .catch(() => {})
-  }, [id])
-
-  useEffect(() => {
+  const loadProfile = useCallback(() => {
     setLoading(true)
-    fetch(`/api/pianos/${id}/`)
+    apiFetch(`/api/pianos/${id}/profile/`)
       .then(r => {
         if (!r.ok) throw new Error('Not found')
         return r.json()
       })
-      .then(data => { setPiano(data); setLoading(false) })
-      .catch(() => { setError('Piano not found.'); setLoading(false) })
+      .then(data => { setProfile(data); setLoading(false) })
+      .catch(err => { setError(err.message); setLoading(false) })
+  }, [id])
 
-    loadSchedules()
-    loadWorkOrders()
-  }, [id, loadSchedules, loadWorkOrders])
+  useEffect(() => { loadProfile() }, [loadProfile])
 
-  if (loading) return <div className="pp-page"><div className="loading">Loading…</div></div>
-  if (error)   return (
-    <div className="pp-page">
-      <div className="pp-error">{error}</div>
-      <Link to="/pianos" className="pp-back">← Back to Pianos</Link>
-    </div>
-  )
-  if (!piano)  return null
+  if (loading) return <div className="profile-loading"><div className="spinner" />Loading piano profile…</div>
+  if (error) return <div className="profile-error">Error: {error}</div>
+
+  const { piano, work_orders, schedules, photos } = profile
+
+  const openWOs  = work_orders.filter(wo => wo.status === 'Open' || wo.status === 'In Progress').length
+  const doneWOs  = work_orders.filter(wo => wo.status === 'Complete').length
 
   return (
-    <div className="pp-page">
-      <div className="pp-breadcrumb">
-        <Link to="/pianos" className="pp-back">← Back to Pianos</Link>
-      </div>
+    <div className="profile-page">
+      {/* ── Back nav ── */}
+      <button className="back-btn" onClick={() => navigate('/pianos')}>
+        ← Back to Pianos
+      </button>
 
-      <div className="page-header">
-        <div>
-          <h2>{piano.name}</h2>
-          <p className="page-subtitle">{piano.brand} {piano.model} · {piano.location_name}</p>
+      {/* ── Hero header ── */}
+      <div className="profile-hero">
+        <div className="hero-photo-wrap">
+          {piano.profile_photo_url ? (
+            <img src={piano.profile_photo_url} alt={piano.name} className="hero-photo" />
+          ) : (
+            <div className="hero-photo hero-photo-placeholder"></div>
+          )}
         </div>
+
+        <div className="hero-info">
+          <div className="hero-name-row">
+            <h2 className="hero-name">{piano.name}</h2>
+            <span className={`badge ${typeClass(piano.piano_type)}`}>{piano.piano_type}</span>
+          </div>
+          <p className="hero-sub">{piano.brand}{piano.model ? ` — ${piano.model}` : ''}</p>
+          <p className="hero-location">{piano.location_name}</p>
+
+          <div className="hero-stats">
+            <div className="stat-pill">
+              <span className="stat-num">{work_orders.length}</span>
+              <span className="stat-label">Total WOs</span>
+            </div>
+            <div className="stat-pill stat-pill--active">
+              <span className="stat-num">{openWOs}</span>
+              <span className="stat-label">Open</span>
+            </div>
+            <div className="stat-pill stat-pill--done">
+              <span className="stat-num">{doneWOs}</span>
+              <span className="stat-label">Complete</span>
+            </div>
+            <div className="stat-pill">
+              <span className="stat-num">{schedules.length}</span>
+              <span className="stat-label">Schedules</span>
+            </div>
+            <div className="stat-pill">
+              <span className="stat-num">{photos.length}</span>
+              <span className="stat-label">Photos</span>
+            </div>
+          </div>
+        </div>
+
+        <button className="hero-edit-btn" onClick={() => setEditModalOpen(true)}>
+          Edit Piano
+        </button>
       </div>
 
-      <PianoCard piano={piano} />
-      <UpcomingTasks
-        piano={piano}
-        schedules={schedules}
-        onWorkOrderStarted={loadWorkOrders}
-      />
-      <OpenWorkOrders
-        piano={piano}
-        workOrders={workOrders}
-        onChanged={loadWorkOrders}
-      />
-      <Attachments pianoId={id} />
+      {/* ── Tabs ── */}
+      <div className="profile-tabs">
+        {TABS.map(tab => (
+          <button
+            key={tab}
+            className={`tab-btn${activeTab === tab ? ' tab-btn--active' : ''}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab}
+            {tab === 'Work History' && work_orders.length > 0 && (
+              <span className="tab-count">{work_orders.length}</span>
+            )}
+            {tab === 'Photos' && photos.length > 0 && (
+              <span className="tab-count">{photos.length}</span>
+            )}
+            {tab === 'Schedules' && schedules.length > 0 && (
+              <span className="tab-count">{schedules.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab content ── */}
+      <div className="profile-tab-content">
+        {activeTab === 'Details' && <DetailsTab piano={piano} />}
+        {activeTab === 'Photos' && (
+          <PhotosTab
+            pianoId={id}
+            photos={photos}
+            onPhotosChanged={loadProfile}
+          />
+        )}
+        {activeTab === 'Work History' && (
+          <WorkHistoryTab
+            workOrders={work_orders}
+            pianoId={id}
+            onWorkOrderSaved={loadProfile}
+          />
+        )}
+        {activeTab === 'Upcoming Tasks' && <UpcomingTasksTab pianoId={id} />}
+        {activeTab === 'Schedules' && <SchedulesTab schedules={schedules} />}
+      </div>
+
+      {/* ── Edit Piano modal ── */}
+      {editModalOpen && (
+        <PianoFormModal
+          piano={piano}
+          onClose={() => setEditModalOpen(false)}
+          onSaved={() => { setEditModalOpen(false); loadProfile() }}
+        />
+      )}
     </div>
   )
 }

@@ -39,6 +39,16 @@
   text-align: center;
 }
 
+.btn-link {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
@@ -92,6 +102,41 @@
 
 .piano-name {
   font-weight: 500;
+}
+
+.piano-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.piano-name-cell a {
+  color: #1a1a2e;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.piano-name-cell a:hover {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
+.piano-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid #e5e7eb;
+}
+
+.piano-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  font-size: 1rem;
+  color: #9ca3af;
 }
 
 .empty {

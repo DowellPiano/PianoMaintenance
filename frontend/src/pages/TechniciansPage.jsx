@@ -1,159 +1,130 @@
 import { useState, useEffect, useCallback } from 'react'
+import { apiFetch } from '../api'
+import { useAuth } from '../AuthContext'
+import TechnicianFormModal from '../components/TechnicianFormModal'
+import TeamFormModal from '../components/TeamFormModal'
 import './TechniciansPage.css'
 
-const EMPTY_FORM = {
-  first_name: '',
-  last_name: '',
-  email: '',
-  phone: '',
-  specialization: '',
-}
-
-function TechnicianFormModal({ technician, onClose, onSaved }) {
-  const [form,   setForm]   = useState(EMPTY_FORM)
-  const [saving, setSaving] = useState(false)
-  const [error,  setError]  = useState(null)
-
-  useEffect(() => {
-    if (technician) {
-      setForm({
-        first_name:     technician.first_name     ?? '',
-        last_name:      technician.last_name      ?? '',
-        email:          technician.email          ?? '',
-        phone:          technician.phone          ?? '',
-        specialization: technician.specialization ?? '',
-      })
-    } else {
-      setForm(EMPTY_FORM)
-    }
-  }, [technician])
-
-  function handleChange(e) {
-    const { name, value } = e.target
-    setForm(f => ({ ...f, [name]: value }))
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setSaving(true)
-    setError(null)
-    const url    = technician ? `/api/technicians/${technician.id}/` : '/api/technicians/'
-    const method = technician ? 'PUT' : 'POST'
-    try {
-      const r = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (!r.ok) {
-        const data = await r.json().catch(() => ({}))
-        setError(data.detail || JSON.stringify(data) || 'Save failed.')
-      } else {
-        onSaved()
-      }
-    } catch {
-      setError('Network error.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{technician ? 'Edit Technician' : 'Add Technician'}</h2>
-          <button className="modal-close" onClick={onClose}>×</button>
-        </div>
-        {error && <div className="modal-error">{error}</div>}
-        <form onSubmit={handleSubmit} className="piano-form">
-          <div className="form-row">
-            <label>First Name *<input name="first_name" value={form.first_name} onChange={handleChange} required /></label>
-            <label>Last Name *<input  name="last_name"  value={form.last_name}  onChange={handleChange} required /></label>
-          </div>
-          <div className="form-row">
-            <label>Email<input type="email" name="email" value={form.email} onChange={handleChange} /></label>
-            <label>Phone<input name="phone" value={form.phone} onChange={handleChange} /></label>
-          </div>
-          <label>
-            Specialization
-            <input name="specialization" value={form.specialization} onChange={handleChange} placeholder="e.g. Tuning, Regulation…" />
-          </label>
-          <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : technician ? 'Save Changes' : 'Add Technician'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
 export default function TechniciansPage() {
-  const [technicians,   setTechnicians]   = useState([])
-  const [loading,       setLoading]       = useState(true)
-  const [error,         setError]         = useState(null)
-  const [modalOpen,     setModalOpen]     = useState(false)
-  const [editing,       setEditing]       = useState(null)
-  const [showInactive,  setShowInactive]  = useState(false)
+  const { user } = useAuth()
+  const [activeTab, setActiveTab] = useState('technicians')
 
-  const loadTechnicians = useCallback(() => {
-    setLoading(true)
-    fetch('/api/technicians/')
+  // ── Technician state ──
+  const [techs, setTechs]             = useState([])
+  const [techsLoading, setTechsLoading] = useState(true)
+  const [techError, setTechError]     = useState(null)
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [editingTech, setEditingTech] = useState(null)
+  const [showInactive, setShowInactive] = useState(false)
+  const [deactivateConfirm, setDeactivateConfirm] = useState(null)
+  const [reactivateConfirm, setReactivateConfirm] = useState(null)
+  const [deleteConfirm, setDeleteConfirm]         = useState(null)
+  const [deleteError, setDeleteError]             = useState(null)
+
+  // ── Team state ──
+  const [teams, setTeams]           = useState([])
+  const [teamsLoading, setTeamsLoading] = useState(true)
+  const [teamError, setTeamError]   = useState(null)
+  const [teamModal, setTeamModal]   = useState(undefined) // undefined=closed, null=create, obj=edit
+
+  const loadTechs = useCallback(() => {
+    setTechsLoading(true)
+    apiFetch('/api/technicians/')
       .then(r => r.json())
-      .then(d => { setTechnicians(d.results ?? d); setLoading(false) })
-      .catch(() => { setError('Failed to load technicians.'); setLoading(false) })
+      .then(data => { setTechs(data.results ?? data); setTechsLoading(false) })
+      .catch(() => { setTechError('Failed to load technicians.'); setTechsLoading(false) })
   }, [])
 
-  useEffect(() => { loadTechnicians() }, [loadTechnicians])
+  const loadTeams = useCallback(() => {
+    setTeamsLoading(true)
+    apiFetch('/api/teams/')
+      .then(r => r.json())
+      .then(data => { setTeams(data.results ?? data); setTeamsLoading(false) })
+      .catch(() => { setTeamError('Failed to load teams.'); setTeamsLoading(false) })
+  }, [])
 
-  async function handleReactivate(tech) {
-    setError(null)
-    try {
-      const r = await fetch(`/api/technicians/${tech.id}/reactivate/`, { method: 'POST' })
-      if (r.ok) {
-        loadTechnicians()
-      } else {
-        const data = await r.json().catch(() => ({}))
-        setError(data.detail || `Reactivate failed (HTTP ${r.status}).`)
-      }
-    } catch {
-      setError('Reactivate failed — network error.')
-    }
-  }
+  useEffect(() => { loadTechs(); loadTeams() }, [loadTechs, loadTeams])
 
   async function handleDeactivate(tech) {
-    setError(null)
+    setTechError(null)
     try {
-      const r = await fetch(`/api/technicians/${tech.id}/deactivate/`, { method: 'POST' })
+      const r = await apiFetch(`/api/technicians/${tech.id}/deactivate/`, { method: 'POST' })
       if (r.ok) {
-        loadTechnicians()
+        setDeactivateConfirm(null)
+        loadTechs()
       } else {
         const data = await r.json().catch(() => ({}))
-        setError(data.detail || `Deactivate failed (HTTP ${r.status}).`)
+        setTechError(data.detail || `Deactivate failed (HTTP ${r.status}).`)
+        setDeactivateConfirm(null)
       }
     } catch {
-      setError('Deactivate failed — network error.')
+      setTechError('Deactivate failed — network error.')
+      setDeactivateConfirm(null)
     }
   }
 
-  const active   = technicians.filter(t => t.is_active !== false)
-  const inactive = technicians.filter(t => t.is_active === false)
-  const displayed = showInactive ? technicians : active
+  async function handleReactivate(tech) {
+    setTechError(null)
+    try {
+      const r = await apiFetch(`/api/technicians/${tech.id}/reactivate/`, { method: 'POST' })
+      if (r.ok) {
+        loadTechs()
+      } else {
+        const data = await r.json().catch(() => ({}))
+        setTechError(data.detail || `Reactivate failed (HTTP ${r.status}).`)
+      }
+      setReactivateConfirm(null)
+    } catch {
+      setTechError('Reactivate failed — network error.')
+      setReactivateConfirm(null)
+    }
+  }
+
+  async function handleDelete(tech) {
+    setDeleteError(null)
+    try {
+      const res = await apiFetch(`/api/technicians/${tech.id}/`, { method: 'DELETE' })
+      if (res.status === 409) {
+        const data = await res.json()
+        setDeleteError(data.error || 'Cannot delete this technician.')
+        setDeleteConfirm(null)
+        return
+      }
+      if (res.ok || res.status === 204) {
+        setTechs(prev => prev.filter(t => t.id !== tech.id))
+        setDeleteConfirm(null)
+      } else {
+        setDeleteError('Delete failed.')
+        setDeleteConfirm(null)
+      }
+    } catch {
+      setDeleteError('Network error.')
+      setDeleteConfirm(null)
+    }
+  }
+
+  async function handleDeleteTeam(team) {
+    if (!window.confirm(`Delete team "${team.name}"?`)) return
+    await apiFetch(`/api/teams/${team.id}/`, { method: 'DELETE' })
+    loadTeams()
+  }
+
+  const active   = techs.filter(t => t.is_active !== false)
+  const inactive = techs.filter(t => t.is_active === false)
+  const displayed = showInactive ? techs : active
 
   return (
-    <div className="tech-page">
+    <div className="techs-page">
+      {/* ── Page header ── */}
       <div className="page-header">
         <div>
-          <h2>Technicians</h2>
+          <h2>Technicians & Teams</h2>
           <p className="page-subtitle">
-            {active.length} active{inactive.length > 0 ? `, ${inactive.length} inactive` : ''}
+            {active.length} active{inactive.length > 0 ? `, ${inactive.length} inactive` : ''} · {teams.length} team{teams.length !== 1 ? 's' : ''}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          {inactive.length > 0 && (
+          {activeTab === 'technicians' && inactive.length > 0 && (
             <label className="show-inactive-toggle">
               <input
                 type="checkbox"
@@ -163,79 +134,225 @@ export default function TechniciansPage() {
               Show inactive
             </label>
           )}
-          <button className="btn-primary" onClick={() => { setEditing(null); setModalOpen(true) }}>
-            + Add Technician
-          </button>
+          {user?.is_staff && activeTab === 'technicians' && (
+            <button className="btn-primary" onClick={() => { setEditingTech(null); setAddModalOpen(true) }}>+ Add Technician</button>
+          )}
+          {user?.is_staff && activeTab === 'teams' && (
+            <button className="btn-primary" onClick={() => setTeamModal(null)}>+ Create Team</button>
+          )}
         </div>
       </div>
 
-      {error && <div className="page-error">{error}</div>}
+      {/* ── Errors (visible on both tabs) ── */}
+      {techError  && <div className="page-error">{techError}</div>}
+      {teamError  && <div className="page-error">{teamError}</div>}
+      {deleteError && <div className="page-error">{deleteError}</div>}
 
-      {loading ? (
-        <div className="loading">Loading…</div>
-      ) : displayed.length === 0 ? (
-        <div className="empty-state">
-          <p>No technicians yet.</p>
-          <button className="btn-primary" onClick={() => { setEditing(null); setModalOpen(true) }}>
-            Add your first technician
-          </button>
-        </div>
-      ) : (
-        <div className="table-wrapper">
-          <table className="tech-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Specialization</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayed.map(t => (
-                <tr key={t.id} className={t.is_active === false ? 'row-inactive' : ''}>
-                  <td className="fw-medium">
-                    {t.full_name ?? `${t.first_name} ${t.last_name}`}
-                  </td>
-                  <td>{t.email || <span className="empty">—</span>}</td>
-                  <td>{t.phone || <span className="empty">—</span>}</td>
-                  <td>{t.specialization || <span className="empty">—</span>}</td>
-                  <td>
-                    {t.is_active === false ? (
-                      <span className="badge status-inactive">Inactive</span>
-                    ) : (
-                      <span className="badge status-active">Active</span>
-                    )}
-                  </td>
-                  <td className="actions">
-                    <button className="btn-edit" onClick={() => { setEditing(t); setModalOpen(true) }}>
-                      Edit
-                    </button>
-                    {t.is_active === false ? (
-                      <button className="btn-reactivate" onClick={() => handleReactivate(t)}>
-                        Reactivate
-                      </button>
-                    ) : (
-                      <button className="btn-deactivate" onClick={() => handleDeactivate(t)}>
-                        Deactivate
-                      </button>
-                    )}
-                  </td>
+      {/* ── Tabs ── */}
+      <div className="tech-tabs">
+        <button
+          className={`tech-tab-btn${activeTab === 'technicians' ? ' tech-tab-btn--active' : ''}`}
+          onClick={() => setActiveTab('technicians')}
+        >
+          Technicians
+          <span className="tab-count">{techs.length}</span>
+        </button>
+        <button
+          className={`tech-tab-btn${activeTab === 'teams' ? ' tech-tab-btn--active' : ''}`}
+          onClick={() => setActiveTab('teams')}
+        >
+          Teams
+          <span className="tab-count">{teams.length}</span>
+        </button>
+      </div>
+
+      {/* ── Technicians tab ── */}
+      {activeTab === 'technicians' && (
+        <>
+          {techsLoading ? (
+            <div className="loading">Loading…</div>
+          ) : displayed.length === 0 ? (
+            <div className="empty-state">
+              <p>No technicians yet.</p>
+              {user?.is_staff && (
+                <button className="btn-primary" onClick={() => { setEditingTech(null); setAddModalOpen(true) }}>
+                  Add your first technician
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="table-wrapper">
+              <table className="techs-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Specialization</th>
+                    <th>Team</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Date Joined</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayed.map(t => {
+                    const isMe = t.id === user?.id
+                    return (
+                      <tr key={t.id} className={`${t.is_active === false ? 'row-inactive' : ''}${isMe ? ' row-me' : ''}`}>
+                        <td className="tech-name">
+                          {t.full_name ?? `${t.first_name} ${t.last_name}`}
+                          {isMe && <span className="you-badge">You</span>}
+                        </td>
+                        <td>{t.username}</td>
+                        <td>{t.email || <span className="empty">—</span>}</td>
+                        <td>{t.phone || <span className="empty">—</span>}</td>
+                        <td>{t.specialization || <span className="empty">—</span>}</td>
+                        <td>{t.team_name || <span className="empty">—</span>}</td>
+                        <td>
+                          {t.is_staff
+                            ? <span className="badge badge-staff">Staff</span>
+                            : <span className="badge badge-tech">Technician</span>}
+                        </td>
+                        <td>
+                          {t.is_active !== false
+                            ? <span className="badge badge-active">Active</span>
+                            : <span className="badge badge-inactive">Inactive</span>}
+                        </td>
+                        <td>{t.date_joined ? t.date_joined.slice(0, 10) : <span className="empty">—</span>}</td>
+                        <td className="actions">
+                          <button className="btn-edit" onClick={() => { setEditingTech(t); setAddModalOpen(true) }}>
+                            Edit
+                          </button>
+                          {t.is_active !== false ? (
+                            user?.is_staff && t.id !== user?.id && (
+                              <button className="btn-deactivate" onClick={() => setDeactivateConfirm(t)}>
+                                Deactivate
+                              </button>
+                            )
+                          ) : (
+                            user?.is_staff && (
+                              <button className="btn-reactivate" onClick={() => setReactivateConfirm(t)}>
+                                Reactivate
+                              </button>
+                            )
+                          )}
+                          {user?.is_staff && t.id !== user?.id && (
+                            <button className="btn-delete-row" onClick={() => { setDeleteError(null); setDeleteConfirm(t) }}>
+                              Delete
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Teams tab ── */}
+      {activeTab === 'teams' && (
+        <>
+          <div className="table-wrapper">
+            <table className="techs-table">
+              <thead>
+                <tr>
+                  <th>Team Name</th>
+                  <th>Manager</th>
+                  <th>Members</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {teamsLoading ? (
+                  <tr><td colSpan={4} className="td-loading">Loading…</td></tr>
+                ) : teams.length === 0 ? (
+                  <tr><td colSpan={4} className="td-empty">No teams yet. Create one above.</td></tr>
+                ) : teams.map(team => (
+                  <tr key={team.id}>
+                    <td style={{ fontWeight: 500 }}>{team.name}</td>
+                    <td>{team.manager_name || <span className="empty">—</span>}</td>
+                    <td>{techs.filter(t => t.team === team.id).length}</td>
+                    <td className="actions">
+                      {user?.is_staff && (
+                        <>
+                          <button className="btn-edit" onClick={() => setTeamModal(team)}>Edit</button>
+                          <button className="btn-delete-row" onClick={() => handleDeleteTeam(team)}>Delete</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* ── Modals ── */}
+      {addModalOpen && (
+        <TechnicianFormModal
+          technician={editingTech}
+          teams={teams}
+          onClose={() => { setAddModalOpen(false); setEditingTech(null) }}
+          onSaved={() => { setAddModalOpen(false); setEditingTech(null); loadTechs() }}
+        />
+      )}
+
+      {teamModal !== undefined && (
+        <TeamFormModal
+          team={teamModal}
+          techs={techs}
+          onClose={() => setTeamModal(undefined)}
+          onSaved={() => { setTeamModal(undefined); loadTeams() }}
+        />
+      )}
+
+      {/* Deactivate confirm */}
+      {deactivateConfirm && (
+        <div className="modal-overlay" onClick={() => setDeactivateConfirm(null)}>
+          <div className="confirm-dialog" onClick={e => e.stopPropagation()}>
+            <h3>Deactivate Technician</h3>
+            <p>Deactivate <strong>{deactivateConfirm.full_name ?? `${deactivateConfirm.first_name} ${deactivateConfirm.last_name}`}</strong>? They will no longer be able to sign in.</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setDeactivateConfirm(null)}>Cancel</button>
+              <button className="btn-danger" onClick={() => handleDeactivate(deactivateConfirm)}>Deactivate</button>
+            </div>
+          </div>
         </div>
       )}
 
-      {modalOpen && (
-        <TechnicianFormModal
-          technician={editing}
-          onClose={() => { setModalOpen(false); setEditing(null) }}
-          onSaved={() => { setModalOpen(false); setEditing(null); loadTechnicians() }}
-        />
+      {/* Reactivate confirm */}
+      {reactivateConfirm && (
+        <div className="modal-overlay" onClick={() => setReactivateConfirm(null)}>
+          <div className="confirm-dialog" onClick={e => e.stopPropagation()}>
+            <h3>Reactivate Technician</h3>
+            <p>Reactivate <strong>{reactivateConfirm.full_name ?? `${reactivateConfirm.first_name} ${reactivateConfirm.last_name}`}</strong>? They will regain access to sign in.</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setReactivateConfirm(null)}>Cancel</button>
+              <button className="btn-primary" onClick={() => handleReactivate(reactivateConfirm)}>Reactivate</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {deleteConfirm && (
+        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+          <div className="confirm-dialog" onClick={e => e.stopPropagation()}>
+            <h3>Delete Technician</h3>
+            <p>Permanently delete <strong>{deleteConfirm.full_name ?? `${deleteConfirm.first_name} ${deleteConfirm.last_name}`}</strong>? This cannot be undone.</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button className="btn-danger" onClick={() => handleDelete(deleteConfirm)}>Delete</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
