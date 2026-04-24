@@ -230,7 +230,7 @@ class ConditionReading(models.Model):
         on_delete=models.SET_NULL,
         related_name="condition_readings",
     )
-    pitch_offset_cents = models.DecimalField(
+    pitch_before_cents = models.DecimalField(
         max_digits=6, decimal_places=2, null=True, blank=True
     )
     humidity_pct = models.DecimalField(

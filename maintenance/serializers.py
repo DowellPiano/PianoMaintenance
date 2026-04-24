@@ -189,7 +189,7 @@ class ConditionReadingSerializer(serializers.ModelSerializer):
             'id',
             'piano',
             'log',
-            'pitch_offset_cents',   # confirmed field name — no rename in this branch
+            'pitch_before_cents',
             'humidity_pct',
             'temperature_f',
             'overall_rating',

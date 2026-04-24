@@ -1,7 +1,9 @@
 import csv
 from datetime import date
 
-from django.db.models import Count, Max, Sum
+from decimal import Decimal
+
+from django.db.models import Count, DecimalField, Max, Sum
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -223,7 +225,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 
         return Response({
             'work_order': WorkOrderSerializer(work_order).data,
-            'log_id': log.pk,
+            'log': {'id': log.pk},
         })
 
 
@@ -290,7 +292,8 @@ class ReportsViewSet(viewsets.ViewSet):
             .annotate(
                 total_hours=Coalesce(
                     Sum('logs__hours_worked', filter=self._q(log_filters)),
-                    0,
+                    Decimal('0'),
+                    output_field=DecimalField(),
                 ),
                 work_order_count=Count(
                     'logs__work_order',
@@ -324,7 +327,8 @@ class ReportsViewSet(viewsets.ViewSet):
             .annotate(
                 total_hours=Coalesce(
                     Sum('logs__hours_worked', filter=self._q(log_filters)),
-                    0,
+                    Decimal('0'),
+                    output_field=DecimalField(),
                 ),
                 work_order_count=Count(
                     'logs__work_order',

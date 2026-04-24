@@ -120,7 +120,7 @@ class ConditionReadingInline(admin.TabularInline):
     extra = 0
     fields = (
         "overall_rating",
-        "pitch_offset_cents",
+        "pitch_before_cents",
         "humidity_pct",
         "temperature_f",
         "recorded_at",
@@ -153,7 +153,7 @@ class ConditionReadingAdmin(admin.ModelAdmin):
         "id",
         "piano",
         "overall_rating",
-        "pitch_offset_cents",
+        "pitch_before_cents",
         "humidity_pct",
         "temperature_f",
         "recorded_at",
