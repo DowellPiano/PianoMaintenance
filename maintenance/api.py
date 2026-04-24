@@ -12,6 +12,7 @@ from rest_framework.response import Response
 
 from .models import (
     Attachment,
+    ConditionReading,
     Location,
     MaintenanceLog,
     MaintenanceSchedule,
@@ -22,6 +23,7 @@ from .models import (
 )
 from .serializers import (
     AttachmentSerializer,
+    ConditionReadingSerializer,
     LocationSerializer,
     MaintenanceLogSerializer,
     MaintenanceScheduleSerializer,
@@ -170,21 +172,18 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         work_order = self.get_object()
 
-        # --- Validate hours_worked ---
-        try:
-            hours_worked = float(request.data.get('hours_worked', 0))
-        except (TypeError, ValueError):
-            hours_worked = 0
-        if hours_worked <= 0:
-            return Response(
-                {'error': 'hours_worked must be a positive number.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+        # --- Validate hours_worked and work_performed ---
+        hours_worked = request.data.get('hours_worked')
         work_performed = request.data.get('work_performed', '').strip()
-        if not work_performed:
+
+        try:
+            hours_worked_val = float(hours_worked)
+        except (TypeError, ValueError):
+            hours_worked_val = 0
+
+        if hours_worked_val <= 0 or not work_performed:
             return Response(
-                {'error': 'work_performed is required.'},
+                {'error': 'hours_worked must be greater than 0 and work_performed is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         notes = request.data.get('notes', '')
@@ -205,7 +204,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             work_order=work_order,
             technician=technician,
             piano=work_order.piano,
-            hours_worked=hours_worked,
+            hours_worked=hours_worked_val,
             work_performed=work_performed,
             notes=notes,
         )
@@ -226,6 +225,20 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             'work_order': WorkOrderSerializer(work_order).data,
             'log_id': log.pk,
         })
+
+
+# ---------------------------------------------------------------------------
+# ConditionReading  (Bug 4: field is pitch_offset_cents in this branch)
+# ---------------------------------------------------------------------------
+class ConditionReadingViewSet(viewsets.ModelViewSet):
+    serializer_class = ConditionReadingSerializer
+
+    def get_queryset(self):
+        qs = ConditionReading.objects.select_related('piano', 'log').order_by('-recorded_at')
+        piano_id = self.request.query_params.get('piano')
+        if piano_id:
+            qs = qs.filter(piano_id=piano_id)
+        return qs
 
 
 # ---------------------------------------------------------------------------

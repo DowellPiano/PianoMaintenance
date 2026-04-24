@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Attachment,
+    ConditionReading,
     Location,
     MaintenanceLog,
     MaintenanceSchedule,
@@ -176,6 +177,26 @@ class MaintenanceLogSerializer(serializers.ModelSerializer):
             'logged_at',
         ]
         read_only_fields = ['logged_at']
+
+
+# ---------------------------------------------------------------------------
+# ConditionReading
+# ---------------------------------------------------------------------------
+class ConditionReadingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConditionReading
+        fields = [
+            'id',
+            'piano',
+            'log',
+            'pitch_offset_cents',   # confirmed field name — no rename in this branch
+            'humidity_pct',
+            'temperature_f',
+            'overall_rating',
+            'notes',
+            'recorded_at',
+        ]
+        read_only_fields = ['recorded_at']
 
 
 # ---------------------------------------------------------------------------
