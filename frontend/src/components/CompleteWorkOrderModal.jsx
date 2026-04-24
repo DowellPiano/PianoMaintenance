@@ -7,6 +7,7 @@ export default function CompleteWorkOrderModal({ workOrder, onClose, onCompleted
     work_performed: '',
     notes: '',
   })
+  const [pitchBefore, setPitchBefore] = useState('')
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState(null)
 
@@ -41,6 +42,17 @@ export default function CompleteWorkOrderModal({ workOrder, onClose, onCompleted
         const data = await r.json().catch(() => ({}))
         setError(data.detail || JSON.stringify(data) || 'Failed to complete work order.')
       } else {
+        // Best-effort condition reading — fire and forget, never block onCompleted()
+        if (pitchBefore !== '') {
+          fetch('/api/condition-readings/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              piano: workOrder.piano,
+              pitch_before_cents: parseFloat(pitchBefore),
+            }),
+          }).catch(err => console.warn('Condition reading not saved:', err))
+        }
         onCompleted()
       }
     } catch {
@@ -87,6 +99,17 @@ export default function CompleteWorkOrderModal({ workOrder, onClose, onCompleted
               rows={4}
               placeholder="Describe what was done…"
               required
+            />
+          </label>
+
+          <label>
+            Pitch Offset (cents) — optional
+            <input
+              type="number"
+              step="0.5"
+              placeholder="e.g. 15.5"
+              value={pitchBefore}
+              onChange={e => setPitchBefore(e.target.value)}
             />
           </label>
 
