@@ -19,9 +19,6 @@ from .models import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Location
-# ---------------------------------------------------------------------------
 class LocationSerializer(serializers.ModelSerializer):
     piano_count = serializers.IntegerField(source='pianos.count', read_only=True)
 
@@ -30,9 +27,6 @@ class LocationSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'building', 'address', 'piano_count']
 
 
-# ---------------------------------------------------------------------------
-# Photo
-# ---------------------------------------------------------------------------
 class PhotoSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
 
@@ -48,11 +42,8 @@ class PhotoSerializer(serializers.ModelSerializer):
         return None
 
 
-# ---------------------------------------------------------------------------
-# Piano
-# ---------------------------------------------------------------------------
 class PianoSerializer(serializers.ModelSerializer):
-    location_name     = serializers.CharField(source='location.name', read_only=True)
+    location_name = serializers.CharField(source='location.name', read_only=True)
     profile_photo_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -73,9 +64,6 @@ class PianoSerializer(serializers.ModelSerializer):
         return None
 
 
-# ---------------------------------------------------------------------------
-# ScheduleTemplate
-# ---------------------------------------------------------------------------
 class ScheduleTemplateSerializer(serializers.ModelSerializer):
     schedule_count = serializers.IntegerField(source='schedules.count', read_only=True)
 
@@ -87,21 +75,18 @@ class ScheduleTemplateSerializer(serializers.ModelSerializer):
         ]
 
 
-# ---------------------------------------------------------------------------
-# MaintenanceSchedule
-# ---------------------------------------------------------------------------
 class MaintenanceScheduleSerializer(serializers.ModelSerializer):
-    piano_name     = serializers.CharField(source='piano.name',          read_only=True)
-    piano_brand    = serializers.CharField(source='piano.brand',         read_only=True)
+    piano_name = serializers.CharField(source='piano.name', read_only=True)
+    piano_brand = serializers.CharField(source='piano.brand', read_only=True)
     piano_location = serializers.CharField(source='piano.location.name', read_only=True)
-    template_name  = serializers.CharField(source='template.name',       read_only=True)
-    next_due       = serializers.SerializerMethodField()
+    template_name = serializers.CharField(source='template.name', read_only=True)
+    next_due = serializers.SerializerMethodField()
 
     def get_next_due(self, obj):
         today = date.today()
         last = (
             WorkOrder.objects
-            .filter(schedule=obj, status='Complete', completed_date__isnull=False)
+            .filter(schedule=obj, status=WorkOrder.Status.COMPLETE, completed_date__isnull=False)
             .order_by('-completed_date')
             .values_list('completed_date', flat=True)
             .first()
@@ -119,9 +104,6 @@ class MaintenanceScheduleSerializer(serializers.ModelSerializer):
         ]
 
 
-# ---------------------------------------------------------------------------
-# TechnicianMinimal  (for list/retrieve endpoints — no sensitive data)
-# ---------------------------------------------------------------------------
 class TechnicianMinimalSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     team_name = serializers.SerializerMethodField()
@@ -141,13 +123,10 @@ class TechnicianMinimalSerializer(serializers.ModelSerializer):
         return obj.team.name if obj.team_id else None
 
 
-# ---------------------------------------------------------------------------
-# MaintenanceLog
-# ---------------------------------------------------------------------------
 class MaintenanceLogSerializer(serializers.ModelSerializer):
     technician_name = serializers.SerializerMethodField(read_only=True)
-    piano           = serializers.PrimaryKeyRelatedField(source='work_order.piano', read_only=True)
-    piano_name      = serializers.CharField(source='work_order.piano.name', read_only=True)
+    piano = serializers.PrimaryKeyRelatedField(source='work_order.piano', read_only=True)
+    piano_name = serializers.CharField(source='work_order.piano.name', read_only=True)
 
     class Meta:
         model = MaintenanceLog
@@ -162,19 +141,11 @@ class MaintenanceLogSerializer(serializers.ModelSerializer):
         return obj.technician.get_full_name() or obj.technician.username
 
 
-# ---------------------------------------------------------------------------
-# WorkOrder
-# ---------------------------------------------------------------------------
 class WorkOrderSerializer(serializers.ModelSerializer):
-    piano_name         = serializers.CharField(source='piano.name',          read_only=True)
-    piano_brand        = serializers.CharField(source='piano.brand',         read_only=True)
-    piano_location     = serializers.CharField(source='piano.location.name', read_only=True)
+    piano_name = serializers.CharField(source='piano.name', read_only=True)
+    piano_brand = serializers.CharField(source='piano.brand', read_only=True)
+    piano_location = serializers.CharField(source='piano.location.name', read_only=True)
     assigned_tech_name = serializers.SerializerMethodField(read_only=True)
-
-    def get_assigned_tech_name(self, obj):
-        if obj.assigned_tech:
-            return obj.assigned_tech.get_full_name() or obj.assigned_tech.username
-        return None
 
     class Meta:
         model = WorkOrder
@@ -186,10 +157,12 @@ class WorkOrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_at']
 
+    def get_assigned_tech_name(self, obj):
+        if obj.assigned_tech:
+            return obj.assigned_tech.get_full_name() or obj.assigned_tech.username
+        return None
 
-# ---------------------------------------------------------------------------
-# ConditionReading
-# ---------------------------------------------------------------------------
+
 class ConditionReadingSerializer(serializers.ModelSerializer):
     piano_name = serializers.CharField(source='piano.name', read_only=True)
 
@@ -200,12 +173,8 @@ class ConditionReadingSerializer(serializers.ModelSerializer):
             'pitch_before_cents', 'pitch_after_cents', 'humidity_pct', 'temperature_f',
             'overall_rating', 'notes', 'recorded_at',
         ]
-        read_only_fields = []
 
 
-# ---------------------------------------------------------------------------
-# Part & PartUsed
-# ---------------------------------------------------------------------------
 class PartSerializer(serializers.ModelSerializer):
     needs_reorder = serializers.BooleanField(read_only=True)
 
@@ -225,11 +194,8 @@ class PartUsedSerializer(serializers.ModelSerializer):
         fields = ['id', 'log', 'part', 'part_name', 'quantity_used', 'cost_at_time']
 
 
-# ---------------------------------------------------------------------------
-# Technician (full — for create/update)
-# ---------------------------------------------------------------------------
 class TechnicianSerializer(serializers.ModelSerializer):
-    password  = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     full_name = serializers.SerializerMethodField(read_only=True)
     team_name = serializers.SerializerMethodField(read_only=True)
 
@@ -257,7 +223,6 @@ class TechnicianSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
-        # username and password are not updatable via this serializer
         validated_data.pop('username', None)
         validated_data.pop('password', None)
         for attr, value in validated_data.items():
@@ -266,9 +231,6 @@ class TechnicianSerializer(serializers.ModelSerializer):
         return instance
 
 
-# ---------------------------------------------------------------------------
-# Team
-# ---------------------------------------------------------------------------
 class TeamSerializer(serializers.ModelSerializer):
     manager_name = serializers.SerializerMethodField(read_only=True)
     member_count = serializers.SerializerMethodField(read_only=True)
@@ -286,18 +248,10 @@ class TeamSerializer(serializers.ModelSerializer):
         return obj.members.count()
 
 
-# ---------------------------------------------------------------------------
-# MaintenanceRequest
-# ---------------------------------------------------------------------------
 class MaintenanceRequestSerializer(serializers.ModelSerializer):
-    piano_name          = serializers.CharField(source='piano.name',          read_only=True)
-    piano_location      = serializers.CharField(source='piano.location.name', read_only=True)
-    wo_assigned_tech    = serializers.SerializerMethodField()
-
-    def get_wo_assigned_tech(self, obj):
-        if obj.work_order and obj.work_order.assigned_tech:
-            return obj.work_order.assigned_tech.get_full_name() or obj.work_order.assigned_tech.username
-        return None
+    piano_name = serializers.CharField(source='piano.name', read_only=True)
+    piano_location = serializers.CharField(source='piano.location.name', read_only=True)
+    wo_assigned_tech = serializers.SerializerMethodField()
 
     class Meta:
         model = MaintenanceRequest
@@ -309,15 +263,17 @@ class MaintenanceRequestSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_at']
 
+    def get_wo_assigned_tech(self, obj):
+        if obj.work_order and obj.work_order.assigned_tech:
+            return obj.work_order.assigned_tech.get_full_name() or obj.work_order.assigned_tech.username
+        return None
 
-# ---------------------------------------------------------------------------
-# Alert
-# ---------------------------------------------------------------------------
+
 class AlertSerializer(serializers.ModelSerializer):
-    piano_name     = serializers.CharField(source='work_order.piano.name',          read_only=True)
+    piano_name = serializers.CharField(source='work_order.piano.name', read_only=True)
     piano_location = serializers.CharField(source='work_order.piano.location.name', read_only=True)
-    due_date       = serializers.DateField(source='work_order.due_date',            read_only=True)
-    priority       = serializers.CharField(source='work_order.priority',            read_only=True)
+    due_date = serializers.DateField(source='work_order.due_date', read_only=True)
+    priority = serializers.CharField(source='work_order.priority', read_only=True)
 
     class Meta:
         model = Alert
@@ -328,18 +284,10 @@ class AlertSerializer(serializers.ModelSerializer):
         read_only_fields = ['sent_at']
 
 
-# ---------------------------------------------------------------------------
-# Attachment  (legacy)
-# ---------------------------------------------------------------------------
 class AttachmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Attachment
         fields = [
-            'id',
-            'piano',
-            'work_order',
-            'file',
-            'filename',
-            'uploaded_at',
+            'id', 'piano', 'work_order', 'file', 'filename', 'uploaded_at',
         ]
         read_only_fields = ['uploaded_at']
