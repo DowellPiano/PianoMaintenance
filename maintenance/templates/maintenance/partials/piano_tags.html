@@ -1,0 +1,39 @@
+<div id="piano-tags">
+  <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-bottom:.75rem;">
+    {% for tag in piano_tags %}
+    <span class="tag-chip">
+      {{ tag.name }}
+      <button type="button" class="tag-remove" title="Remove tag"
+              hx-post="{% url 'piano_remove_tag' piano.pk tag.pk %}"
+              hx-target="#piano-tags"
+              hx-swap="outerHTML">&times;</button>
+    </span>
+    {% empty %}
+    <span class="text-dim text-sm">No tags yet.</span>
+    {% endfor %}
+  </div>
+
+  {% if available_tags %}
+  <div style="margin-bottom:.75rem;">
+    <span class="text-sm text-muted" style="margin-right:.35rem;">Add existing:</span>
+    {% for tag in available_tags %}
+    <button type="button" class="tag-chip"
+            style="cursor:pointer; border:1px dashed #a5b4fc; background:#eef2ff; font-size:.78rem; padding:.15rem .5rem;"
+            title="Add &quot;{{ tag.name }}&quot;"
+            hx-post="{% url 'piano_add_tag' piano.pk %}"
+            hx-vals='{"tag_name": "{{ tag.name|escapejs }}"}'
+            hx-target="#piano-tags"
+            hx-swap="outerHTML">+ {{ tag.name }}</button>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form hx-post="{% url 'piano_add_tag' piano.pk %}"
+        hx-target="#piano-tags"
+        hx-swap="outerHTML"
+        style="display:inline-flex; gap:.35rem; align-items:center;">
+    <input type="text" name="tag_name" placeholder="Create new tag…"
+           class="form-input" style="width:160px; height:30px; font-size:.82rem; padding:0 .5rem;">
+    <button type="submit" class="btn btn-xs btn-secondary" style="height:30px;">Create</button>
+  </form>
+</div>

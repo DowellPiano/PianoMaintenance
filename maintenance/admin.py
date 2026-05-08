@@ -11,7 +11,6 @@ from .models import (
     Team,
     ScheduleTemplate,
     MaintenanceSchedule,
-    ServiceVisit,
     WorkOrder,
     MaintenanceLog,
     ConditionReading,
@@ -147,29 +146,6 @@ class MaintenanceScheduleAdmin(admin.ModelAdmin):
 
 
 # ---------------------------------------------------------------------------
-# ServiceVisit
-# ---------------------------------------------------------------------------
-@admin.register(ServiceVisit)
-class ServiceVisitAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "venue",
-        "technician",
-        "date",
-        "status",
-        "time_in",
-        "time_out",
-        "miles_driven",
-    )
-    list_filter   = ("status", "venue", "technician")
-    search_fields = ("venue__name", "technician__username", "notes")
-    readonly_fields = ("created_at",)
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related("venue", "technician")
-
-
-# ---------------------------------------------------------------------------
 # WorkOrder
 # ---------------------------------------------------------------------------
 class MaintenanceLogInline(admin.TabularInline):
@@ -193,7 +169,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
     )
     list_filter    = ("status", "order_type", "priority", "piano__venue")
     search_fields  = ("piano__name", "piano__make", "description")
-    raw_id_fields  = ("piano", "assigned_tech", "schedule", "service_visit")
+    raw_id_fields  = ("piano", "assigned_tech", "schedule")
     readonly_fields = ("created_at",)
     inlines        = [MaintenanceLogInline]
 

@@ -60,7 +60,7 @@
         {% for wo in recent_work_orders %}
         <tr>
           <td class="text-muted">WO-{{ wo.pk }}</td>
-          <td><a href="{% url 'piano_detail' wo.piano_id %}">{{ wo.piano.name }}</a></td>
+          <td>{% if wo.piano %}<a href="{% url 'piano_detail' wo.piano_id %}">{{ wo.piano.name }}</a>{% else %}<span class="text-dim">{{ wo.piano_name }}</span>{% endif %}</td>
           <td>{{ wo.order_type }}</td>
           <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
           <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>

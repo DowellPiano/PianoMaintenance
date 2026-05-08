@@ -9,7 +9,7 @@
           <tr><td class="fw-medium">Serial Number</td><td>{{ piano.serial_number|default:"—" }}</td></tr>
           <tr><td class="fw-medium">Year Built</td><td>{{ piano.year_built|default:"—" }}</td></tr>
           <tr><td class="fw-medium">Year Acquired</td><td>{{ piano.year_acquired|default:"—" }}</td></tr>
-          <tr><td class="fw-medium">Venue</td><td>{{ piano.venue.name }}</td></tr>
+          <tr><td class="fw-medium">Venue</td><td>{{ piano.venue_name }}</td></tr>
           {% if piano.section %}<tr><td class="fw-medium">Section</td><td>{{ piano.section }}</td></tr>{% endif %}
           {% if piano.room %}<tr><td class="fw-medium">Room</td><td>{{ piano.room }}</td></tr>{% endif %}
           {% if piano.notes %}<tr><td class="fw-medium">Notes</td><td>{{ piano.notes }}</td></tr>{% endif %}

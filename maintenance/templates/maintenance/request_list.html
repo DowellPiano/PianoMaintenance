@@ -3,12 +3,6 @@
 {% block title %}Requests — Piano Maintainer{% endblock %}
 {% block topbar_title %}Requests{% endblock %}
 
-{% block extra_css %}
-<style>
-.req-filters { display: flex; gap: .75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
-.req-actions { display: flex; gap: .35rem; }
-</style>
-{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -52,8 +46,8 @@
         <tr>
           <td class="text-sm fw-medium">#{{ req.pk }}</td>
           <td>
-            <a href="{% url 'piano_detail' req.piano.pk %}">{{ req.piano.name }}</a>
-            <div class="text-dim text-sm">{{ req.piano.venue.name }}</div>
+            {% if req.piano %}<a href="{% url 'piano_detail' req.piano.pk %}">{{ req.piano.name }}</a>{% else %}<span class="text-dim">{{ req.piano_display|default:"(deleted piano)" }}</span>{% endif %}
+            <div class="text-dim text-sm">{% if req.piano and req.piano.venue %}{{ req.piano.venue.name }}{% endif %}</div>
           </td>
           <td class="text-sm">
             {{ req.reported_by_name|default:"Anonymous" }}

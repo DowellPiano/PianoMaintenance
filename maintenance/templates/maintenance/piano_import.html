@@ -19,6 +19,9 @@
         name, make, model, serial_number, piano_type, organization, venue, section, room, year_built, year_acquired, notes
       </div>
     </div>
+    <p style="margin-bottom:1rem;">
+      <a href="{% url 'piano_import_sample' %}" class="btn btn-sm btn-secondary">Download Sample CSV</a>
+    </p>
     <p class="text-sm text-muted mb-2">
       <strong>piano_type</strong> must be one of: Grand, Upright, Digital.<br>
       <strong>organization</strong> and <strong>venue</strong> will be created if they don't exist.<br>

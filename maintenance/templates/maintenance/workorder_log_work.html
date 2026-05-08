@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Log Work — WO-{{ wo.pk }} — Piano Maintainer{% endblock %}
+{% block topbar_title %}Log Work — WO-{{ wo.pk }}{% endblock %}
+
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'workorder_detail' wo.pk %}" class="text-muted text-sm">&larr; Back to WO-{{ wo.pk }}</a>
+</div>
+
+<div class="card" style="max-width:800px;">
+  <div class="card-header">
+    <h2>Log Work</h2>
+  </div>
+  <div class="card-body">
+    <div style="background:#f9fafb; border-radius:var(--radius-sm); padding:.75rem 1rem; margin-bottom:1.25rem;">
+      <div style="font-weight:600;">WO-{{ wo.pk }} &middot; {{ wo.piano_name }}</div>
+      <div class="text-sm text-muted">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }} &middot; {% endif %}{{ wo.order_type }}{% if wo.task_type %} &middot; {{ wo.task_type }}{% endif %}</div>
+      {% if wo.description %}<div class="text-sm" style="margin-top:.35rem;">{{ wo.description|truncatechars:120 }}</div>{% endif %}
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_hours_worked">Hours Worked *</label>
+          <input type="number" step="0.25" min="0" name="hours_worked" id="id_hours_worked"
+                 class="form-input" required value="{{ form.hours_worked.value|default:'' }}"
+                 placeholder="0.00">
+          {% if form.hours_worked.errors %}<span class="form-error">{{ form.hours_worked.errors.0 }}</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_work_performed">Work Performed *</label>
+        <textarea name="work_performed" id="id_work_performed" class="form-textarea" rows="3"
+                  required placeholder="Describe the work performed...">{{ form.work_performed.value|default:'' }}</textarea>
+        {% if form.work_performed.errors %}<span class="form-error">{{ form.work_performed.errors.0 }}</span>{% endif %}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_notes">Additional Notes</label>
+        <textarea name="notes" id="id_notes" class="form-textarea" rows="2"
+                  placeholder="Optional notes...">{{ form.notes.value|default:'' }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_photos">Photos (optional)</label>
+        <input type="file" name="photos" id="id_photos" accept="image/*" multiple class="form-input">
+        <span class="text-dim text-sm">Attach photos of work performed</span>
+      </div>
+
+      <!-- Parts Used -->
+      <div class="form-group" style="margin-top:1.25rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem;">
+          <label class="form-label" style="margin-bottom:0;">Parts Used</label>
+          <button type="button" class="btn btn-xs btn-secondary" onclick="addPartRow()">+ Add Part</button>
+        </div>
+        <div id="parts-container">
+          <!-- Part rows added via JS -->
+        </div>
+        <span class="text-dim text-sm">Select parts and quantities used. Stock will be decremented automatically.</span>
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1.25rem;">
+        <a href="{% url 'workorder_detail' wo.pk %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Log Work</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function addPartRow() {
+  const container = document.getElementById('parts-container');
+  const row = document.createElement('div');
+  row.className = 'parts-row';
+  row.innerHTML = `
+    <select name="part_id" class="form-select">
+      <option value="">— Select Part —</option>
+      {% for p in parts %}
+      <option value="{{ p.pk }}">{{ p.name }}{% if p.part_number %} ({{ p.part_number }}){% endif %} — {{ p.stock_quantity }} in stock</option>
+      {% endfor %}
+    </select>
+    <input type="number" name="part_qty" min="1" value="1" class="form-input" placeholder="Qty">
+    <button type="button" class="btn btn-xs btn-secondary parts-row-remove" onclick="this.parentElement.remove()">&#10005;</button>
+  `;
+  container.appendChild(row);
+}
+</script>
+{% endblock %}

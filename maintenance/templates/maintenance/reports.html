@@ -3,24 +3,6 @@
 {% block title %}Reports — Piano Maintainer{% endblock %}
 {% block topbar_title %}Reports{% endblock %}
 
-{% block extra_css %}
-<style>
-.report-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
-}
-.report-card {
-  background: var(--clr-surface);
-  border: 1px solid var(--clr-border);
-  border-radius: var(--radius);
-  padding: 1.5rem;
-  box-shadow: var(--shadow);
-}
-.report-card-title { font-weight: 700; font-size: 1rem; margin-bottom: .25rem; }
-.report-card-desc { color: var(--clr-text-sec); font-size: .88rem; margin-bottom: 1rem; }
-</style>
-{% endblock %}
 
 {% block content %}
 <div class="page-header">

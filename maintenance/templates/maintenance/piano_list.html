@@ -3,91 +3,6 @@
 {% block title %}Pianos — Piano Maintainer{% endblock %}
 {% block topbar_title %}Pianos{% endblock %}
 
-{% block extra_css %}
-<style>
-.piano-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
-}
-.piano-card {
-  background: var(--clr-surface);
-  border: 1px solid var(--clr-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-  transition: box-shadow .15s;
-}
-.piano-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); }
-.piano-card-photo {
-  height: 140px;
-  background: #f3f4f6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 3rem;
-  opacity: .3;
-  overflow: hidden;
-}
-.piano-card-photo img { width: 100%; height: 100%; object-fit: cover; opacity: 1; }
-.piano-card-body { padding: 1rem; }
-.piano-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; margin-bottom: .4rem; }
-.piano-card-name {
-  font-weight: 700;
-  font-size: 1rem;
-  color: var(--clr-text);
-  text-decoration: none;
-}
-.piano-card-name:hover { color: var(--clr-primary); text-decoration: none; }
-.piano-card-meta { color: var(--clr-text-sec); font-size: .875rem; margin-bottom: .2rem; }
-.piano-card-venue { color: var(--clr-text-dim); font-size: .82rem; }
-.piano-card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .5rem;
-  margin-top: .75rem;
-  padding-top: .65rem;
-  border-top: 1px solid var(--clr-border);
-}
-.piano-card-conditions { display: flex; gap: .4rem; flex-wrap: wrap; }
-.condition-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.condition-dot.excellent { background: #16a34a; }
-.condition-dot.good { background: #2563eb; }
-.condition-dot.fair { background: #f59e0b; }
-.condition-dot.poor { background: #dc2626; }
-.condition-dot.attention { background: #7f1d1d; }
-.next-due-label { font-size: .78rem; }
-.piano-card-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
-.tag-chip-sm {
-  display: inline-block;
-  background: #e0e7ff;
-  color: #3730a3;
-  font-size: .72rem;
-  font-weight: 500;
-  padding: .1rem .45rem;
-  border-radius: 999px;
-}
-.filter-bar {
-  display: flex;
-  gap: .75rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.25rem;
-}
-.filter-bar .form-input,
-.filter-bar .form-select { flex: none; }
-@media (max-width: 768px) {
-  .piano-grid { grid-template-columns: 1fr; }
-  .filter-bar { flex-direction: column; }
-  .filter-bar .form-input,
-  .filter-bar .form-select { width: 100%; }
-}
-</style>
-{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -96,6 +11,7 @@
     <p class="page-subtitle">{{ pianos|length }} piano{{ pianos|length|pluralize }} registered</p>
   </div>
   <div class="gap-row">
+    <a href="{% url 'piano_import' %}" class="btn btn-secondary">Import CSV</a>
     <a href="{% url 'piano_create' %}" class="btn btn-primary">+ Add Piano</a>
   </div>
 </div>
@@ -147,7 +63,7 @@
         <span class="badge badge-{{ piano.piano_type|lower }}">{{ piano.piano_type }}</span>
       </div>
       <p class="piano-card-meta">{{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %}{% if piano.year_built %} · {{ piano.year_built }}{% endif %}</p>
-      <p class="piano-card-venue">{{ piano.venue.name }}{% if piano.room %} · {{ piano.room }}{% endif %}</p>
+      <p class="piano-card-venue">{{ piano.venue_name }}{% if piano.room %} · {{ piano.room }}{% endif %}</p>
       {% if piano.tags.all %}
       <div class="piano-card-tags">
         {% for tag in piano.tags.all %}
