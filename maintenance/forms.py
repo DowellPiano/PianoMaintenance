@@ -1,9 +1,28 @@
 from django import forms
 from .models import (
-    Piano, WorkOrder, ConditionReading, ConditionLevel,
-    MaintenanceSchedule, ScheduleTemplate, Part, TaskType,
-    MaintenanceLog, Photo,
+    Organization, Venue, Piano, WorkOrder, ConditionReading, ConditionLevel,
+    MaintenanceSchedule, ScheduleTemplate, ServiceVisit, Part,
 )
+
+
+class OrganizationForm(forms.ModelForm):
+    class Meta:
+        model = Organization
+        fields = [
+            'name', 'short_name', 'address',
+            'contact_name', 'contact_email', 'contact_phone',
+            'notes',
+        ]
+
+
+class VenueForm(forms.ModelForm):
+    class Meta:
+        model = Venue
+        fields = [
+            'name', 'short_name', 'organization', 'address',
+            'on_site_contact', 'parking_notes', 'access_notes',
+            'notes',
+        ]
 
 
 class PianoForm(forms.ModelForm):
@@ -11,7 +30,8 @@ class PianoForm(forms.ModelForm):
         model = Piano
         fields = [
             'name', 'make', 'model', 'serial_number',
-            'piano_type', 'location', 'location_in_venue',
+            'piano_type', 'venue',
+            'section', 'room', 'room_description', 'room_access_notes',
             'year_built', 'year_acquired',
             'tuning_interval_value', 'tuning_interval_unit',
             'regulation_interval_value', 'regulation_interval_unit',
@@ -19,6 +39,38 @@ class PianoForm(forms.ModelForm):
             'cleaning_interval_value', 'cleaning_interval_unit',
             'notes',
         ]
+
+
+class ServiceVisitForm(forms.ModelForm):
+    class Meta:
+        model = ServiceVisit
+        fields = ['technician', 'venue', 'date', 'time_in', 'time_out',
+                  'miles_driven', 'notes']
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'time_in': forms.TimeInput(attrs={'type': 'time'}),
+            'time_out': forms.TimeInput(attrs={'type': 'time'}),
+        }
+
+
+class ServiceVisitCompleteForm(forms.Form):
+    """Form for completing a service visit."""
+    time_in = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(attrs={'type': 'time'}),
+    )
+    time_out = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(attrs={'type': 'time'}),
+    )
+    miles_driven = forms.DecimalField(
+        required=False, max_digits=6, decimal_places=1,
+        widget=forms.NumberInput(attrs={'step': '0.1', 'placeholder': '0.0'}),
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Visit notes (optional)'}),
+    )
 
 
 class WorkOrderForm(forms.ModelForm):

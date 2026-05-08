@@ -8,8 +8,7 @@ Usage:
 For every active MaintenanceSchedule this command:
   1. Determines the anchor date in priority order:
        a. schedule.last_service_date  (set whenever a work order is completed)
-       b. piano.date_acquired         (fallback when no service has ever occurred)
-       c. today                       (last resort)
+       b. today                       (last resort — no service history)
   2. Computes next_due = anchor + interval_days.
   3. Creates a new Open/Preventive WorkOrder if:
        - next_due <= today + warning_days_before (i.e. due or coming due soon), AND
@@ -72,14 +71,11 @@ class Command(BaseCommand):
 
             # ------------------------------------------------------------------
             # 2.  Determine the anchor date for next-due calculation.
-            #     Priority: last_service_date > piano.date_acquired > today
+            #     Priority: last_service_date > today (no history)
             # ------------------------------------------------------------------
             if schedule.last_service_date:
                 anchor = schedule.last_service_date
                 anchor_source = "last_service_date"
-            elif piano.date_acquired:
-                anchor = piano.date_acquired
-                anchor_source = "piano.date_acquired"
             else:
                 anchor = today
                 anchor_source = "today (no history)"

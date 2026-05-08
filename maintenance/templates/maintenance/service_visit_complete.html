@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Complete Visit — Piano Maintainer{% endblock %}
+{% block topbar_title %}Complete Visit{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'service_visit_detail' visit.pk %}" class="text-muted text-sm">← Back to Visit</a>
+</div>
+
+<div class="card" style="max-width:560px;">
+  <div class="card-header"><h2>Complete Service Visit</h2></div>
+  <div class="card-body">
+    <div style="background:#f9fafb; border-radius:var(--radius-sm); padding:.75rem 1rem; margin-bottom:1.25rem;">
+      <div style="font-weight:600;">{{ visit.venue.name }} — {{ visit.date|date:"M d, Y" }}</div>
+      <div class="text-sm text-muted">{{ visit.technician.get_full_name|default:visit.technician.username }}</div>
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_time_in">Time In</label>
+          <input type="time" name="time_in" id="id_time_in" class="form-input"
+                 value="{{ form.time_in.value|default:'' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_time_out">Time Out</label>
+          <input type="time" name="time_out" id="id_time_out" class="form-input"
+                 value="{{ form.time_out.value|default:'' }}">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_miles_driven">Miles Driven</label>
+        <input type="number" name="miles_driven" id="id_miles_driven" class="form-input"
+               value="{{ form.miles_driven.value|default:'' }}" step="0.1" min="0">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_notes">Notes</label>
+        <textarea class="form-textarea" name="notes" id="id_notes" rows="3">{{ form.notes.value|default:'' }}</textarea>
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <a href="{% url 'service_visit_detail' visit.pk %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-success">Mark Complete</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -22,15 +22,43 @@ class IntervalUnit(models.TextChoices):
 
 
 # ---------------------------------------------------------------------------
-# Location
+# Organization  (administrative owner — who signs the contract)
 # ---------------------------------------------------------------------------
-class Location(models.Model):
+class Organization(models.Model):
     name = models.CharField(max_length=200)
-    building = models.CharField(max_length=200, blank=True)
+    short_name = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
+    contact_name = models.CharField(max_length=200, blank=True)
+    contact_email = models.EmailField(blank=True)
+    contact_phone = models.CharField(max_length=50, blank=True)
+    notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ["name"]
+
+    def __str__(self):
+        return self.short_name or self.name
+
+
+# ---------------------------------------------------------------------------
+# Venue  (physical location a technician drives to)
+# ---------------------------------------------------------------------------
+class Venue(models.Model):
+    name = models.CharField(max_length=200)
+    short_name = models.CharField(max_length=50, blank=True)
+    organization = models.ForeignKey(
+        Organization, on_delete=models.PROTECT, related_name="venues",
+    )
+    address = models.TextField(blank=True)
+    on_site_contact = models.TextField(blank=True,
+        help_text="Local contact at this venue — name, role, phone.")
+    parking_notes = models.TextField(blank=True)
+    access_notes = models.TextField(blank=True,
+        help_text="General access instructions for the building.")
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["organization", "name"]
 
     def __str__(self):
         return self.name
@@ -45,8 +73,8 @@ class Piano(models.Model):
         UPRIGHT = "Upright", "Upright"
         DIGITAL = "Digital", "Digital"
 
-    location = models.ForeignKey(
-        Location, on_delete=models.PROTECT, related_name="pianos"
+    venue = models.ForeignKey(
+        Venue, on_delete=models.PROTECT, related_name="pianos"
     )
     name = models.CharField(max_length=200)
     make = models.CharField(max_length=100)
@@ -55,7 +83,17 @@ class Piano(models.Model):
     piano_type = models.CharField(max_length=20, choices=PianoType.choices)
     year_built    = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
     year_acquired = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
-    location_in_venue = models.CharField(max_length=200, blank=True)
+
+    # -- Location within venue --------------------------------------------------
+    section = models.CharField(max_length=200, blank=True,
+        help_text="Optional grouping within venue (building, floor, wing).")
+    room = models.CharField(max_length=200, blank=True,
+        help_text="Specific spot — room name or number.")
+    room_description = models.TextField(blank=True,
+        help_text="Directions to help a first-time visitor find this room.")
+    room_access_notes = models.TextField(blank=True,
+        help_text="Key codes, access hours, or other entry instructions.")
+
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     qr_code_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
@@ -135,7 +173,7 @@ class Piano(models.Model):
     ]
 
     class Meta:
-        ordering = ["location", "name"]
+        ordering = ["venue", "name"]
 
     def __str__(self):
         return f"{self.make} {self.model} — {self.name}".strip(" —")
@@ -306,6 +344,66 @@ class MaintenanceSchedule(models.Model):
 
 
 # ---------------------------------------------------------------------------
+# ServiceVisit  (one trip to a venue)
+# ---------------------------------------------------------------------------
+class ServiceVisit(models.Model):
+    class VisitStatus(models.TextChoices):
+        PLANNED = "Planned", "Planned"
+        IN_PROGRESS = "In Progress", "In Progress"
+        COMPLETE = "Complete", "Complete"
+
+    technician = models.ForeignKey(
+        Technician, on_delete=models.PROTECT, related_name="service_visits",
+    )
+    venue = models.ForeignKey(
+        Venue, on_delete=models.PROTECT, related_name="service_visits",
+    )
+    date = models.DateField()
+    time_in = models.TimeField(null=True, blank=True)
+    time_out = models.TimeField(null=True, blank=True)
+    miles_driven = models.DecimalField(
+        max_digits=6, decimal_places=1, null=True, blank=True,
+    )
+    status = models.CharField(
+        max_length=20, choices=VisitStatus.choices, default=VisitStatus.PLANNED,
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-created_at"]
+
+    def __str__(self):
+        return f"Visit {self.date} — {self.venue.name}"
+
+    @property
+    def total_duration_minutes(self):
+        """Time Out minus Time In, in minutes."""
+        if self.time_in and self.time_out:
+            from datetime import datetime
+            t_in = datetime.combine(self.date, self.time_in)
+            t_out = datetime.combine(self.date, self.time_out)
+            return int((t_out - t_in).total_seconds() / 60)
+        return None
+
+    @property
+    def total_duration_display(self):
+        mins = self.total_duration_minutes
+        if mins is None:
+            return "—"
+        hours, remainder = divmod(mins, 60)
+        if hours and remainder:
+            return f"{hours}h {remainder}m"
+        elif hours:
+            return f"{hours}h"
+        return f"{mins}m"
+
+    @property
+    def work_order_count(self):
+        return self.work_orders.count()
+
+
+# ---------------------------------------------------------------------------
 # WorkOrder
 # ---------------------------------------------------------------------------
 class WorkOrder(models.Model):
@@ -331,6 +429,13 @@ class WorkOrder(models.Model):
     )
     assigned_tech = models.ForeignKey(
         Technician,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="work_orders",
+    )
+    service_visit = models.ForeignKey(
+        ServiceVisit,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

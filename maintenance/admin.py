@@ -3,12 +3,14 @@ from django.contrib.auth.admin import UserAdmin
 from django.db.models import Count
 
 from .models import (
-    Location,
+    Organization,
+    Venue,
     Piano,
     Technician,
     Team,
     ScheduleTemplate,
     MaintenanceSchedule,
+    ServiceVisit,
     WorkOrder,
     MaintenanceLog,
     ConditionReading,
@@ -19,13 +21,32 @@ from .models import (
 
 
 # ---------------------------------------------------------------------------
-# Location
+# Organization
 # ---------------------------------------------------------------------------
-@admin.register(Location)
-class LocationAdmin(admin.ModelAdmin):
-    list_display  = ("name", "building", "address")
-    search_fields = ("name", "building", "address")
-    # No FK columns in list_display — no select_related needed.
+@admin.register(Organization)
+class OrganizationAdmin(admin.ModelAdmin):
+    list_display  = ("name", "short_name", "contact_name", "contact_email", "venue_count")
+    search_fields = ("name", "short_name", "contact_name")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(_venue_count=Count("venues"))
+
+    @admin.display(description="Venues")
+    def venue_count(self, obj):
+        return obj._venue_count
+
+
+# ---------------------------------------------------------------------------
+# Venue
+# ---------------------------------------------------------------------------
+@admin.register(Venue)
+class VenueAdmin(admin.ModelAdmin):
+    list_display  = ("name", "short_name", "organization", "address")
+    list_filter   = ("organization",)
+    search_fields = ("name", "short_name", "address")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("organization")
 
 
 # ---------------------------------------------------------------------------
@@ -38,18 +59,17 @@ class PianoAdmin(admin.ModelAdmin):
         "make",
         "model",
         "piano_type",
-        "location",
+        "venue",
+        "section",
+        "room",
         "serial_number",
-        "year_built",
-        "year_acquired",
     )
-    list_filter    = ("piano_type", "location", "make")
+    list_filter    = ("piano_type", "venue__organization", "venue", "make")
     search_fields  = ("name", "make", "model", "serial_number")
     readonly_fields = ("qr_code_token",)
 
     def get_queryset(self, request):
-        # location column — join instead of per-row query
-        return super().get_queryset(request).select_related("location")
+        return super().get_queryset(request).select_related("venue__organization")
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +87,6 @@ class TechnicianAdmin(UserAdmin):
     )
     list_filter   = ("is_active", "is_staff", "groups")
     search_fields = ("username", "first_name", "last_name", "email")
-    # No FK columns in list_display — no select_related needed.
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +108,6 @@ class ScheduleTemplateAdmin(admin.ModelAdmin):
     inlines       = [MaintenanceScheduleInline]
 
     def get_queryset(self, request):
-        # Annotate once per page load instead of one .count() query per row.
         return super().get_queryset(request).annotate(_schedule_count=Count("schedules"))
 
     @admin.display(description="Schedules applied")
@@ -110,12 +128,34 @@ class MaintenanceScheduleAdmin(admin.ModelAdmin):
         "warning_days_before",
         "is_active",
     )
-    list_filter   = ("task_type", "is_active", "piano__location")
+    list_filter   = ("task_type", "is_active", "piano__venue")
     search_fields = ("task_name", "piano__name", "piano__make")
 
     def get_queryset(self, request):
-        # piano column + piano__location filter — one join covers both
-        return super().get_queryset(request).select_related("piano__location", "template")
+        return super().get_queryset(request).select_related("piano__venue", "template")
+
+
+# ---------------------------------------------------------------------------
+# ServiceVisit
+# ---------------------------------------------------------------------------
+@admin.register(ServiceVisit)
+class ServiceVisitAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "venue",
+        "technician",
+        "date",
+        "status",
+        "time_in",
+        "time_out",
+        "miles_driven",
+    )
+    list_filter   = ("status", "venue", "technician")
+    search_fields = ("venue__name", "technician__username", "notes")
+    readonly_fields = ("created_at",)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("venue", "technician")
 
 
 # ---------------------------------------------------------------------------
@@ -140,16 +180,15 @@ class WorkOrderAdmin(admin.ModelAdmin):
         "due_date",
         "created_at",
     )
-    list_filter    = ("status", "order_type", "priority", "piano__location")
+    list_filter    = ("status", "order_type", "priority", "piano__venue")
     search_fields  = ("piano__name", "piano__make", "description")
-    raw_id_fields  = ("piano", "assigned_tech", "schedule")
+    raw_id_fields  = ("piano", "assigned_tech", "schedule", "service_visit")
     readonly_fields = ("created_at",)
     inlines        = [MaintenanceLogInline]
 
     def get_queryset(self, request):
-        # piano + assigned_tech columns; piano__location for list_filter
         return super().get_queryset(request).select_related(
-            "piano__location", "assigned_tech"
+            "piano__venue", "assigned_tech"
         )
 
 
@@ -186,15 +225,14 @@ class MaintenanceLogAdmin(admin.ModelAdmin):
         "hours_worked",
         "logged_at",
     )
-    list_filter   = ("technician", "piano__location")
+    list_filter   = ("technician", "piano__venue")
     search_fields = ("piano__name", "technician__username", "work_performed")
     readonly_fields = ("logged_at",)
     inlines       = [PartUsedInline, ConditionReadingInline]
 
     def get_queryset(self, request):
-        # piano + technician + work_order columns
         return super().get_queryset(request).select_related(
-            "piano__location", "technician", "work_order"
+            "piano__venue", "technician", "work_order"
         )
 
 
@@ -213,13 +251,12 @@ class ConditionReadingAdmin(admin.ModelAdmin):
         "temperature_f",
         "recorded_at",
     )
-    list_filter   = ("overall_rating", "piano__location")
+    list_filter   = ("overall_rating", "piano__venue")
     search_fields = ("piano__name",)
     readonly_fields = ("recorded_at",)
 
     def get_queryset(self, request):
-        # piano column
-        return super().get_queryset(request).select_related("piano__location")
+        return super().get_queryset(request).select_related("piano__venue")
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +275,6 @@ class PartAdmin(admin.ModelAdmin):
     )
     list_filter   = ("supplier",)
     search_fields = ("name", "part_number", "supplier")
-    # No FK columns in list_display — no select_related needed.
 
     @admin.display(boolean=True, description="Needs Reorder?")
     def needs_reorder(self, obj):
@@ -255,7 +291,6 @@ class PartUsedAdmin(admin.ModelAdmin):
     search_fields = ("part__name", "part__part_number")
 
     def get_queryset(self, request):
-        # part + log columns
         return super().get_queryset(request).select_related("part", "log")
 
 
@@ -273,13 +308,12 @@ class MaintenanceRequestAdmin(admin.ModelAdmin):
         "work_order",
         "created_at",
     )
-    list_filter   = ("status", "piano__location")
+    list_filter   = ("status", "piano__venue")
     search_fields = ("piano__name", "reported_by_name", "reported_by_email", "issue_description")
     readonly_fields = ("created_at",)
 
     def get_queryset(self, request):
-        # piano + work_order columns; piano__location for list_filter
-        return super().get_queryset(request).select_related("piano__location", "work_order")
+        return super().get_queryset(request).select_related("piano__venue", "work_order")
 
 
 # ---------------------------------------------------------------------------

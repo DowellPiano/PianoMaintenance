@@ -85,7 +85,7 @@
           <td class="wo-id">WO-{{ wo.pk }}</td>
           <td>
             <div class="wo-piano">{{ wo.piano.name }}</div>
-            <div class="wo-piano-loc">{{ wo.piano.location.name }}</div>
+            <div class="wo-piano-loc">{{ wo.piano.venue.name }}</div>
           </td>
           <td>{{ wo.order_type }}</td>
           <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>

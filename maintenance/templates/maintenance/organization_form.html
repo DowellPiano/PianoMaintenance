@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}{% if organization %}Edit {{ organization.name }}{% else %}New Organization{% endif %} — Piano Maintainer{% endblock %}
+{% block topbar_title %}{% if organization %}Edit Organization{% else %}New Organization{% endif %}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% if organization %}{% url 'organization_detail' organization.pk %}{% else %}{% url 'organization_list' %}{% endif %}" class="text-muted text-sm">← Back</a>
+</div>
+
+<div class="card" style="max-width:600px;">
+  <div class="card-header">
+    <h2>{% if organization %}Edit {{ organization.name }}{% else %}Add Organization{% endif %}</h2>
+  </div>
+  <div class="card-body">
+    {% if form.errors %}
+      <div class="alert alert-error">Please fix the errors below.</div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label class="form-label" for="id_name">Name *</label>
+        <input class="form-input" type="text" name="name" id="id_name"
+               value="{{ form.name.value|default:'' }}" required>
+        {% if form.name.errors %}<span class="form-error">{{ form.name.errors.0 }}</span>{% endif %}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_short_name">Short Name</label>
+        <input class="form-input" type="text" name="short_name" id="id_short_name"
+               value="{{ form.short_name.value|default:'' }}" placeholder="Abbreviation">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_address">Address</label>
+        <textarea class="form-textarea" name="address" id="id_address" rows="2">{{ form.address.value|default:'' }}</textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_contact_name">Contact Name</label>
+          <input class="form-input" type="text" name="contact_name" id="id_contact_name"
+                 value="{{ form.contact_name.value|default:'' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_contact_email">Contact Email</label>
+          <input class="form-input" type="email" name="contact_email" id="id_contact_email"
+                 value="{{ form.contact_email.value|default:'' }}">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_contact_phone">Contact Phone</label>
+        <input class="form-input" type="text" name="contact_phone" id="id_contact_phone"
+               value="{{ form.contact_phone.value|default:'' }}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_notes">Notes</label>
+        <textarea class="form-textarea" name="notes" id="id_notes" rows="3">{{ form.notes.value|default:'' }}</textarea>
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <a href="{% if organization %}{% url 'organization_detail' organization.pk %}{% else %}{% url 'organization_list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">{% if organization %}Save Changes{% else %}Create Organization{% endif %}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

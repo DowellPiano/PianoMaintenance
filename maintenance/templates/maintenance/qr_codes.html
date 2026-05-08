@@ -52,7 +52,7 @@
   {% for item in piano_qrs %}
   <div class="qr-card">
     <div class="qr-card-piano">{{ item.piano.name }}</div>
-    <div class="qr-card-loc">{{ item.piano.location.name }}</div>
+    <div class="qr-card-loc">{{ item.piano.venue.name }}</div>
     <div class="qr-url">{{ item.url }}</div>
     <button class="btn btn-xs btn-secondary qr-copy-btn no-print"
             onclick="navigator.clipboard.writeText('{{ item.url }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy Link',1500)">

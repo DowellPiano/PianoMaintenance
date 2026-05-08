@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Venues — Piano Maintainer{% endblock %}
+{% block topbar_title %}Venues{% endblock %}
+
+{% block extra_css %}
+<style>
+.venue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.venue-card {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow .15s;
+}
+.venue-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); text-decoration: none; color: inherit; }
+.venue-card-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--clr-primary-bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; margin-bottom: .6rem;
+}
+.venue-card-name { font-weight: 700; font-size: 1.05rem; margin-bottom: .2rem; }
+.venue-card-org { color: var(--clr-text-sec); font-size: .82rem; margin-bottom: .15rem; }
+.venue-card-address { color: var(--clr-text-sec); font-size: .85rem; margin-bottom: .6rem; }
+.venue-card-stat {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .82rem; color: var(--clr-text-dim);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Venues</h1>
+    <p class="page-subtitle">{{ venues|length }} venue{{ venues|length|pluralize }}</p>
+  </div>
+  <a href="{% url 'venue_create' %}" class="btn btn-primary">+ Add Venue</a>
+</div>
+
+<div class="venue-grid">
+  {% for venue in venues %}
+  <a href="{% url 'venue_detail' venue.pk %}" class="venue-card">
+    <div class="venue-card-icon">📍</div>
+    <div class="venue-card-name">{{ venue.name }}</div>
+    <div class="venue-card-org">{{ venue.organization.name }}</div>
+    {% if venue.address %}<div class="venue-card-address">{{ venue.address|truncatechars:60 }}</div>{% endif %}
+    <span class="venue-card-stat">🎹 {{ venue.piano_count }} piano{{ venue.piano_count|pluralize }}</span>
+  </a>
+  {% empty %}
+  <div style="grid-column: 1 / -1;">
+    <div class="card">
+      <div class="card-body">
+        <div class="empty-state">
+          <div class="empty-icon">📍</div>
+          <p>No venues yet. <a href="{% url 'venue_create' %}">Add your first venue.</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -58,21 +58,38 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label" for="id_location">Location *</label>
-          <select class="form-select" name="location" id="id_location" required>
+          <label class="form-label" for="id_venue">Venue *</label>
+          <select class="form-select" name="venue" id="id_venue" required>
             <option value="">— Select —</option>
-            {% for loc in locations %}
-              <option value="{{ loc.pk }}" {% if form.location.value|stringformat:"d" == loc.pk|stringformat:"d" %}selected{% endif %}>{{ loc.name }}</option>
+            {% for v in venues %}
+              <option value="{{ v.pk }}" {% if form.venue.value|stringformat:"d" == v.pk|stringformat:"d" %}selected{% endif %}>{{ v.name }}</option>
             {% endfor %}
           </select>
-          {% if form.location.errors %}<span class="form-error">{{ form.location.errors.0 }}</span>{% endif %}
+          {% if form.venue.errors %}<span class="form-error">{{ form.venue.errors.0 }}</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_section">Section / Building</label>
+          <input class="form-input" type="text" name="section" id="id_section"
+                 value="{{ form.section.value|default:'' }}" placeholder="e.g. Main Building, East Wing">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_room">Room</label>
+          <input class="form-input" type="text" name="room" id="id_room"
+                 value="{{ form.room.value|default:'' }}" placeholder="e.g. Room 405, Main Stage">
         </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="id_location_in_venue">Room / Area within Location</label>
-        <input class="form-input" type="text" name="location_in_venue" id="id_location_in_venue"
-               value="{{ form.location_in_venue.value|default:'' }}" placeholder="e.g. Room 405, Main Stage">
+        <label class="form-label" for="id_room_description">Room Description</label>
+        <textarea class="form-textarea" name="room_description" id="id_room_description" rows="2" placeholder="Directions to help a first-time visitor find this room">{{ form.room_description.value|default:'' }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_room_access_notes">Room Access Notes</label>
+        <textarea class="form-textarea" name="room_access_notes" id="id_room_access_notes" rows="2" placeholder="Key codes, access hours, or other entry instructions">{{ form.room_access_notes.value|default:'' }}</textarea>
       </div>
 
       <div class="form-row">

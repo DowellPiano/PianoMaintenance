@@ -40,7 +40,7 @@
 }
 .piano-card-name:hover { color: var(--clr-primary); text-decoration: none; }
 .piano-card-meta { color: var(--clr-text-sec); font-size: .875rem; margin-bottom: .2rem; }
-.piano-card-location { color: var(--clr-text-dim); font-size: .82rem; }
+.piano-card-venue { color: var(--clr-text-dim); font-size: .82rem; }
 .piano-card-footer {
   display: flex;
   align-items: center;
@@ -93,10 +93,10 @@
 <form method="get" class="filter-bar">
   <input type="text" name="q" value="{{ search_query }}" placeholder="Search pianos…"
          class="form-input" style="width:240px;">
-  <select name="location" class="form-select" style="width:180px;" onchange="this.form.submit()">
-    <option value="">All Locations</option>
-    {% for loc in locations %}
-      <option value="{{ loc.id }}" {% if loc.id|stringformat:"d" == location_filter %}selected{% endif %}>{{ loc.name }}</option>
+  <select name="venue" class="form-select" style="width:180px;" onchange="this.form.submit()">
+    <option value="">All Venues</option>
+    {% for v in venues %}
+      <option value="{{ v.id }}" {% if v.id|stringformat:"d" == venue_filter %}selected{% endif %}>{{ v.name }}</option>
     {% endfor %}
   </select>
   <select name="type" class="form-select" style="width:150px;" onchange="this.form.submit()">
@@ -123,7 +123,7 @@
         <span class="badge badge-{{ piano.piano_type|lower }}">{{ piano.piano_type }}</span>
       </div>
       <p class="piano-card-meta">{{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %}{% if piano.year_built %} · {{ piano.year_built }}{% endif %}</p>
-      <p class="piano-card-location">{{ piano.location.name }}{% if piano.location_in_venue %} · {{ piano.location_in_venue }}{% endif %}</p>
+      <p class="piano-card-venue">{{ piano.venue.name }}{% if piano.room %} · {{ piano.room }}{% endif %}</p>
 
       <div class="piano-card-footer">
         <div>

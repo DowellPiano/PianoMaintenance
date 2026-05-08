@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Plan Service Visit — Piano Maintainer{% endblock %}
+{% block topbar_title %}Plan Service Visit{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'service_visit_list' %}" class="text-muted text-sm">← Back to Visits</a>
+</div>
+
+<div class="card" style="max-width:560px;">
+  <div class="card-header"><h2>Plan a Service Visit</h2></div>
+  <div class="card-body">
+    {% if form.errors %}
+      <div class="alert alert-error">Please fix the errors below.</div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label class="form-label" for="id_venue">Venue *</label>
+        <select class="form-select" name="venue" id="id_venue" required>
+          <option value="">— Select Venue —</option>
+          {% for v in venues %}
+            <option value="{{ v.pk }}" {% if form.venue.value|stringformat:"d" == v.pk|stringformat:"d" %}selected{% endif %}>{{ v.name }}</option>
+          {% endfor %}
+        </select>
+        {% if form.venue.errors %}<span class="form-error">{{ form.venue.errors.0 }}</span>{% endif %}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_technician">Technician *</label>
+        <select class="form-select" name="technician" id="id_technician" required>
+          <option value="">— Select Technician —</option>
+          {% for t in technicians %}
+            <option value="{{ t.pk }}" {% if form.technician.value|stringformat:"d" == t.pk|stringformat:"d" %}selected{% endif %}>{{ t.get_full_name|default:t.username }}</option>
+          {% endfor %}
+        </select>
+        {% if form.technician.errors %}<span class="form-error">{{ form.technician.errors.0 }}</span>{% endif %}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_date">Date *</label>
+        <input type="date" name="date" id="id_date" class="form-input"
+               value="{{ form.date.value|default:'' }}" required>
+        {% if form.date.errors %}<span class="form-error">{{ form.date.errors.0 }}</span>{% endif %}
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_time_in">Time In</label>
+          <input type="time" name="time_in" id="id_time_in" class="form-input"
+                 value="{{ form.time_in.value|default:'' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_time_out">Time Out</label>
+          <input type="time" name="time_out" id="id_time_out" class="form-input"
+                 value="{{ form.time_out.value|default:'' }}">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_miles_driven">Miles Driven</label>
+        <input type="number" name="miles_driven" id="id_miles_driven" class="form-input"
+               value="{{ form.miles_driven.value|default:'' }}" step="0.1" min="0" placeholder="0.0">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_notes">Notes</label>
+        <textarea class="form-textarea" name="notes" id="id_notes" rows="3">{{ form.notes.value|default:'' }}</textarea>
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <a href="{% url 'service_visit_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Plan Visit</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

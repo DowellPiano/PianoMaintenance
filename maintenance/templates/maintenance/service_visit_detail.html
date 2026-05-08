@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Visit {{ visit.date }} — Piano Maintainer{% endblock %}
+{% block topbar_title %}Visit {{ visit.date }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.visit-hero { margin-bottom: 1.5rem; }
+.visit-hero-title { font-size: 1.3rem; font-weight: 700; margin-bottom: .25rem; }
+.visit-hero-meta { color: var(--clr-text-sec); font-size: .88rem; }
+.visit-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+@media (max-width: 768px) { .visit-detail-grid { grid-template-columns: 1fr; } }
+.wo-link-card {
+  display: flex; align-items: center; gap: .75rem;
+  padding: .75rem; margin-bottom: .5rem;
+  background: #fff; border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  text-decoration: none; color: inherit;
+  transition: box-shadow .12s;
+}
+.wo-link-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,.1); text-decoration: none; color: inherit; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'service_visit_list' %}" class="text-muted text-sm">← Back to Service Visits</a>
+</div>
+
+<div class="card visit-hero">
+  <div class="card-body" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <h1 class="visit-hero-title">{{ visit.venue.name }} — {{ visit.date|date:"M d, Y" }}</h1>
+      <p class="visit-hero-meta">{{ visit.venue.organization.name }}</p>
+      <p class="visit-hero-meta">Technician: {{ visit.technician.get_full_name|default:visit.technician.username }}</p>
+      <div style="margin-top:.5rem;">
+        <span class="badge badge-{{ visit.status|lower|cut:' ' }}">{{ visit.status }}</span>
+      </div>
+    </div>
+    <div style="display:flex; gap:.5rem;">
+      {% if visit.status != "Complete" %}
+        <a href="{% url 'service_visit_complete' visit.pk %}" class="btn btn-sm btn-success">Complete Visit</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="visit-detail-grid">
+  <div class="card">
+    <div class="card-header"><h2>Visit Details</h2></div>
+    <div class="card-body">
+      <table class="data-table" style="font-size:.88rem;">
+        <tbody>
+          <tr><td class="fw-medium" style="width:120px;">Date</td><td>{{ visit.date|date:"M d, Y" }}</td></tr>
+          <tr><td class="fw-medium">Venue</td><td><a href="{% url 'venue_detail' visit.venue.pk %}">{{ visit.venue.name }}</a></td></tr>
+          <tr><td class="fw-medium">Technician</td><td>{{ visit.technician.get_full_name|default:visit.technician.username }}</td></tr>
+          <tr><td class="fw-medium">Time In</td><td>{{ visit.time_in|time:"g:i A"|default:"—" }}</td></tr>
+          <tr><td class="fw-medium">Time Out</td><td>{{ visit.time_out|time:"g:i A"|default:"—" }}</td></tr>
+          <tr><td class="fw-medium">Duration</td><td>{{ visit.total_duration_display }}</td></tr>
+          <tr><td class="fw-medium">Miles Driven</td><td>{{ visit.miles_driven|default:"—" }}</td></tr>
+          {% if visit.notes %}<tr><td class="fw-medium">Notes</td><td>{{ visit.notes }}</td></tr>{% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Linked Work Orders ({{ linked_wos|length }})</h2></div>
+    <div class="card-body">
+      {% for wo in linked_wos %}
+      <a href="{% url 'workorder_detail' wo.pk %}" class="wo-link-card">
+        <div>
+          <div class="fw-medium">WO-{{ wo.pk }} · {{ wo.piano.name }}</div>
+          <div class="text-sm text-muted">{{ wo.order_type }} · <span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></div>
+        </div>
+      </a>
+      {% empty %}
+      <p class="text-dim text-sm">No work orders linked to this visit yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% if available_wos %}
+<div class="card">
+  <div class="card-header"><h2>Link a Work Order</h2></div>
+  <div class="card-body">
+    <p class="text-sm text-muted mb-2">Open work orders at {{ visit.venue.name }} that aren't assigned to a visit:</p>
+    {% for wo in available_wos %}
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:.5rem 0; border-bottom:1px solid #f3f4f6;">
+      <div>
+        <span class="fw-medium">WO-{{ wo.pk }}</span> · {{ wo.piano.name }}
+        <span class="text-sm text-muted"> · {{ wo.order_type }}</span>
+      </div>
+      <form method="post" action="{% url 'service_visit_add_workorder' visit.pk %}" style="margin:0;">
+        {% csrf_token %}
+        <input type="hidden" name="work_order_id" value="{{ wo.pk }}">
+        <button type="submit" class="btn btn-xs btn-primary">Link</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

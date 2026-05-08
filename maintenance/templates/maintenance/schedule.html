@@ -68,7 +68,7 @@
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
         </div>
         <div class="kc-piano">{{ wo.piano.name }}</div>
-        <div class="kc-meta">{{ wo.piano.location.name }}</div>
+        <div class="kc-meta">{{ wo.piano.venue.name }}</div>
         <div class="kc-due text-danger">Due {{ wo.due_date|date:"M d" }}</div>
       </a>
       {% empty %}
@@ -89,7 +89,7 @@
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
         </div>
         <div class="kc-piano">{{ wo.piano.name }}</div>
-        <div class="kc-meta">{{ wo.piano.location.name }}</div>
+        <div class="kc-meta">{{ wo.piano.venue.name }}</div>
         <div class="kc-due">Due {{ wo.due_date|date:"M d" }}</div>
       </a>
       {% empty %}
@@ -110,7 +110,7 @@
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
         </div>
         <div class="kc-piano">{{ wo.piano.name }}</div>
-        <div class="kc-meta">{{ wo.piano.location.name }}</div>
+        <div class="kc-meta">{{ wo.piano.venue.name }}</div>
         <div class="kc-due">Due {{ wo.due_date|date:"M d" }}</div>
       </a>
       {% empty %}
@@ -131,7 +131,7 @@
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
         </div>
         <div class="kc-piano">{{ wo.piano.name }}</div>
-        <div class="kc-meta">{{ wo.piano.location.name }}</div>
+        <div class="kc-meta">{{ wo.piano.venue.name }}</div>
       </a>
       {% empty %}
       <p class="text-dim text-sm" style="text-align:center; padding:1rem;">None</p>

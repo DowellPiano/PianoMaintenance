@@ -100,7 +100,7 @@
       <div class="hero-info">
         <h1 class="hero-name">{{ piano.name }}</h1>
         <p class="hero-sub">{{ piano.make }}{% if piano.model %} — {{ piano.model }}{% endif %}</p>
-        <p class="hero-loc">{{ piano.location.name }}{% if piano.location_in_venue %} · {{ piano.location_in_venue }}{% endif %}</p>
+        <p class="hero-loc">{{ piano.venue.name }}{% if piano.section %} · {{ piano.section }}{% endif %}{% if piano.room %} · {{ piano.room }}{% endif %}</p>
         <div class="hero-badges">
           <span class="badge badge-{{ piano.piano_type|lower }}">{{ piano.piano_type }}</span>
           {% if piano.serial_number %}<span class="text-dim text-sm">S/N: {{ piano.serial_number }}</span>{% endif %}

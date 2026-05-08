@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Service Visits — Piano Maintainer{% endblock %}
+{% block topbar_title %}Service Visits{% endblock %}
+
+{% block extra_css %}
+<style>
+.visit-filters {
+  display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 1.25rem;
+}
+.visit-filters .form-input,
+.visit-filters .form-select { width: auto; min-width: 150px; }
+.visit-row { cursor: pointer; }
+.visit-row:hover td { background: #f0f4ff !important; }
+.visit-venue { font-weight: 500; }
+.visit-meta { color: var(--clr-text-dim); font-size: .78rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Service Visits</h1>
+    <p class="page-subtitle">{{ visits|length }} visit{{ visits|length|pluralize }}</p>
+  </div>
+  <a href="{% url 'service_visit_create' %}" class="btn btn-primary">+ Plan Visit</a>
+</div>
+
+<form method="get" class="visit-filters">
+  <select name="venue" class="form-select" onchange="this.form.submit()">
+    <option value="">All Venues</option>
+    {% for v in venues %}
+      <option value="{{ v.id }}" {% if v.id|stringformat:"d" == venue_filter %}selected{% endif %}>{{ v.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="technician" class="form-select" onchange="this.form.submit()">
+    <option value="">All Technicians</option>
+    {% for t in technicians %}
+      <option value="{{ t.id }}" {% if t.id|stringformat:"d" == tech_filter %}selected{% endif %}>{{ t.get_full_name|default:t.username }}</option>
+    {% endfor %}
+  </select>
+  <input type="date" name="date_from" value="{{ date_from }}" class="form-input" placeholder="From" title="From date">
+  <input type="date" name="date_to" value="{{ date_to }}" class="form-input" placeholder="To" title="To date">
+  <button type="submit" class="btn btn-sm btn-secondary">Filter</button>
+  {% if venue_filter or tech_filter or date_from or date_to %}
+    <a href="{% url 'service_visit_list' %}" class="btn btn-xs btn-secondary">Clear</a>
+  {% endif %}
+</form>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Venue</th>
+          <th>Technician</th>
+          <th>Status</th>
+          <th>Time</th>
+          <th>Miles</th>
+          <th>WOs</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for visit in visits %}
+        <tr class="visit-row" onclick="window.location='{% url 'service_visit_detail' visit.pk %}'">
+          <td class="fw-medium">{{ visit.date|date:"M d, Y" }}</td>
+          <td>
+            <div class="visit-venue">{{ visit.venue.name }}</div>
+            <div class="visit-meta">{{ visit.venue.organization.name }}</div>
+          </td>
+          <td class="text-sm">{{ visit.technician.get_full_name|default:visit.technician.username }}</td>
+          <td><span class="badge badge-{{ visit.status|lower|cut:' ' }}">{{ visit.status }}</span></td>
+          <td class="text-sm">{{ visit.total_duration_display }}</td>
+          <td class="text-sm">{{ visit.miles_driven|default:"—" }}</td>
+          <td class="text-sm">{{ visit.work_order_count }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:2rem;">No service visits found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

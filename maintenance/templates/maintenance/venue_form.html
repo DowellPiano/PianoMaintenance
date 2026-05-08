@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}{% if venue %}Edit {{ venue.name }}{% else %}New Venue{% endif %} — Piano Maintainer{% endblock %}
+{% block topbar_title %}{% if venue %}Edit Venue{% else %}New Venue{% endif %}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% if venue %}{% url 'venue_detail' venue.pk %}{% else %}{% url 'venue_list' %}{% endif %}" class="text-muted text-sm">← Back</a>
+</div>
+
+<div class="card" style="max-width:600px;">
+  <div class="card-header">
+    <h2>{% if venue %}Edit {{ venue.name }}{% else %}Add Venue{% endif %}</h2>
+  </div>
+  <div class="card-body">
+    {% if form.errors %}
+      <div class="alert alert-error">Please fix the errors below.</div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label class="form-label" for="id_name">Name *</label>
+        <input class="form-input" type="text" name="name" id="id_name"
+               value="{{ form.name.value|default:'' }}" required>
+        {% if form.name.errors %}<span class="form-error">{{ form.name.errors.0 }}</span>{% endif %}
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_short_name">Short Name</label>
+          <input class="form-input" type="text" name="short_name" id="id_short_name"
+                 value="{{ form.short_name.value|default:'' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_organization">Organization *</label>
+          <select class="form-select" name="organization" id="id_organization" required>
+            <option value="">— Select —</option>
+            {% for org in organizations %}
+              <option value="{{ org.pk }}" {% if form.organization.value|stringformat:"d" == org.pk|stringformat:"d" %}selected{% endif %}>{{ org.name }}</option>
+            {% endfor %}
+          </select>
+          {% if form.organization.errors %}<span class="form-error">{{ form.organization.errors.0 }}</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_address">Address</label>
+        <textarea class="form-textarea" name="address" id="id_address" rows="2">{{ form.address.value|default:'' }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_on_site_contact">On-Site Contact</label>
+        <textarea class="form-textarea" name="on_site_contact" id="id_on_site_contact" rows="2"
+                  placeholder="Name, role, phone">{{ form.on_site_contact.value|default:'' }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_parking_notes">Parking Notes</label>
+        <textarea class="form-textarea" name="parking_notes" id="id_parking_notes" rows="2">{{ form.parking_notes.value|default:'' }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_access_notes">Access Notes</label>
+        <textarea class="form-textarea" name="access_notes" id="id_access_notes" rows="2"
+                  placeholder="General access instructions for the building">{{ form.access_notes.value|default:'' }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_notes">Notes</label>
+        <textarea class="form-textarea" name="notes" id="id_notes" rows="3">{{ form.notes.value|default:'' }}</textarea>
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <a href="{% if venue %}{% url 'venue_detail' venue.pk %}{% else %}{% url 'venue_list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">{% if venue %}Save Changes{% else %}Create Venue{% endif %}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

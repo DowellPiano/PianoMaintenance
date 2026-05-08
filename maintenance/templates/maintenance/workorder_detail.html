@@ -33,7 +33,7 @@
         <p class="wo-hero-sub">{{ wo.description|truncatechars:120|default:"No description" }}</p>
         <p class="wo-hero-sub">
           <a href="{% url 'piano_detail' wo.piano.pk %}">{{ wo.piano.name }}</a>
-          · {{ wo.piano.location.name }}
+          · {{ wo.piano.venue.name }}
         </p>
         <div class="wo-hero-badges">
           <span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span>
@@ -62,7 +62,7 @@
       <table class="data-table wo-meta-table" style="font-size:.88rem;">
         <tbody>
           <tr><td>Piano</td><td><a href="{% url 'piano_detail' wo.piano.pk %}">{{ wo.piano.name }}</a></td></tr>
-          <tr><td>Location</td><td>{{ wo.piano.location.name }}</td></tr>
+          <tr><td>Venue</td><td>{{ wo.piano.venue.name }}</td></tr>
           <tr><td>Type</td><td>{{ wo.order_type }}</td></tr>
           <tr><td>Priority</td><td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td></tr>
           <tr><td>Status</td><td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td></tr>

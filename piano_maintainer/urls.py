@@ -17,6 +17,18 @@ urlpatterns = [
     # Template views
     path('', views.dashboard, name='dashboard'),
 
+    # Organizations
+    path('organizations/', views.organization_list, name='organization_list'),
+    path('organizations/new/', views.organization_create, name='organization_create'),
+    path('organizations/<int:pk>/', views.organization_detail, name='organization_detail'),
+    path('organizations/<int:pk>/edit/', views.organization_edit, name='organization_edit'),
+
+    # Venues
+    path('venues/', views.venue_list, name='venue_list'),
+    path('venues/new/', views.venue_create, name='venue_create'),
+    path('venues/<int:pk>/', views.venue_detail, name='venue_detail'),
+    path('venues/<int:pk>/edit/', views.venue_edit, name='venue_edit'),
+
     # Pianos
     path('pianos/', views.piano_list, name='piano_list'),
     path('pianos/new/', views.piano_create, name='piano_create'),
@@ -29,16 +41,19 @@ urlpatterns = [
     path('pianos/<int:pk>/photos/upload/', views.piano_photo_upload, name='piano_photo_upload'),
     path('pianos/<int:pk>/photos/<int:photo_pk>/set-profile/', views.piano_set_profile_photo, name='piano_set_profile_photo'),
 
-    # Locations
-    path('locations/', views.location_list, name='location_list'),
-    path('locations/<int:pk>/', views.location_detail, name='location_detail'),
-
     # Work Orders
     path('work-orders/', views.workorder_list, name='workorder_list'),
     path('work-orders/new/', views.workorder_create, name='workorder_create'),
     path('work-orders/<int:pk>/', views.workorder_detail, name='workorder_detail'),
     path('work-orders/<int:pk>/assign/', views.workorder_assign, name='workorder_assign'),
     path('work-orders/<int:pk>/complete/', views.workorder_complete, name='workorder_complete'),
+
+    # Service Visits
+    path('visits/', views.service_visit_list, name='service_visit_list'),
+    path('visits/new/', views.service_visit_create, name='service_visit_create'),
+    path('visits/<int:pk>/', views.service_visit_detail, name='service_visit_detail'),
+    path('visits/<int:pk>/complete/', views.service_visit_complete, name='service_visit_complete'),
+    path('visits/<int:pk>/add-wo/', views.service_visit_add_workorder, name='service_visit_add_workorder'),
 
     # Schedule
     path('schedule/', views.schedule, name='schedule'),

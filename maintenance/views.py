@@ -3,19 +3,20 @@ import io
 from datetime import date, timedelta
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Count, F
+from django.db.models import Q, Count
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse
 from django.contrib import messages
 
 from .models import (
-    Piano, Location, WorkOrder, MaintenanceRequest,
-    MaintenanceSchedule, ScheduleTemplate, ConditionReading,
+    Organization, Venue, Piano, WorkOrder, MaintenanceRequest,
+    MaintenanceSchedule, ScheduleTemplate, ConditionReading, ServiceVisit,
     Technician, Part, PartUsed, MaintenanceLog, TaskType, Photo,
 )
 from .forms import (
-    PianoForm, WorkOrderForm, WorkOrderCompleteForm, ConditionReadingForm,
-    ScheduleTemplateForm, MaintenanceScheduleForm, PartForm,
+    OrganizationForm, VenueForm, PianoForm, WorkOrderForm, WorkOrderCompleteForm,
+    ConditionReadingForm, ScheduleTemplateForm,
+    ServiceVisitForm, ServiceVisitCompleteForm, PartForm,
 )
 
 
@@ -71,7 +72,8 @@ def dashboard(request):
     in_progress_count = WorkOrder.objects.filter(status=WorkOrder.Status.IN_PROGRESS).count()
     pending_request_count = MaintenanceRequest.objects.filter(status=MaintenanceRequest.RequestStatus.NEW).count()
     piano_count = Piano.objects.filter(is_active=True).count()
-    location_count = Location.objects.count()
+    venue_count = Venue.objects.count()
+    org_count = Organization.objects.count()
     completed_this_month = WorkOrder.objects.filter(
         status=WorkOrder.Status.COMPLETE,
         completed_date__gte=month_start,
@@ -79,7 +81,7 @@ def dashboard(request):
 
     recent_work_orders = (
         WorkOrder.objects
-        .select_related('piano', 'piano__location')
+        .select_related('piano', 'piano__venue')
         .order_by('-created_at')[:10]
     )
 
@@ -90,7 +92,8 @@ def dashboard(request):
         'in_progress_count': in_progress_count,
         'pending_request_count': pending_request_count,
         'piano_count': piano_count,
-        'location_count': location_count,
+        'venue_count': venue_count,
+        'org_count': org_count,
         'completed_this_month': completed_this_month,
         'recent_work_orders': recent_work_orders,
     })
@@ -103,10 +106,10 @@ def piano_list(request):
     today = date.today()
     soon = today + timedelta(days=30)
 
-    qs = Piano.objects.filter(is_active=True).select_related('location').prefetch_related('photos')
+    qs = Piano.objects.filter(is_active=True).select_related('venue').prefetch_related('photos')
 
     search_query = request.GET.get('q', '').strip()
-    location_filter = request.GET.get('location', '')
+    venue_filter = request.GET.get('venue', '')
     type_filter = request.GET.get('type', '')
 
     if search_query:
@@ -115,17 +118,17 @@ def piano_list(request):
             Q(make__icontains=search_query) |
             Q(serial_number__icontains=search_query)
         )
-    if location_filter:
-        qs = qs.filter(location_id=location_filter)
+    if venue_filter:
+        qs = qs.filter(venue_id=venue_filter)
     if type_filter:
         qs = qs.filter(piano_type=type_filter)
 
     return render(request, 'maintenance/piano_list.html', {
         'active_nav': 'pianos',
         'pianos': qs,
-        'locations': Location.objects.all(),
+        'venues': Venue.objects.all(),
         'search_query': search_query,
-        'location_filter': location_filter,
+        'venue_filter': venue_filter,
         'type_filter': type_filter,
         'today': today,
         'soon': soon,
@@ -166,7 +169,7 @@ def _piano_context(piano):
 
 @login_required
 def piano_detail(request, pk):
-    piano = get_object_or_404(Piano.objects.select_related('location'), pk=pk)
+    piano = get_object_or_404(Piano.objects.select_related('venue'), pk=pk)
     ctx = _piano_context(piano)
     ctx['qr_url'] = request.build_absolute_uri(f'/maintenance_request/{piano.qr_code_token}/')
     ctx['photos'] = piano.photos.all()
@@ -175,7 +178,7 @@ def piano_detail(request, pk):
 
 @login_required
 def piano_tab(request, pk, tab):
-    piano = get_object_or_404(Piano.objects.select_related('location'), pk=pk)
+    piano = get_object_or_404(Piano.objects.select_related('venue'), pk=pk)
     ctx = _piano_context(piano)
     templates = {
         'overview': 'maintenance/partials/piano_tab_overview.html',
@@ -202,7 +205,7 @@ def piano_create(request):
         'active_nav': 'pianos',
         'form': form,
         'piano': None,
-        'locations': Location.objects.all(),
+        'venues': Venue.objects.all(),
         'type_choices': Piano.PianoType.choices,
     })
 
@@ -224,35 +227,135 @@ def piano_edit(request, pk):
         'active_nav': 'pianos',
         'form': form,
         'piano': piano,
-        'locations': Location.objects.all(),
+        'venues': Venue.objects.all(),
         'type_choices': Piano.PianoType.choices,
     })
 
 
-# ── Locations ─────────────────────────────────────────────────────
+# ── Organizations ─────────────────────────────────────────────────
 
 @login_required
-def location_list(request):
-    locations = Location.objects.annotate(piano_count=Count('pianos'))
-    return render(request, 'maintenance/location_list.html', {
-        'active_nav': 'locations',
-        'locations': locations,
+def organization_list(request):
+    organizations = Organization.objects.annotate(venue_count=Count('venues'))
+    return render(request, 'maintenance/organization_list.html', {
+        'active_nav': 'organizations',
+        'organizations': organizations,
     })
 
 
 @login_required
-def location_detail(request, pk):
-    location = get_object_or_404(Location, pk=pk)
-    pianos = Piano.objects.filter(location=location, is_active=True).select_related('location')
+def organization_detail(request, pk):
+    organization = get_object_or_404(Organization, pk=pk)
+    venues = Venue.objects.filter(organization=organization).annotate(piano_count=Count('pianos'))
+    return render(request, 'maintenance/organization_detail.html', {
+        'active_nav': 'organizations',
+        'organization': organization,
+        'venues': venues,
+    })
+
+
+@login_required
+def organization_create(request):
+    if request.method == 'POST':
+        form = OrganizationForm(request.POST)
+        if form.is_valid():
+            org = form.save()
+            messages.success(request, f'Organization "{org.name}" created.')
+            return redirect('organization_detail', pk=org.pk)
+    else:
+        form = OrganizationForm()
+
+    return render(request, 'maintenance/organization_form.html', {
+        'active_nav': 'organizations',
+        'form': form,
+        'organization': None,
+    })
+
+
+@login_required
+def organization_edit(request, pk):
+    organization = get_object_or_404(Organization, pk=pk)
+
+    if request.method == 'POST':
+        form = OrganizationForm(request.POST, instance=organization)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Organization "{organization.name}" updated.')
+            return redirect('organization_detail', pk=organization.pk)
+    else:
+        form = OrganizationForm(instance=organization)
+
+    return render(request, 'maintenance/organization_form.html', {
+        'active_nav': 'organizations',
+        'form': form,
+        'organization': organization,
+    })
+
+
+# ── Venues ─────────────────────────────────────────────────────────
+
+@login_required
+def venue_list(request):
+    venues = Venue.objects.select_related('organization').annotate(piano_count=Count('pianos'))
+    return render(request, 'maintenance/venue_list.html', {
+        'active_nav': 'venues',
+        'venues': venues,
+    })
+
+
+@login_required
+def venue_detail(request, pk):
+    venue = get_object_or_404(Venue.objects.select_related('organization'), pk=pk)
+    pianos = Piano.objects.filter(venue=venue, is_active=True).select_related('venue')
     open_wo_count = WorkOrder.objects.filter(
-        piano__location=location,
+        piano__venue=venue,
         status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
     ).count()
-    return render(request, 'maintenance/location_detail.html', {
-        'active_nav': 'locations',
-        'location': location,
+    return render(request, 'maintenance/venue_detail.html', {
+        'active_nav': 'venues',
+        'venue': venue,
         'pianos': pianos,
         'open_wo_count': open_wo_count,
+    })
+
+
+@login_required
+def venue_create(request):
+    if request.method == 'POST':
+        form = VenueForm(request.POST)
+        if form.is_valid():
+            venue = form.save()
+            messages.success(request, f'Venue "{venue.name}" created.')
+            return redirect('venue_detail', pk=venue.pk)
+    else:
+        form = VenueForm()
+
+    return render(request, 'maintenance/venue_form.html', {
+        'active_nav': 'venues',
+        'form': form,
+        'venue': None,
+        'organizations': Organization.objects.all(),
+    })
+
+
+@login_required
+def venue_edit(request, pk):
+    venue = get_object_or_404(Venue, pk=pk)
+
+    if request.method == 'POST':
+        form = VenueForm(request.POST, instance=venue)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Venue "{venue.name}" updated.')
+            return redirect('venue_detail', pk=venue.pk)
+    else:
+        form = VenueForm(instance=venue)
+
+    return render(request, 'maintenance/venue_form.html', {
+        'active_nav': 'venues',
+        'form': form,
+        'venue': venue,
+        'organizations': Organization.objects.all(),
     })
 
 
@@ -263,7 +366,7 @@ def workorder_list(request):
     today = date.today()
     qs = (
         WorkOrder.objects
-        .select_related('piano', 'piano__location', 'assigned_tech')
+        .select_related('piano', 'piano__venue', 'assigned_tech')
         .order_by('-created_at')
     )
 
@@ -276,7 +379,7 @@ def workorder_list(request):
         qs = qs.filter(
             Q(description__icontains=search_query) |
             Q(piano__name__icontains=search_query) |
-            Q(piano__location__name__icontains=search_query)
+            Q(piano__venue__name__icontains=search_query)
         )
     if status_filter:
         qs = qs.filter(status=status_filter)
@@ -302,7 +405,7 @@ def workorder_list(request):
 @login_required
 def workorder_detail(request, pk):
     wo = get_object_or_404(
-        WorkOrder.objects.select_related('piano', 'piano__location', 'assigned_tech'),
+        WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech'),
         pk=pk,
     )
     logs = wo.logs.select_related('technician').order_by('-logged_at')
@@ -334,7 +437,8 @@ def workorder_create(request):
     return render(request, 'maintenance/workorder_form.html', {
         'active_nav': 'workorders',
         'form': form,
-        'pianos': Piano.objects.filter(is_active=True).select_related('location'),
+        'pianos': Piano.objects.filter(is_active=True).select_related('venue'),
+        'venues': Venue.objects.all(),
         'technicians': Technician.objects.filter(is_active=True),
         'type_choices': WorkOrder.OrderType.choices,
         'task_type_choices': TaskType.choices,
@@ -605,7 +709,7 @@ def schedule(request):
     active_wos = (
         WorkOrder.objects
         .filter(status__in=active_statuses)
-        .select_related('piano', 'piano__location', 'assigned_tech')
+        .select_related('piano', 'piano__venue', 'assigned_tech')
     )
 
     overdue = active_wos.filter(due_date__lt=today).order_by('due_date')
@@ -629,7 +733,7 @@ def schedule(request):
 def request_list(request):
     qs = (
         MaintenanceRequest.objects
-        .select_related('piano', 'piano__location', 'work_order')
+        .select_related('piano', 'piano__venue', 'work_order')
         .order_by('-created_at')
     )
 
@@ -783,7 +887,7 @@ def template_edit(request, pk):
 @login_required
 def template_apply(request, pk):
     tmpl = get_object_or_404(ScheduleTemplate, pk=pk)
-    pianos = Piano.objects.filter(is_active=True).select_related('location')
+    pianos = Piano.objects.filter(is_active=True).select_related('venue')
 
     if request.method == 'POST':
         piano_ids = request.POST.getlist('pianos')
@@ -901,16 +1005,26 @@ def piano_import_csv(request):
         errors = []
         for i, row in enumerate(reader, start=2):
             try:
-                loc_name = row.get('location', '').strip()
-                location, _ = Location.objects.get_or_create(name=loc_name)
+                org_name = row.get('organization', '').strip()
+                venue_name = row.get('venue', '').strip()
+                org, _ = Organization.objects.get_or_create(name=org_name) if org_name else (None, False)
+                if not org:
+                    org = Organization.objects.first()
+                    if not org:
+                        org = Organization.objects.create(name='Default Organization')
+                venue, _ = Venue.objects.get_or_create(
+                    name=venue_name,
+                    defaults={'organization': org},
+                )
                 Piano.objects.create(
                     name=row.get('name', '').strip(),
                     make=row.get('make', '').strip(),
                     model=row.get('model', '').strip(),
                     serial_number=row.get('serial_number', '').strip(),
                     piano_type=row.get('piano_type', 'Grand').strip(),
-                    location=location,
-                    location_in_venue=row.get('location_in_venue', '').strip(),
+                    venue=venue,
+                    section=row.get('section', '').strip(),
+                    room=row.get('room', '').strip(),
                     year_built=int(row['year_built']) if row.get('year_built', '').strip() else None,
                     year_acquired=int(row['year_acquired']) if row.get('year_acquired', '').strip() else None,
                     notes=row.get('notes', '').strip(),
@@ -934,7 +1048,7 @@ def piano_import_csv(request):
 
 @login_required
 def qr_codes(request):
-    pianos = Piano.objects.filter(is_active=True).select_related('location').order_by('location__name', 'name')
+    pianos = Piano.objects.filter(is_active=True).select_related('venue').order_by('venue__name', 'name')
     base_url = request.build_absolute_uri('/maintenance_request/')
     piano_qrs = []
     for p in pianos:
@@ -962,14 +1076,14 @@ def report_export_workorders(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="work_orders.csv"'
     writer = csv.writer(response)
-    writer.writerow(['ID', 'Piano', 'Location', 'Type', 'Status', 'Priority',
+    writer.writerow(['ID', 'Piano', 'Venue', 'Type', 'Status', 'Priority',
                      'Assigned To', 'Due Date', 'Completed', 'Created', 'Description'])
-    wos = WorkOrder.objects.select_related('piano', 'piano__location', 'assigned_tech').order_by('-created_at')
+    wos = WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech').order_by('-created_at')
     for wo in wos:
         writer.writerow([
             f'WO-{wo.pk}',
             wo.piano.name,
-            wo.piano.location.name,
+            wo.piano.venue.name,
             wo.order_type,
             wo.status,
             wo.priority,
@@ -988,12 +1102,145 @@ def report_export_pianos(request):
     response['Content-Disposition'] = 'attachment; filename="pianos.csv"'
     writer = csv.writer(response)
     writer.writerow(['Name', 'Make', 'Model', 'Serial Number', 'Type',
-                     'Location', 'Room/Area', 'Year Built', 'Year Acquired', 'Notes'])
-    pianos = Piano.objects.filter(is_active=True).select_related('location').order_by('name')
+                     'Venue', 'Section', 'Room', 'Year Built', 'Year Acquired', 'Notes'])
+    pianos = Piano.objects.filter(is_active=True).select_related('venue').order_by('name')
     for p in pianos:
         writer.writerow([
             p.name, p.make, p.model, p.serial_number, p.piano_type,
-            p.location.name, p.location_in_venue, p.year_built or '',
+            p.venue.name, p.section, p.room, p.year_built or '',
             p.year_acquired or '', p.notes,
         ])
     return response
+
+
+# ── Service Visits ───────────────────────────────────────────────
+
+@login_required
+def service_visit_list(request):
+    qs = (
+        ServiceVisit.objects
+        .select_related('venue', 'venue__organization', 'technician')
+        .order_by('-date', '-created_at')
+    )
+
+    venue_filter = request.GET.get('venue', '')
+    tech_filter = request.GET.get('technician', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    if venue_filter:
+        qs = qs.filter(venue_id=venue_filter)
+    if tech_filter:
+        qs = qs.filter(technician_id=tech_filter)
+    if date_from:
+        qs = qs.filter(date__gte=date_from)
+    if date_to:
+        qs = qs.filter(date__lte=date_to)
+
+    return render(request, 'maintenance/service_visit_list.html', {
+        'active_nav': 'visits',
+        'visits': qs,
+        'venues': Venue.objects.all(),
+        'technicians': Technician.objects.filter(is_active=True).order_by('first_name', 'last_name'),
+        'venue_filter': venue_filter,
+        'tech_filter': tech_filter,
+        'date_from': date_from,
+        'date_to': date_to,
+    })
+
+
+@login_required
+def service_visit_detail(request, pk):
+    visit = get_object_or_404(
+        ServiceVisit.objects.select_related('venue', 'venue__organization', 'technician'),
+        pk=pk,
+    )
+    linked_wos = visit.work_orders.select_related('piano', 'assigned_tech').order_by('-created_at')
+    available_wos = (
+        WorkOrder.objects
+        .filter(
+            piano__venue=visit.venue,
+            status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
+            service_visit__isnull=True,
+        )
+        .select_related('piano', 'assigned_tech')
+        .order_by('-created_at')
+    )
+    return render(request, 'maintenance/service_visit_detail.html', {
+        'active_nav': 'visits',
+        'visit': visit,
+        'linked_wos': linked_wos,
+        'available_wos': available_wos,
+    })
+
+
+@login_required
+def service_visit_create(request):
+    if request.method == 'POST':
+        form = ServiceVisitForm(request.POST)
+        if form.is_valid():
+            visit = form.save()
+            messages.success(request, f'Service visit planned for {visit.date}.')
+            return redirect('service_visit_detail', pk=visit.pk)
+    else:
+        form = ServiceVisitForm()
+
+    return render(request, 'maintenance/service_visit_form.html', {
+        'active_nav': 'visits',
+        'form': form,
+        'venues': Venue.objects.all(),
+        'technicians': Technician.objects.filter(is_active=True).order_by('first_name', 'last_name'),
+        'visit': None,
+    })
+
+
+@login_required
+def service_visit_complete(request, pk):
+    visit = get_object_or_404(
+        ServiceVisit.objects.select_related('venue', 'technician'),
+        pk=pk,
+    )
+    if request.method == 'POST':
+        form = ServiceVisitCompleteForm(request.POST)
+        if form.is_valid():
+            if form.cleaned_data.get('time_in'):
+                visit.time_in = form.cleaned_data['time_in']
+            if form.cleaned_data.get('time_out'):
+                visit.time_out = form.cleaned_data['time_out']
+            if form.cleaned_data.get('miles_driven') is not None:
+                visit.miles_driven = form.cleaned_data['miles_driven']
+            if form.cleaned_data.get('notes'):
+                visit.notes = form.cleaned_data['notes']
+            visit.status = ServiceVisit.VisitStatus.COMPLETE
+            visit.save()
+            messages.success(request, f'Service visit on {visit.date} marked complete.')
+            return redirect('service_visit_detail', pk=visit.pk)
+    else:
+        form = ServiceVisitCompleteForm(initial={
+            'time_in': visit.time_in,
+            'time_out': visit.time_out,
+            'miles_driven': visit.miles_driven,
+            'notes': visit.notes,
+        })
+
+    return render(request, 'maintenance/service_visit_complete.html', {
+        'active_nav': 'visits',
+        'visit': visit,
+        'form': form,
+    })
+
+
+@login_required
+def service_visit_add_workorder(request, pk):
+    visit = get_object_or_404(ServiceVisit, pk=pk)
+    if request.method == 'POST':
+        wo_id = request.POST.get('work_order_id')
+        if wo_id:
+            try:
+                wo = WorkOrder.objects.get(pk=int(wo_id))
+                wo.service_visit = visit
+                wo.save(update_fields=['service_visit'])
+                messages.success(request, f'WO-{wo.pk} linked to this visit.')
+            except (WorkOrder.DoesNotExist, ValueError):
+                messages.error(request, 'Work order not found.')
+    return redirect('service_visit_detail', pk=visit.pk)

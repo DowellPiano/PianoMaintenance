@@ -3,7 +3,8 @@ from rest_framework import serializers
 from .models import (
     Attachment,
     ConditionReading,
-    Location,
+    Organization,
+    Venue,
     MaintenanceLog,
     MaintenanceSchedule,
     Piano,
@@ -19,12 +20,25 @@ from .models import (
 )
 
 
-class LocationSerializer(serializers.ModelSerializer):
-    piano_count = serializers.IntegerField(source='pianos.count', read_only=True)
+class OrganizationSerializer(serializers.ModelSerializer):
+    venue_count = serializers.IntegerField(source='venues.count', read_only=True)
 
     class Meta:
-        model = Location
-        fields = ['id', 'name', 'building', 'address', 'piano_count']
+        model = Organization
+        fields = ['id', 'name', 'short_name', 'address',
+                  'contact_name', 'contact_email', 'contact_phone',
+                  'notes', 'venue_count']
+
+
+class VenueSerializer(serializers.ModelSerializer):
+    piano_count = serializers.IntegerField(source='pianos.count', read_only=True)
+    organization_name = serializers.CharField(source='organization.name', read_only=True)
+
+    class Meta:
+        model = Venue
+        fields = ['id', 'name', 'short_name', 'organization', 'organization_name',
+                  'address', 'on_site_contact', 'parking_notes', 'access_notes',
+                  'notes', 'piano_count']
 
 
 class PhotoSerializer(serializers.ModelSerializer):
@@ -43,14 +57,14 @@ class PhotoSerializer(serializers.ModelSerializer):
 
 
 class PianoSerializer(serializers.ModelSerializer):
-    location_name = serializers.CharField(source='location.name', read_only=True)
+    venue_name = serializers.CharField(source='venue.name', read_only=True)
     profile_photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Piano
         fields = [
             'id', 'name', 'make', 'model', 'serial_number',
-            'piano_type', 'location', 'location_name',
+            'piano_type', 'venue', 'venue_name',
             'year_built', 'year_acquired', 'notes', 'is_active', 'qr_code_token',
             'profile_photo_url',
         ]
@@ -78,7 +92,7 @@ class ScheduleTemplateSerializer(serializers.ModelSerializer):
 class MaintenanceScheduleSerializer(serializers.ModelSerializer):
     piano_name = serializers.CharField(source='piano.name', read_only=True)
     piano_make = serializers.CharField(source='piano.make', read_only=True)
-    piano_location = serializers.CharField(source='piano.location.name', read_only=True)
+    piano_location = serializers.CharField(source='piano.venue.name', read_only=True)
     template_name = serializers.CharField(source='template.name', read_only=True)
     next_due = serializers.SerializerMethodField()
 
@@ -144,7 +158,7 @@ class MaintenanceLogSerializer(serializers.ModelSerializer):
 class WorkOrderSerializer(serializers.ModelSerializer):
     piano_name = serializers.CharField(source='piano.name', read_only=True)
     piano_make = serializers.CharField(source='piano.make', read_only=True)
-    piano_location = serializers.CharField(source='piano.location.name', read_only=True)
+    piano_location = serializers.CharField(source='piano.venue.name', read_only=True)
     assigned_tech_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -253,7 +267,7 @@ class TeamSerializer(serializers.ModelSerializer):
 
 class MaintenanceRequestSerializer(serializers.ModelSerializer):
     piano_name = serializers.CharField(source='piano.name', read_only=True)
-    piano_location = serializers.CharField(source='piano.location.name', read_only=True)
+    piano_location = serializers.CharField(source='piano.venue.name', read_only=True)
     wo_assigned_tech = serializers.SerializerMethodField()
 
     class Meta:
@@ -274,7 +288,7 @@ class MaintenanceRequestSerializer(serializers.ModelSerializer):
 
 class AlertSerializer(serializers.ModelSerializer):
     piano_name = serializers.CharField(source='work_order.piano.name', read_only=True)
-    piano_location = serializers.CharField(source='work_order.piano.location.name', read_only=True)
+    piano_location = serializers.CharField(source='work_order.piano.venue.name', read_only=True)
     due_date = serializers.DateField(source='work_order.due_date', read_only=True)
     priority = serializers.CharField(source='work_order.priority', read_only=True)
 

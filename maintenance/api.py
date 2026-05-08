@@ -16,14 +16,15 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import (
-    Location, Piano, MaintenanceSchedule, ScheduleTemplate,
+    Organization, Venue, Piano, MaintenanceSchedule, ScheduleTemplate,
     WorkOrder, MaintenanceLog, Technician, Team, Photo,
     ConditionReading, Part, PartUsed, MaintenanceRequest, Alert,
 )
 from .serializers import (
     AttachmentSerializer,
     ConditionReadingSerializer,
-    LocationSerializer,
+    OrganizationSerializer,
+    VenueSerializer,
     MaintenanceLogSerializer,
     MaintenanceScheduleSerializer,
     PianoSerializer,
@@ -64,22 +65,29 @@ TASK_COLOR = {
 }
 
 
-class LocationViewSet(viewsets.ModelViewSet):
-    serializer_class = LocationSerializer
+class OrganizationViewSet(viewsets.ModelViewSet):
+    serializer_class = OrganizationSerializer
 
     def get_queryset(self):
-        return Location.objects.prefetch_related('pianos').order_by('name')
+        return Organization.objects.prefetch_related('venues').order_by('name')
+
+
+class VenueViewSet(viewsets.ModelViewSet):
+    serializer_class = VenueSerializer
+
+    def get_queryset(self):
+        return Venue.objects.select_related('organization').prefetch_related('pianos').order_by('name')
 
 
 class PianoViewSet(viewsets.ModelViewSet):
     serializer_class = PianoSerializer
     filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
-    filterset_fields = ['location', 'piano_type']
+    filterset_fields = ['venue', 'piano_type']
     search_fields = ['name', 'make', 'serial_number']
-    ordering_fields = ['name', 'make', 'piano_type', 'location__name', 'year_built', 'year_acquired']
+    ordering_fields = ['name', 'make', 'piano_type', 'venue__name', 'year_built', 'year_acquired']
 
     def get_queryset(self):
-        qs = Piano.objects.select_related('location').prefetch_related('photos').order_by('location__name', 'name')
+        qs = Piano.objects.select_related('venue').prefetch_related('photos').order_by('venue__name', 'name')
         active_param = self.request.query_params.get('active', 'true').lower()
         if active_param == 'false':
             return qs.filter(is_active=False)
@@ -93,7 +101,7 @@ class PianoViewSet(viewsets.ModelViewSet):
         return ctx
 
     def get_object(self):
-        queryset = Piano.objects.select_related('location')
+        queryset = Piano.objects.select_related('venue')
         obj = get_object_or_404(queryset, pk=self.kwargs['pk'])
         self.check_object_permissions(self.request, obj)
         return obj
@@ -219,8 +227,8 @@ class MaintenanceScheduleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return MaintenanceSchedule.objects.select_related(
-            'piano__location', 'template'
-        ).order_by('piano__location__name', 'piano__name', 'task_type')
+            'piano__venue', 'template'
+        ).order_by('piano__venue__name', 'piano__name', 'task_type')
 
 
 class WorkOrderViewSet(viewsets.ModelViewSet):
@@ -233,7 +241,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = WorkOrder.objects.select_related(
-            'piano__location', 'assigned_tech', 'schedule'
+            'piano__venue', 'assigned_tech', 'schedule'
         ).order_by('-due_date')
         piano_id = self.request.query_params.get('piano')
         if piano_id:
@@ -444,7 +452,7 @@ class AlertViewSet(viewsets.ModelViewSet):
         return (
             Alert.objects
             .filter(acknowledged=False)
-            .select_related('work_order__piano__location')
+            .select_related('work_order__piano__venue')
             .order_by('-sent_at')
         )
 
@@ -535,15 +543,15 @@ class ReportsViewSet(viewsets.ViewSet):
     def pianos_export_csv(self, request):
         pianos = (
             Piano.objects
-            .select_related('location')
+            .select_related('venue')
             .prefetch_related('schedules', 'work_orders')
-            .order_by('location__name', 'name')
+            .order_by('venue__name', 'name')
         )
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="piano_report.csv"'
         writer = csv.writer(response)
         writer.writerow([
-            'Piano', 'Location', 'Last Service Date', 'Next Due Date', 'Open Work Orders'
+            'Piano', 'Venue', 'Last Service Date', 'Next Due Date', 'Open Work Orders'
         ])
         today = date.today()
         for piano in pianos:
@@ -555,7 +563,7 @@ class ReportsViewSet(viewsets.ViewSet):
             for sched in piano.schedules.all():
                 if not sched.is_active:
                     continue
-                anchor = sched.last_service_date or piano.date_acquired or today
+                anchor = sched.last_service_date or today
                 candidate = anchor + timedelta(days=sched.interval_days)
                 if next_due is None or candidate < next_due:
                     next_due = candidate
@@ -566,7 +574,7 @@ class ReportsViewSet(viewsets.ViewSet):
             )
             writer.writerow([
                 str(piano),
-                piano.location.name,
+                piano.venue.name,
                 last_service.strftime('%Y-%m-%d') if last_service else '',
                 next_due.strftime('%Y-%m-%d') if next_due else '',
                 open_wo_count,
@@ -607,14 +615,14 @@ def dashboard_stats(request):
         status='Complete', completed_date__gte=month_start, completed_date__lte=today
     ).count()
 
-    urgent_qs = WorkOrder.objects.select_related('piano__location', 'assigned_tech').filter(
+    urgent_qs = WorkOrder.objects.select_related('piano__venue', 'assigned_tech').filter(
         status__in=active_statuses
     ).order_by('due_date')[:10]
     urgent_open = [
         {
             'id':               wo.id,
             'piano_name':       wo.piano.name,
-            'piano_location':   wo.piano.location.name,
+            'piano_location':   wo.piano.venue.name,
             'order_type':       wo.order_type,
             'priority':         wo.priority,
             'status':           wo.status,
@@ -645,7 +653,7 @@ def calendar_events(request):
     events = []
     today = date.today()
 
-    work_orders = WorkOrder.objects.select_related('piano__location', 'assigned_tech').filter(
+    work_orders = WorkOrder.objects.select_related('piano__venue', 'assigned_tech').filter(
         due_date__gte=start, due_date__lte=end
     )
     for wo in work_orders:
@@ -665,14 +673,14 @@ def calendar_events(request):
             'priority_dot': PRIORITY_DOT.get(wo.priority, '🔵'),
             'piano_name': wo.piano.name,
             'piano_make': wo.piano.make,
-            'piano_location': wo.piano.location.name,
+            'piano_location': wo.piano.venue.name,
             'piano_id': wo.piano_id,
             'work_order_id': wo.id,
             'description': wo.description,
             'assigned_tech': wo.assigned_tech.get_full_name() if wo.assigned_tech else None,
         })
 
-    schedules = MaintenanceSchedule.objects.select_related('piano__location').filter(is_active=True)
+    schedules = MaintenanceSchedule.objects.select_related('piano__venue').filter(is_active=True)
 
     last_completed = {}
     completed_wos = WorkOrder.objects.filter(
@@ -706,7 +714,7 @@ def calendar_events(request):
                     'task_type': sched.task_type,
                     'piano_name': sched.piano.name,
                     'piano_make': sched.piano.make,
-                    'piano_location': sched.piano.location.name,
+                    'piano_location': sched.piano.venue.name,
                     'piano_id': sched.piano_id,
                     'schedule_id': sched.id,
                     'interval_days': sched.interval_days,
@@ -721,7 +729,7 @@ def calendar_events(request):
 @api_view(['GET'])
 def piano_profile(request, piano_id):
     try:
-        piano = Piano.objects.select_related('location').prefetch_related('photos').get(pk=piano_id)
+        piano = Piano.objects.select_related('venue').prefetch_related('photos').get(pk=piano_id)
     except Piano.DoesNotExist:
         return Response({'error': 'Piano not found.'}, status=404)
 
@@ -741,15 +749,15 @@ def piano_profile(request, piano_id):
 
 
 @api_view(['GET'])
-def location_profile(request, location_id):
+def venue_profile(request, venue_id):
     try:
-        location = Location.objects.prefetch_related('pianos__photos').get(pk=location_id)
-    except Location.DoesNotExist:
-        return Response({'error': 'Location not found.'}, status=404)
+        venue = Venue.objects.select_related('organization').prefetch_related('pianos__photos').get(pk=venue_id)
+    except Venue.DoesNotExist:
+        return Response({'error': 'Venue not found.'}, status=404)
 
-    pianos = location.pianos.prefetch_related('photos').order_by('name')
+    pianos = venue.pianos.prefetch_related('photos').order_by('name')
     return Response({
-        'location': LocationSerializer(location).data,
+        'venue': VenueSerializer(venue).data,
         'pianos': PianoSerializer(pianos, many=True, context={'request': request}).data,
     })
 

@@ -20,11 +20,17 @@
         <a href="{% url 'piano_list' %}" class="{% if active_nav == 'pianos' %}active{% endif %}">
           <span class="nav-icon">🎹</span> Pianos
         </a>
-        <a href="{% url 'location_list' %}" class="{% if active_nav == 'locations' %}active{% endif %}">
-          <span class="nav-icon">📍</span> Locations
+        <a href="{% url 'organization_list' %}" class="{% if active_nav == 'organizations' %}active{% endif %}">
+          <span class="nav-icon">🏢</span> Organizations
+        </a>
+        <a href="{% url 'venue_list' %}" class="{% if active_nav == 'venues' %}active{% endif %}">
+          <span class="nav-icon">📍</span> Venues
         </a>
         <a href="{% url 'workorder_list' %}" class="{% if active_nav == 'workorders' %}active{% endif %}">
           <span class="nav-icon">🔧</span> Work Orders
+        </a>
+        <a href="{% url 'service_visit_list' %}" class="{% if active_nav == 'visits' %}active{% endif %}">
+          <span class="nav-icon">🚗</span> Service Visits
         </a>
         <a href="{% url 'schedule' %}" class="{% if active_nav == 'schedule' %}active{% endif %}">
           <span class="nav-icon">📅</span> Schedule

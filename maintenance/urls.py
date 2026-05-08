@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .api import (
     AttachmentViewSet,
     ConditionReadingViewSet,
-    LocationViewSet,
+    OrganizationViewSet,
+    VenueViewSet,
     MaintenanceScheduleViewSet,
     MaintenanceLogViewSet,
     PianoViewSet,
@@ -21,14 +22,15 @@ from .api import (
     dashboard_stats,
     calendar_events,
     piano_profile,
-    location_profile,
+    venue_profile,
     auth_login,
     auth_logout,
     auth_me,
 )
 
 router = DefaultRouter()
-router.register(r'locations',            LocationViewSet,            basename='location')
+router.register(r'organizations',       OrganizationViewSet,        basename='organization')
+router.register(r'venues',              VenueViewSet,               basename='venue')
 router.register(r'pianos',              PianoViewSet,               basename='piano')
 router.register(r'technicians',         TechnicianViewSet,          basename='technician')
 router.register(r'teams',               TeamViewSet,                basename='team')
@@ -51,8 +53,8 @@ urlpatterns = [
     path('', include(router.urls)),
     path('dashboard/', dashboard_stats, name='dashboard-stats'),
     path('calendar-events/', calendar_events, name='calendar-events'),
-    path('pianos/<int:piano_id>/profile/',       piano_profile,    name='piano-profile'),
-    path('locations/<int:location_id>/profile/', location_profile, name='location-profile'),
+    path('pianos/<int:piano_id>/profile/',   piano_profile, name='piano-profile'),
+    path('venues/<int:venue_id>/profile/',   venue_profile, name='venue-profile'),
     # Auth
     path('auth/login/',  auth_login,  name='auth-login'),
     path('auth/logout/', auth_logout, name='auth-logout'),

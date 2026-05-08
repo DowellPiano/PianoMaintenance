@@ -20,7 +20,7 @@
           <option value="">— Select Piano —</option>
           {% for p in pianos %}
             <option value="{{ p.pk }}" {% if form.piano.value|stringformat:"s" == p.pk|stringformat:"s" %}selected{% endif %}>
-              {{ p.name }} — {{ p.location.name }}
+              {{ p.name }} — {{ p.venue.name }}
             </option>
           {% endfor %}
         </select>

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}{{ organization.name }} — Piano Maintainer{% endblock %}
+{% block topbar_title %}{{ organization.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.org-hero { margin-bottom: 1.5rem; }
+.org-hero-name { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
+.org-hero-meta { color: var(--clr-text-sec); font-size: .88rem; }
+.venue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+.venue-mini {
+  background: #fff;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  text-decoration: none; color: inherit;
+  transition: box-shadow .12s;
+}
+.venue-mini:hover { box-shadow: 0 2px 6px rgba(0,0,0,.1); text-decoration: none; color: inherit; }
+.venue-mini-name { font-weight: 600; margin-bottom: .15rem; }
+.venue-mini-addr { font-size: .82rem; color: var(--clr-text-sec); margin-bottom: .4rem; }
+.venue-mini-stat { font-size: .82rem; color: var(--clr-text-dim); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'organization_list' %}" class="text-muted text-sm">← Back to Organizations</a>
+</div>
+
+<div class="card org-hero">
+  <div class="card-body" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <h1 class="org-hero-name">{{ organization.name }}</h1>
+      {% if organization.short_name %}<p class="org-hero-meta">{{ organization.short_name }}</p>{% endif %}
+      {% if organization.address %}<p class="org-hero-meta">{{ organization.address }}</p>{% endif %}
+      {% if organization.contact_name %}<p class="org-hero-meta">Contact: {{ organization.contact_name }}{% if organization.contact_email %} · {{ organization.contact_email }}{% endif %}{% if organization.contact_phone %} · {{ organization.contact_phone }}{% endif %}</p>{% endif %}
+      {% if organization.notes %}<p class="org-hero-meta" style="margin-top:.5rem;">{{ organization.notes|truncatechars:200 }}</p>{% endif %}
+    </div>
+    <div style="display:flex; gap:.5rem;">
+      <a href="{% url 'organization_edit' organization.pk %}" class="btn btn-sm btn-secondary">Edit</a>
+      <a href="{% url 'venue_create' %}?organization={{ organization.pk }}" class="btn btn-sm btn-primary">+ Add Venue</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2>Venues</h2>
+  </div>
+  <div class="card-body">
+    <div class="venue-grid">
+      {% for venue in venues %}
+      <a href="{% url 'venue_detail' venue.pk %}" class="venue-mini">
+        <div class="venue-mini-name">{{ venue.name }}</div>
+        {% if venue.address %}<div class="venue-mini-addr">{{ venue.address|truncatechars:60 }}</div>{% endif %}
+        <div class="venue-mini-stat">🎹 {{ venue.piano_count }} piano{{ venue.piano_count|pluralize }}</div>
+      </a>
+      {% empty %}
+      <p class="text-dim">No venues for this organization. <a href="{% url 'venue_create' %}?organization={{ organization.pk }}">Add one.</a></p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -46,7 +46,7 @@
           <input type="checkbox" name="pianos" value="{{ p.pk }}" id="piano_{{ p.pk }}">
           <label for="piano_{{ p.pk }}" style="cursor:pointer;">
             <span class="fw-medium">{{ p.name }}</span>
-            <span class="text-dim text-sm">· {{ p.location.name }}</span>
+            <span class="text-dim text-sm">· {{ p.venue.name }}</span>
           </label>
         </li>
         {% endfor %}
