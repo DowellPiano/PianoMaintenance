@@ -45,6 +45,7 @@
     <div style="display:flex; gap:.5rem;">
       <a href="{% url 'organization_edit' organization.pk %}" class="btn btn-sm btn-secondary">Edit</a>
       <a href="{% url 'venue_create' %}?organization={{ organization.pk }}" class="btn btn-sm btn-primary">+ Add Venue</a>
+      <a href="{% url 'organization_delete' organization.pk %}" class="btn btn-sm btn-danger">Delete</a>
     </div>
   </div>
 </div>

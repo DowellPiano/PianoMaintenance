@@ -6,6 +6,7 @@ from .models import (
     Organization,
     Venue,
     Piano,
+    Tag,
     Technician,
     Team,
     ScheduleTemplate,
@@ -50,6 +51,15 @@ class VenueAdmin(admin.ModelAdmin):
 
 
 # ---------------------------------------------------------------------------
+# Tag
+# ---------------------------------------------------------------------------
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ("name",)
+    search_fields = ("name",)
+
+
+# ---------------------------------------------------------------------------
 # Piano
 # ---------------------------------------------------------------------------
 @admin.register(Piano)
@@ -64,8 +74,9 @@ class PianoAdmin(admin.ModelAdmin):
         "room",
         "serial_number",
     )
-    list_filter    = ("piano_type", "venue__organization", "venue", "make")
-    search_fields  = ("name", "make", "model", "serial_number")
+    list_filter    = ("piano_type", "venue__organization", "venue", "make", "tags")
+    search_fields  = ("name", "make", "model", "serial_number", "tags__name")
+    filter_horizontal = ("tags",)
     readonly_fields = ("qr_code_token",)
 
     def get_queryset(self, request):

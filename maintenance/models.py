@@ -24,6 +24,17 @@ class IntervalUnit(models.TextChoices):
 # ---------------------------------------------------------------------------
 # Organization  (administrative owner — who signs the contract)
 # ---------------------------------------------------------------------------
+class Tag(models.Model):
+    """Free-form label that can be attached to pianos."""
+    name = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Organization(models.Model):
     name = models.CharField(max_length=200)
     short_name = models.CharField(max_length=50, blank=True)
@@ -96,6 +107,7 @@ class Piano(models.Model):
 
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    tags = models.ManyToManyField(Tag, blank=True, related_name="pianos")
     qr_code_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     # -- Maintenance intervals (core 4 types) --------------------------------

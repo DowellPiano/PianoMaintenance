@@ -62,6 +62,16 @@
 .condition-dot.poor { background: #dc2626; }
 .condition-dot.attention { background: #7f1d1d; }
 .next-due-label { font-size: .78rem; }
+.piano-card-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
+.tag-chip-sm {
+  display: inline-block;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: .72rem;
+  font-weight: 500;
+  padding: .1rem .45rem;
+  border-radius: 999px;
+}
 .filter-bar {
   display: flex;
   gap: .75rem;
@@ -93,6 +103,12 @@
 <form method="get" class="filter-bar">
   <input type="text" name="q" value="{{ search_query }}" placeholder="Search pianos…"
          class="form-input" style="width:240px;">
+  <select name="org" class="form-select" style="width:180px;" onchange="this.form.submit()">
+    <option value="">All Organizations</option>
+    {% for o in organizations %}
+      <option value="{{ o.id }}" {% if o.id|stringformat:"d" == org_filter %}selected{% endif %}>{{ o.name }}</option>
+    {% endfor %}
+  </select>
   <select name="venue" class="form-select" style="width:180px;" onchange="this.form.submit()">
     <option value="">All Venues</option>
     {% for v in venues %}
@@ -105,6 +121,14 @@
     <option value="Upright" {% if type_filter == "Upright" %}selected{% endif %}>Upright</option>
     <option value="Digital" {% if type_filter == "Digital" %}selected{% endif %}>Digital</option>
   </select>
+  {% if tags %}
+  <select name="tag" class="form-select" style="width:160px;" onchange="this.form.submit()">
+    <option value="">All Tags</option>
+    {% for t in tags %}
+      <option value="{{ t.id }}" {% if t.id|stringformat:"d" == tag_filter %}selected{% endif %}>{{ t.name }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
 </form>
 
 <div class="piano-grid">
@@ -124,6 +148,13 @@
       </div>
       <p class="piano-card-meta">{{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %}{% if piano.year_built %} · {{ piano.year_built }}{% endif %}</p>
       <p class="piano-card-venue">{{ piano.venue.name }}{% if piano.room %} · {{ piano.room }}{% endif %}</p>
+      {% if piano.tags.all %}
+      <div class="piano-card-tags">
+        {% for tag in piano.tags.all %}
+        <span class="tag-chip-sm">{{ tag.name }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
 
       <div class="piano-card-footer">
         <div>

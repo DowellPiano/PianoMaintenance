@@ -1,9 +1,11 @@
 import csv
 import io
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Sum, Max, DecimalField
+from django.db.models.functions import Coalesce
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse
 from django.contrib import messages
@@ -11,7 +13,7 @@ from django.contrib import messages
 from .models import (
     Organization, Venue, Piano, WorkOrder, MaintenanceRequest,
     MaintenanceSchedule, ScheduleTemplate, ConditionReading, ServiceVisit,
-    Technician, Part, PartUsed, MaintenanceLog, TaskType, Photo,
+    Technician, Part, PartUsed, MaintenanceLog, TaskType, Photo, Tag,
 )
 from .forms import (
     OrganizationForm, VenueForm, PianoForm, WorkOrderForm, WorkOrderCompleteForm,
@@ -106,30 +108,41 @@ def piano_list(request):
     today = date.today()
     soon = today + timedelta(days=30)
 
-    qs = Piano.objects.filter(is_active=True).select_related('venue').prefetch_related('photos')
+    qs = Piano.objects.filter(is_active=True).select_related('venue', 'venue__organization').prefetch_related('photos', 'tags')
 
     search_query = request.GET.get('q', '').strip()
+    org_filter = request.GET.get('org', '')
     venue_filter = request.GET.get('venue', '')
     type_filter = request.GET.get('type', '')
+    tag_filter = request.GET.get('tag', '')
 
     if search_query:
         qs = qs.filter(
             Q(name__icontains=search_query) |
             Q(make__icontains=search_query) |
-            Q(serial_number__icontains=search_query)
-        )
+            Q(serial_number__icontains=search_query) |
+            Q(tags__name__icontains=search_query)
+        ).distinct()
+    if org_filter:
+        qs = qs.filter(venue__organization_id=org_filter)
     if venue_filter:
         qs = qs.filter(venue_id=venue_filter)
     if type_filter:
         qs = qs.filter(piano_type=type_filter)
+    if tag_filter:
+        qs = qs.filter(tags__id=tag_filter)
 
     return render(request, 'maintenance/piano_list.html', {
         'active_nav': 'pianos',
         'pianos': qs,
+        'organizations': Organization.objects.all(),
         'venues': Venue.objects.all(),
+        'tags': Tag.objects.all(),
         'search_query': search_query,
+        'org_filter': org_filter,
         'venue_filter': venue_filter,
         'type_filter': type_filter,
+        'tag_filter': tag_filter,
         'today': today,
         'soon': soon,
     })
@@ -169,10 +182,12 @@ def _piano_context(piano):
 
 @login_required
 def piano_detail(request, pk):
-    piano = get_object_or_404(Piano.objects.select_related('venue'), pk=pk)
+    piano = get_object_or_404(Piano.objects.select_related('venue').prefetch_related('tags'), pk=pk)
     ctx = _piano_context(piano)
     ctx['qr_url'] = request.build_absolute_uri(f'/maintenance_request/{piano.qr_code_token}/')
     ctx['photos'] = piano.photos.all()
+    ctx['piano_tags'] = piano.tags.all()
+    ctx['all_tags'] = list(Tag.objects.values_list('name', flat=True))
     return render(request, 'maintenance/piano_detail.html', ctx)
 
 
@@ -232,6 +247,39 @@ def piano_edit(request, pk):
     })
 
 
+@login_required
+def piano_deactivate(request, pk):
+    piano = get_object_or_404(Piano, pk=pk)
+    if request.method == 'POST':
+        piano.is_active = False
+        piano.save(update_fields=['is_active'])
+        messages.success(request, f'Piano "{piano.name}" has been deactivated.')
+        return redirect('piano_list')
+    return render(request, 'maintenance/piano_confirm_deactivate.html', {
+        'active_nav': 'pianos',
+        'piano': piano,
+    })
+
+
+@login_required
+def piano_add_tag(request, pk):
+    piano = get_object_or_404(Piano, pk=pk)
+    if request.method == 'POST':
+        tag_name = request.POST.get('tag_name', '').strip()
+        if tag_name:
+            tag, _ = Tag.objects.get_or_create(name=tag_name)
+            piano.tags.add(tag)
+    return redirect('piano_detail', pk=piano.pk)
+
+
+@login_required
+def piano_remove_tag(request, pk, tag_pk):
+    piano = get_object_or_404(Piano, pk=pk)
+    if request.method == 'POST':
+        piano.tags.remove(tag_pk)
+    return redirect('piano_detail', pk=piano.pk)
+
+
 # ── Organizations ─────────────────────────────────────────────────
 
 @login_required
@@ -289,6 +337,31 @@ def organization_edit(request, pk):
         'active_nav': 'organizations',
         'form': form,
         'organization': organization,
+    })
+
+
+@login_required
+def organization_delete(request, pk):
+    organization = get_object_or_404(Organization, pk=pk)
+    venue_count = organization.venues.count()
+
+    if request.method == 'POST':
+        if venue_count > 0:
+            messages.error(
+                request,
+                f'Cannot delete "{organization.name}" — it still has {venue_count} '
+                f'venue{"s" if venue_count != 1 else ""}. Remove all venues first.',
+            )
+            return redirect('organization_detail', pk=organization.pk)
+        name = organization.name
+        organization.delete()
+        messages.success(request, f'Organization "{name}" deleted.')
+        return redirect('organization_list')
+
+    return render(request, 'maintenance/organization_confirm_delete.html', {
+        'active_nav': 'organizations',
+        'organization': organization,
+        'venue_count': venue_count,
     })
 
 
@@ -944,6 +1017,101 @@ def technician_list(request):
         'active_nav': 'technicians',
         'technicians': techs,
     })
+
+
+@login_required
+def technician_report(request):
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    log_q = Q()
+    if date_from:
+        log_q &= Q(logs__logged_at__date__gte=date_from)
+    if date_to:
+        log_q &= Q(logs__logged_at__date__lte=date_to)
+
+    techs = (
+        Technician.objects
+        .filter(is_active=True)
+        .annotate(
+            total_hours=Coalesce(
+                Sum('logs__hours_worked', filter=log_q),
+                Decimal('0'),
+                output_field=DecimalField(),
+            ),
+            wo_count=Count(
+                'logs__work_order',
+                distinct=True,
+                filter=log_q,
+            ),
+            last_activity=Max(
+                'logs__logged_at',
+                filter=log_q,
+            ),
+        )
+        .order_by('last_name', 'first_name')
+    )
+
+    techs_list = list(techs)
+    total_hours = sum(t.total_hours for t in techs_list)
+    total_wos = sum(t.wo_count for t in techs_list)
+
+    return render(request, 'maintenance/technician_report.html', {
+        'active_nav': 'technicians',
+        'technicians': techs_list,
+        'total_hours': total_hours,
+        'total_wos': total_wos,
+        'date_from': date_from,
+        'date_to': date_to,
+    })
+
+
+@login_required
+def technician_report_csv(request):
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    log_q = Q()
+    if date_from:
+        log_q &= Q(logs__logged_at__date__gte=date_from)
+    if date_to:
+        log_q &= Q(logs__logged_at__date__lte=date_to)
+
+    techs = (
+        Technician.objects
+        .filter(is_active=True)
+        .annotate(
+            total_hours=Coalesce(
+                Sum('logs__hours_worked', filter=log_q),
+                Decimal('0'),
+                output_field=DecimalField(),
+            ),
+            wo_count=Count(
+                'logs__work_order',
+                distinct=True,
+                filter=log_q,
+            ),
+            last_activity=Max(
+                'logs__logged_at',
+                filter=log_q,
+            ),
+        )
+        .order_by('last_name', 'first_name')
+    )
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="technician_report.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Technician', 'Email', 'Total Hours', 'Work Orders Completed', 'Last Activity'])
+    for t in techs:
+        writer.writerow([
+            t.get_full_name() or t.username,
+            t.email or '',
+            float(t.total_hours),
+            t.wo_count,
+            t.last_activity.strftime('%Y-%m-%d %H:%M') if t.last_activity else '',
+        ])
+    return response
 
 
 # ── Slice 10: Parts ─────────────────────────────────────────────

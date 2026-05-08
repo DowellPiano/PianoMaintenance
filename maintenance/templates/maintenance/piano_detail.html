@@ -81,6 +81,27 @@
   font-size: .6rem; padding: .1rem .3rem;
   border-radius: 3px; font-weight: 600;
 }
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: .82rem;
+  font-weight: 500;
+  padding: .2rem .6rem;
+  border-radius: 999px;
+}
+.tag-remove {
+  background: none;
+  border: none;
+  color: #6366f1;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 .1rem;
+}
+.tag-remove:hover { color: #dc2626; }
 @media (max-width: 768px) {
   .detail-grid { grid-template-columns: 1fr; }
   .hero-actions { width: 100%; }
@@ -120,8 +141,36 @@
         <a href="{% url 'piano_photo_upload' piano.pk %}" class="btn btn-sm btn-secondary">Photos</a>
         <a href="{% url 'condition_reading_create' piano.pk %}" class="btn btn-sm btn-secondary">Condition Report</a>
         <a href="{% url 'workorder_create' %}?piano={{ piano.pk }}" class="btn btn-sm btn-primary">+ Work Order</a>
+        <a href="{% url 'piano_deactivate' piano.pk %}" class="btn btn-sm btn-danger">Deactivate</a>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Tags -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <h2>Tags</h2>
+  </div>
+  <div class="card-body" style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;">
+    {% for tag in piano_tags %}
+    <span class="tag-chip">
+      {{ tag.name }}
+      <form method="post" action="{% url 'piano_remove_tag' piano.pk tag.pk %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="tag-remove" title="Remove tag">&times;</button>
+      </form>
+    </span>
+    {% endfor %}
+    <form method="post" action="{% url 'piano_add_tag' piano.pk %}" style="display:inline-flex; gap:.35rem; align-items:center;">
+      {% csrf_token %}
+      <input type="text" name="tag_name" placeholder="Add tag…" list="tag-suggestions"
+             class="form-input" style="width:140px; height:30px; font-size:.82rem; padding:0 .5rem;">
+      <datalist id="tag-suggestions">
+        {% for t in all_tags %}<option value="{{ t }}">{% endfor %}
+      </datalist>
+      <button type="submit" class="btn btn-xs btn-secondary" style="height:30px;">+</button>
+    </form>
   </div>
 </div>
 

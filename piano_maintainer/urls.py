@@ -22,6 +22,7 @@ urlpatterns = [
     path('organizations/new/', views.organization_create, name='organization_create'),
     path('organizations/<int:pk>/', views.organization_detail, name='organization_detail'),
     path('organizations/<int:pk>/edit/', views.organization_edit, name='organization_edit'),
+    path('organizations/<int:pk>/delete/', views.organization_delete, name='organization_delete'),
 
     # Venues
     path('venues/', views.venue_list, name='venue_list'),
@@ -36,6 +37,9 @@ urlpatterns = [
     path('pianos/qr-codes/', views.qr_codes, name='qr_codes'),
     path('pianos/<int:pk>/', views.piano_detail, name='piano_detail'),
     path('pianos/<int:pk>/edit/', views.piano_edit, name='piano_edit'),
+    path('pianos/<int:pk>/deactivate/', views.piano_deactivate, name='piano_deactivate'),
+    path('pianos/<int:pk>/tags/add/', views.piano_add_tag, name='piano_add_tag'),
+    path('pianos/<int:pk>/tags/<int:tag_pk>/remove/', views.piano_remove_tag, name='piano_remove_tag'),
     path('pianos/<int:pk>/tab/<str:tab>/', views.piano_tab, name='piano_tab'),
     path('pianos/<int:piano_pk>/condition/new/', views.condition_reading_create, name='condition_reading_create'),
     path('pianos/<int:pk>/photos/upload/', views.piano_photo_upload, name='piano_photo_upload'),
@@ -75,6 +79,8 @@ urlpatterns = [
 
     # Technicians
     path('technicians/', views.technician_list, name='technician_list'),
+    path('technicians/report/', views.technician_report, name='technician_report'),
+    path('technicians/report/csv/', views.technician_report_csv, name='technician_report_csv'),
 
     # Parts
     path('parts/', views.part_list, name='part_list'),

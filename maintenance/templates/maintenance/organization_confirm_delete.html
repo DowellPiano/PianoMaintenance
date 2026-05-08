@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Delete {{ organization.name }} — Piano Maintainer{% endblock %}
+{% block topbar_title %}Delete Organization{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'organization_detail' organization.pk %}" class="text-muted text-sm">&larr; Back to Organization</a>
+</div>
+
+<div class="card" style="max-width:520px;">
+  <div class="card-header"><h2>Delete Organization</h2></div>
+  <div class="card-body">
+    {% if venue_count > 0 %}
+      <div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:var(--radius-sm); padding:.75rem 1rem; margin-bottom:1rem;">
+        <strong style="color:#991b1b;">Cannot delete</strong>
+        <p style="margin-top:.25rem; color:#7f1d1d; font-size:.9rem;">
+          "{{ organization.name }}" still has <strong>{{ venue_count }}</strong>
+          venue{{ venue_count|pluralize }}. You must remove or reassign all venues before
+          this organization can be deleted.
+        </p>
+      </div>
+      <div style="display:flex; gap:.5rem; justify-content:flex-end;">
+        <a href="{% url 'organization_detail' organization.pk %}" class="btn btn-secondary">Go Back</a>
+      </div>
+    {% else %}
+      <p style="margin-bottom:1rem;">
+        Are you sure you want to permanently delete <strong>{{ organization.name }}</strong>?
+      </p>
+      <p class="text-sm text-muted" style="margin-bottom:1.25rem;">
+        This action cannot be undone. All organization data (name, contact info, notes) will be permanently removed.
+      </p>
+      <form method="post">
+        {% csrf_token %}
+        <div style="display:flex; gap:.5rem; justify-content:flex-end;">
+          <a href="{% url 'organization_detail' organization.pk %}" class="btn btn-secondary">Cancel</a>
+          <button type="submit" class="btn btn-danger">Delete Permanently</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

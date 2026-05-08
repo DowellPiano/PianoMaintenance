@@ -8,6 +8,7 @@ from .models import (
     MaintenanceLog,
     MaintenanceSchedule,
     Piano,
+    Tag,
     ScheduleTemplate,
     Technician,
     Team,
@@ -56,9 +57,16 @@ class PhotoSerializer(serializers.ModelSerializer):
         return None
 
 
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = ['id', 'name']
+
+
 class PianoSerializer(serializers.ModelSerializer):
     venue_name = serializers.CharField(source='venue.name', read_only=True)
     profile_photo_url = serializers.SerializerMethodField()
+    tags = TagSerializer(many=True, read_only=True)
 
     class Meta:
         model = Piano
@@ -66,7 +74,7 @@ class PianoSerializer(serializers.ModelSerializer):
             'id', 'name', 'make', 'model', 'serial_number',
             'piano_type', 'venue', 'venue_name',
             'year_built', 'year_acquired', 'notes', 'is_active', 'qr_code_token',
-            'profile_photo_url',
+            'profile_photo_url', 'tags',
         ]
         read_only_fields = ['qr_code_token']
 

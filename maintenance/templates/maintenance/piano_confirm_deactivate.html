@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Deactivate {{ piano.name }} — Piano Maintainer{% endblock %}
+{% block topbar_title %}Deactivate Piano{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'piano_detail' piano.pk %}" class="text-muted text-sm">&larr; Back to Piano</a>
+</div>
+
+<div class="card" style="max-width:520px;">
+  <div class="card-header"><h2>Deactivate Piano</h2></div>
+  <div class="card-body">
+    <p style="margin-bottom:1rem;">
+      Are you sure you want to deactivate <strong>{{ piano.name }}</strong>
+      ({{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %})
+      at {{ piano.venue.name }}?
+    </p>
+    <p class="text-sm text-muted" style="margin-bottom:1.25rem;">
+      The piano will be hidden from lists and reports but its data will be preserved.
+      It can be reactivated later via the admin panel.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <div style="display:flex; gap:.5rem; justify-content:flex-end;">
+        <a href="{% url 'piano_detail' piano.pk %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-danger">Deactivate</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

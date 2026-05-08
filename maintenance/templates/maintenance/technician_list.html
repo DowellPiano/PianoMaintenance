@@ -9,6 +9,7 @@
     <h1>Technicians</h1>
     <p class="page-subtitle">{{ technicians|length }} active technician{{ technicians|length|pluralize }}</p>
   </div>
+  <a href="{% url 'technician_report' %}" class="btn btn-primary">Work Report</a>
 </div>
 
 <div class="card">
