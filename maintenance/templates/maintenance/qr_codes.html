@@ -3,41 +3,6 @@
 {% block title %}QR Codes — Piano Maintainer{% endblock %}
 {% block topbar_title %}QR Codes{% endblock %}
 
-{% block extra_css %}
-<style>
-.qr-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1rem;
-}
-.qr-card {
-  background: var(--clr-surface);
-  border: 1px solid var(--clr-border);
-  border-radius: var(--radius);
-  padding: 1.25rem;
-  text-align: center;
-}
-.qr-card-piano { font-weight: 700; font-size: 1rem; margin-bottom: .15rem; }
-.qr-card-loc { color: var(--clr-text-sec); font-size: .85rem; margin-bottom: .75rem; }
-.qr-url {
-  font-family: monospace;
-  font-size: .72rem;
-  color: var(--clr-text-dim);
-  word-break: break-all;
-  padding: .4rem;
-  background: #f9fafb;
-  border-radius: var(--radius-sm);
-  margin-bottom: .5rem;
-}
-.qr-copy-btn { cursor: pointer; }
-@media print {
-  .sidebar, .topbar, .page-header, .no-print { display: none !important; }
-  .main-area { margin-left: 0 !important; }
-  .qr-grid { grid-template-columns: repeat(3, 1fr); }
-  .qr-card { break-inside: avoid; border: 1px solid #ccc; }
-}
-</style>
-{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -45,17 +10,20 @@
     <h1>QR Codes</h1>
     <p class="page-subtitle">{{ piano_qrs|length }} piano{{ piano_qrs|length|pluralize }} — share these links for maintenance requests</p>
   </div>
-  <button onclick="window.print()" class="btn btn-sm btn-secondary no-print">Print All</button>
+  <div class="gap-row no-print">
+    <a href="{% url 'qr_codes_csv' %}" class="btn btn-sm btn-secondary">Export CSV for Labels</a>
+    <button onclick="window.print()" class="btn btn-sm btn-secondary">Print All</button>
+  </div>
 </div>
 
 <div class="qr-grid">
   {% for item in piano_qrs %}
   <div class="qr-card">
     <div class="qr-card-piano">{{ item.piano.name }}</div>
-    <div class="qr-card-loc">{{ item.piano.venue.name }}</div>
+    <div class="qr-card-loc">{{ item.piano.venue_name }}</div>
     <div class="qr-url">{{ item.url }}</div>
     <button class="btn btn-xs btn-secondary qr-copy-btn no-print"
-            onclick="navigator.clipboard.writeText('{{ item.url }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy Link',1500)">
+            onclick="navigator.clipboard.writeText('{{ item.url|escapejs }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy Link',1500)">
       Copy Link
     </button>
   </div>

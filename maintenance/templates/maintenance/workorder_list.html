@@ -3,28 +3,6 @@
 {% block title %}Work Orders — Piano Maintainer{% endblock %}
 {% block topbar_title %}Work Orders{% endblock %}
 
-{% block extra_css %}
-<style>
-.wo-filters {
-  display: flex;
-  gap: .75rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.25rem;
-}
-.wo-filters .form-input,
-.wo-filters .form-select {
-  width: auto;
-  min-width: 140px;
-}
-.wo-filters .search-input { min-width: 220px; }
-.wo-row-link { cursor: pointer; }
-.wo-row-link:hover td { background: #f0f4ff !important; }
-.wo-id { font-weight: 600; color: var(--clr-primary); }
-.wo-piano { font-weight: 500; }
-.wo-piano-loc { color: var(--clr-text-dim); font-size: .78rem; }
-.overdue-marker { color: var(--clr-danger); font-weight: 600; font-size: .78rem; }
-</style>
-{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -57,8 +35,20 @@
         <option value="{{ val }}" {% if type_filter == val %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
+    <select name="org" class="form-select" onchange="this.form.submit()">
+      <option value="">All Organizations</option>
+      {% for o in organizations %}
+        <option value="{{ o.pk }}" {% if org_filter == o.pk|stringformat:"d" %}selected{% endif %}>{{ o.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="venue" class="form-select" onchange="this.form.submit()">
+      <option value="">All Venues</option>
+      {% for v in venues %}
+        <option value="{{ v.pk }}" {% if venue_filter == v.pk|stringformat:"d" %}selected{% endif %}>{{ v.name }}</option>
+      {% endfor %}
+    </select>
     <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
-    {% if search_query or status_filter or priority_filter or type_filter %}
+    {% if search_query or status_filter or priority_filter or type_filter or org_filter or venue_filter %}
       <a href="{% url 'workorder_list' %}" class="btn btn-xs btn-secondary">Clear</a>
     {% endif %}
   </form>
@@ -84,8 +74,8 @@
         <tr class="wo-row-link" onclick="window.location='{% url 'workorder_detail' wo.pk %}'">
           <td class="wo-id">WO-{{ wo.pk }}</td>
           <td>
-            <div class="wo-piano">{{ wo.piano.name }}</div>
-            <div class="wo-piano-loc">{{ wo.piano.venue.name }}</div>
+            <div class="wo-piano">{{ wo.piano_name }}</div>
+            <div class="wo-piano-loc">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
           </td>
           <td>{{ wo.order_type }}</td>
           <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>

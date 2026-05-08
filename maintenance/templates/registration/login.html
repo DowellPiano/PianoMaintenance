@@ -27,9 +27,13 @@
           <label class="form-label" for="id_password">Password</label>
           <input class="form-input" type="password" name="password" id="id_password" required>
         </div>
-        <button type="submit" class="btn btn-primary">Sign In</button>
+        <button type="submit" class="btn btn-primary" style="width:100%;">Sign In</button>
         {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       </form>
+
+      <p style="text-align:center; margin-top:1rem; font-size:.88rem;">
+        Don't have an account? <a href="{% url 'signup' %}">Sign up</a>
+      </p>
     </div>
   </div>
 </body>

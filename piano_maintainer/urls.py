@@ -13,6 +13,7 @@ urlpatterns = [
     # Auth
     path('login/', auth_views.LoginView.as_view(), name='login'),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
+    path('signup/', views.signup, name='signup'),
 
     # Template views
     path('', views.dashboard, name='dashboard'),
@@ -29,12 +30,15 @@ urlpatterns = [
     path('venues/new/', views.venue_create, name='venue_create'),
     path('venues/<int:pk>/', views.venue_detail, name='venue_detail'),
     path('venues/<int:pk>/edit/', views.venue_edit, name='venue_edit'),
+    path('venues/<int:pk>/delete/', views.venue_delete, name='venue_delete'),
 
     # Pianos
     path('pianos/', views.piano_list, name='piano_list'),
     path('pianos/new/', views.piano_create, name='piano_create'),
     path('pianos/import/', views.piano_import_csv, name='piano_import'),
+    path('pianos/import/sample/', views.piano_import_sample_csv, name='piano_import_sample'),
     path('pianos/qr-codes/', views.qr_codes, name='qr_codes'),
+    path('pianos/qr-codes/csv/', views.qr_codes_csv, name='qr_codes_csv'),
     path('pianos/<int:pk>/', views.piano_detail, name='piano_detail'),
     path('pianos/<int:pk>/edit/', views.piano_edit, name='piano_edit'),
     path('pianos/<int:pk>/deactivate/', views.piano_deactivate, name='piano_deactivate'),
@@ -50,14 +54,9 @@ urlpatterns = [
     path('work-orders/new/', views.workorder_create, name='workorder_create'),
     path('work-orders/<int:pk>/', views.workorder_detail, name='workorder_detail'),
     path('work-orders/<int:pk>/assign/', views.workorder_assign, name='workorder_assign'),
+    path('work-orders/<int:pk>/delete/', views.workorder_delete, name='workorder_delete'),
     path('work-orders/<int:pk>/complete/', views.workorder_complete, name='workorder_complete'),
-
-    # Service Visits
-    path('visits/', views.service_visit_list, name='service_visit_list'),
-    path('visits/new/', views.service_visit_create, name='service_visit_create'),
-    path('visits/<int:pk>/', views.service_visit_detail, name='service_visit_detail'),
-    path('visits/<int:pk>/complete/', views.service_visit_complete, name='service_visit_complete'),
-    path('visits/<int:pk>/add-wo/', views.service_visit_add_workorder, name='service_visit_add_workorder'),
+    path('work-orders/<int:pk>/log-work/', views.workorder_log_work, name='workorder_log_work'),
 
     # Schedule
     path('schedule/', views.schedule, name='schedule'),

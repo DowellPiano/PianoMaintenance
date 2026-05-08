@@ -1,8 +1,19 @@
 from django import forms
+from django.contrib.auth.forms import UserCreationForm
 from .models import (
     Organization, Venue, Piano, WorkOrder, ConditionReading, ConditionLevel,
-    MaintenanceSchedule, ScheduleTemplate, ServiceVisit, Part,
+    MaintenanceSchedule, ScheduleTemplate, Part, Technician,
 )
+
+
+class SignUpForm(UserCreationForm):
+    first_name = forms.CharField(max_length=150)
+    last_name = forms.CharField(max_length=150)
+    email = forms.EmailField()
+
+    class Meta:
+        model = Technician
+        fields = ['username', 'first_name', 'last_name', 'email', 'password1', 'password2']
 
 
 class OrganizationForm(forms.ModelForm):
@@ -39,38 +50,6 @@ class PianoForm(forms.ModelForm):
             'cleaning_interval_value', 'cleaning_interval_unit',
             'notes',
         ]
-
-
-class ServiceVisitForm(forms.ModelForm):
-    class Meta:
-        model = ServiceVisit
-        fields = ['technician', 'venue', 'date', 'time_in', 'time_out',
-                  'miles_driven', 'notes']
-        widgets = {
-            'date': forms.DateInput(attrs={'type': 'date'}),
-            'time_in': forms.TimeInput(attrs={'type': 'time'}),
-            'time_out': forms.TimeInput(attrs={'type': 'time'}),
-        }
-
-
-class ServiceVisitCompleteForm(forms.Form):
-    """Form for completing a service visit."""
-    time_in = forms.TimeField(
-        required=False,
-        widget=forms.TimeInput(attrs={'type': 'time'}),
-    )
-    time_out = forms.TimeField(
-        required=False,
-        widget=forms.TimeInput(attrs={'type': 'time'}),
-    )
-    miles_driven = forms.DecimalField(
-        required=False, max_digits=6, decimal_places=1,
-        widget=forms.NumberInput(attrs={'step': '0.1', 'placeholder': '0.0'}),
-    )
-    notes = forms.CharField(
-        required=False,
-        widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Visit notes (optional)'}),
-    )
 
 
 class WorkOrderForm(forms.ModelForm):
@@ -160,6 +139,21 @@ class PartForm(forms.ModelForm):
         model = Part
         fields = ['name', 'part_number', 'supplier', 'unit_cost',
                   'stock_quantity', 'reorder_threshold']
+
+
+class WorkOrderLogWorkForm(forms.Form):
+    """Form for logging work against a work order without completing it."""
+    hours_worked = forms.DecimalField(
+        max_digits=5, decimal_places=2, min_value=0,
+        widget=forms.NumberInput(attrs={'step': '0.25', 'placeholder': '0.00'}),
+    )
+    work_performed = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Describe the work performed…'}),
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 2, 'placeholder': 'Additional notes (optional)'}),
+    )
 
 
 class PhotoUploadForm(forms.Form):

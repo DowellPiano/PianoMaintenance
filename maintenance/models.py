@@ -3,7 +3,18 @@ from datetime import date, timedelta
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
+
+
+def validate_image_file(value):
+    """Reject uploads that aren't common image types or exceed 10 MB."""
+    max_size = 10 * 1024 * 1024  # 10 MB
+    if value.size > max_size:
+        raise ValidationError(f'File too large — maximum is 10 MB (got {value.size / 1024 / 1024:.1f} MB).')
+    allowed = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+    if hasattr(value.file, 'content_type') and value.file.content_type not in allowed:
+        raise ValidationError('Only JPEG, PNG, GIF, and WebP images are allowed.')
 
 YEAR_VALIDATORS = [MinValueValidator(1700), MaxValueValidator(2100)]
 
@@ -50,6 +61,10 @@ class Organization(models.Model):
     def __str__(self):
         return self.short_name or self.name
 
+    def delete(self, *args, **kwargs):
+        """Venues are SET_NULL; no extra stamping needed (venue still exists)."""
+        super().delete(*args, **kwargs)
+
 
 # ---------------------------------------------------------------------------
 # Venue  (physical location a technician drives to)
@@ -58,7 +73,7 @@ class Venue(models.Model):
     name = models.CharField(max_length=200)
     short_name = models.CharField(max_length=50, blank=True)
     organization = models.ForeignKey(
-        Organization, on_delete=models.PROTECT, related_name="venues",
+        Organization, null=True, blank=True, on_delete=models.SET_NULL, related_name="venues",
     )
     address = models.TextField(blank=True)
     on_site_contact = models.TextField(blank=True,
@@ -74,6 +89,11 @@ class Venue(models.Model):
     def __str__(self):
         return self.name
 
+    def delete(self, *args, **kwargs):
+        """Stamp display name into pianos before deletion."""
+        self.pianos.update(venue_display=self.name)
+        super().delete(*args, **kwargs)
+
 
 # ---------------------------------------------------------------------------
 # Piano
@@ -85,8 +105,10 @@ class Piano(models.Model):
         DIGITAL = "Digital", "Digital"
 
     venue = models.ForeignKey(
-        Venue, on_delete=models.PROTECT, related_name="pianos"
+        Venue, null=True, blank=True, on_delete=models.SET_NULL, related_name="pianos"
     )
+    venue_display = models.CharField(max_length=200, blank=True,
+        help_text="Preserved venue name after venue deletion.")
     name = models.CharField(max_length=200)
     make = models.CharField(max_length=100)
     model = models.CharField(max_length=100, blank=True)
@@ -189,6 +211,30 @@ class Piano(models.Model):
 
     def __str__(self):
         return f"{self.make} {self.model} — {self.name}".strip(" —")
+
+    @property
+    def venue_name(self):
+        """Return live venue name, or preserved display name if venue was deleted."""
+        if self.venue:
+            return self.venue.name
+        return self.venue_display or "(deleted venue)"
+
+    def _build_display_name(self):
+        parts = [self.name]
+        if self.make:
+            parts.append(self.make)
+        if self.serial_number:
+            parts.append(f"SN-{self.serial_number}")
+        return " — ".join(parts)
+
+    def delete(self, *args, **kwargs):
+        """Stamp display name into related objects before deletion."""
+        display = self._build_display_name()
+        self.work_orders.update(piano_display=display)
+        self.logs.update(piano_display=display)
+        self.condition_readings.update(piano_display=display)
+        self.maintenance_requests.update(piano_display=display)
+        super().delete(*args, **kwargs)
 
     @property
     def has_any_condition(self):
@@ -355,65 +401,6 @@ class MaintenanceSchedule(models.Model):
         return nd <= date.today() + timedelta(days=self.warning_days_before)
 
 
-# ---------------------------------------------------------------------------
-# ServiceVisit  (one trip to a venue)
-# ---------------------------------------------------------------------------
-class ServiceVisit(models.Model):
-    class VisitStatus(models.TextChoices):
-        PLANNED = "Planned", "Planned"
-        IN_PROGRESS = "In Progress", "In Progress"
-        COMPLETE = "Complete", "Complete"
-
-    technician = models.ForeignKey(
-        Technician, on_delete=models.PROTECT, related_name="service_visits",
-    )
-    venue = models.ForeignKey(
-        Venue, on_delete=models.PROTECT, related_name="service_visits",
-    )
-    date = models.DateField()
-    time_in = models.TimeField(null=True, blank=True)
-    time_out = models.TimeField(null=True, blank=True)
-    miles_driven = models.DecimalField(
-        max_digits=6, decimal_places=1, null=True, blank=True,
-    )
-    status = models.CharField(
-        max_length=20, choices=VisitStatus.choices, default=VisitStatus.PLANNED,
-    )
-    notes = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-date", "-created_at"]
-
-    def __str__(self):
-        return f"Visit {self.date} — {self.venue.name}"
-
-    @property
-    def total_duration_minutes(self):
-        """Time Out minus Time In, in minutes."""
-        if self.time_in and self.time_out:
-            from datetime import datetime
-            t_in = datetime.combine(self.date, self.time_in)
-            t_out = datetime.combine(self.date, self.time_out)
-            return int((t_out - t_in).total_seconds() / 60)
-        return None
-
-    @property
-    def total_duration_display(self):
-        mins = self.total_duration_minutes
-        if mins is None:
-            return "—"
-        hours, remainder = divmod(mins, 60)
-        if hours and remainder:
-            return f"{hours}h {remainder}m"
-        elif hours:
-            return f"{hours}h"
-        return f"{mins}m"
-
-    @property
-    def work_order_count(self):
-        return self.work_orders.count()
-
 
 # ---------------------------------------------------------------------------
 # WorkOrder
@@ -437,17 +424,12 @@ class WorkOrder(models.Model):
         URGENT = "Urgent", "Urgent"
 
     piano = models.ForeignKey(
-        Piano, on_delete=models.PROTECT, related_name="work_orders"
+        Piano, null=True, blank=True, on_delete=models.SET_NULL, related_name="work_orders"
     )
+    piano_display = models.CharField(max_length=200, blank=True,
+        help_text="Preserved piano name after piano deletion.")
     assigned_tech = models.ForeignKey(
         Technician,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="work_orders",
-    )
-    service_visit = models.ForeignKey(
-        ServiceVisit,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -482,20 +464,28 @@ class WorkOrder(models.Model):
     def __str__(self):
         return f"WO-{self.pk} · {self.order_type} · {self.status}"
 
+    @property
+    def piano_name(self):
+        if self.piano:
+            return self.piano.name
+        return self.piano_display or "(deleted piano)"
+
 
 # ---------------------------------------------------------------------------
 # MaintenanceLog
 # ---------------------------------------------------------------------------
 class MaintenanceLog(models.Model):
     work_order = models.ForeignKey(
-        WorkOrder, on_delete=models.PROTECT, related_name="logs"
+        WorkOrder, on_delete=models.CASCADE, related_name="logs"
     )
     technician = models.ForeignKey(
         Technician, on_delete=models.PROTECT, related_name="logs"
     )
     piano = models.ForeignKey(
-        Piano, on_delete=models.PROTECT, related_name="logs"
+        Piano, null=True, blank=True, on_delete=models.SET_NULL, related_name="logs"
     )
+    piano_display = models.CharField(max_length=200, blank=True,
+        help_text="Preserved piano name after piano deletion.")
     hours_worked = models.DecimalField(max_digits=5, decimal_places=2)
     work_performed = models.TextField()
     notes = models.TextField(blank=True)
@@ -513,8 +503,10 @@ class MaintenanceLog(models.Model):
 # ---------------------------------------------------------------------------
 class ConditionReading(models.Model):
     piano = models.ForeignKey(
-        Piano, on_delete=models.PROTECT, related_name="condition_readings"
+        Piano, null=True, blank=True, on_delete=models.SET_NULL, related_name="condition_readings"
     )
+    piano_display = models.CharField(max_length=200, blank=True,
+        help_text="Preserved piano name after piano deletion.")
     log = models.ForeignKey(
         MaintenanceLog,
         null=True,
@@ -636,7 +628,7 @@ class Part(models.Model):
 # ---------------------------------------------------------------------------
 class PartUsed(models.Model):
     log = models.ForeignKey(
-        MaintenanceLog, on_delete=models.PROTECT, related_name="parts_used"
+        MaintenanceLog, on_delete=models.CASCADE, related_name="parts_used"
     )
     part = models.ForeignKey(
         Part, on_delete=models.PROTECT, related_name="usages"
@@ -664,8 +656,10 @@ class MaintenanceRequest(models.Model):
         RESOLVED = "Resolved", "Resolved"
 
     piano = models.ForeignKey(
-        Piano, on_delete=models.PROTECT, related_name="maintenance_requests"
+        Piano, null=True, blank=True, on_delete=models.SET_NULL, related_name="maintenance_requests"
     )
+    piano_display = models.CharField(max_length=200, blank=True,
+        help_text="Preserved piano name after piano deletion.")
     reported_by_name = models.CharField(max_length=200, blank=True)
     reported_by_email = models.EmailField(blank=True)
     issue_description = models.TextField()
@@ -696,7 +690,7 @@ class MaintenanceRequest(models.Model):
 class Photo(models.Model):
     piano      = models.ForeignKey(Piano,     null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
     work_order = models.ForeignKey(WorkOrder, null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
-    image      = models.ImageField(upload_to='photos/')
+    image      = models.ImageField(upload_to='photos/', validators=[validate_image_file])
     caption    = models.CharField(max_length=300, blank=True)
     is_profile_photo = models.BooleanField(default=False)
     uploaded_at = models.DateTimeField(auto_now_add=True)

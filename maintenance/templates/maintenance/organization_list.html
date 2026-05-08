@@ -3,32 +3,6 @@
 {% block title %}Organizations — Piano Maintainer{% endblock %}
 {% block topbar_title %}Organizations{% endblock %}
 
-{% block extra_css %}
-<style>
-.org-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
-}
-.org-card {
-  background: var(--clr-surface);
-  border: 1px solid var(--clr-border);
-  border-radius: var(--radius);
-  padding: 1.25rem;
-  box-shadow: var(--shadow);
-  text-decoration: none;
-  color: inherit;
-  transition: box-shadow .15s;
-}
-.org-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); text-decoration: none; color: inherit; }
-.org-card-name { font-weight: 700; font-size: 1.05rem; margin-bottom: .2rem; }
-.org-card-contact { color: var(--clr-text-sec); font-size: .85rem; margin-bottom: .6rem; }
-.org-card-stat {
-  display: inline-flex; align-items: center; gap: .3rem;
-  font-size: .82rem; color: var(--clr-text-dim);
-}
-</style>
-{% endblock %}
 
 {% block content %}
 <div class="page-header">

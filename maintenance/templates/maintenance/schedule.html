@@ -3,45 +3,6 @@
 {% block title %}Schedule — Piano Maintainer{% endblock %}
 {% block topbar_title %}Schedule{% endblock %}
 
-{% block extra_css %}
-<style>
-.kanban { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
-.kanban-col { min-width: 0; }
-.kanban-col-header {
-  font-size: .82rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .04em; padding: .5rem .75rem;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.kanban-col-header .count {
-  background: rgba(255,255,255,.25); padding: .1rem .45rem;
-  border-radius: 999px; font-size: .75rem;
-}
-.col-overdue .kanban-col-header { background: #fee2e2; color: #991b1b; }
-.col-due-soon .kanban-col-header { background: #fef3c7; color: #92400e; }
-.col-upcoming .kanban-col-header { background: #dbeafe; color: #1e40af; }
-.col-no-date .kanban-col-header { background: #f3f4f6; color: #6b7280; }
-.kanban-col-body {
-  background: var(--clr-surface); border: 1px solid var(--clr-border);
-  border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  padding: .5rem; min-height: 100px;
-}
-.kanban-card {
-  background: #fff; border: 1px solid var(--clr-border);
-  border-radius: var(--radius-sm); padding: .65rem .75rem;
-  margin-bottom: .5rem; transition: box-shadow .12s;
-  display: block; text-decoration: none; color: inherit;
-}
-.kanban-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,.1); text-decoration: none; color: inherit; }
-.kanban-card:last-child { margin-bottom: 0; }
-.kc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: .2rem; }
-.kc-id { font-weight: 600; font-size: .82rem; color: var(--clr-primary); }
-.kc-piano { font-weight: 600; font-size: .88rem; }
-.kc-meta { font-size: .78rem; color: var(--clr-text-sec); }
-.kc-due { font-size: .78rem; margin-top: .25rem; }
-.schedule-actions { display: flex; gap: .5rem; margin-bottom: 1.25rem; }
-</style>
-{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -67,8 +28,8 @@
           <span class="kc-id">WO-{{ wo.pk }}</span>
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
         </div>
-        <div class="kc-piano">{{ wo.piano.name }}</div>
-        <div class="kc-meta">{{ wo.piano.venue.name }}</div>
+        <div class="kc-piano">{{ wo.piano_name }}</div>
+        <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
         <div class="kc-due text-danger">Due {{ wo.due_date|date:"M d" }}</div>
       </a>
       {% empty %}
@@ -88,8 +49,8 @@
           <span class="kc-id">WO-{{ wo.pk }}</span>
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
         </div>
-        <div class="kc-piano">{{ wo.piano.name }}</div>
-        <div class="kc-meta">{{ wo.piano.venue.name }}</div>
+        <div class="kc-piano">{{ wo.piano_name }}</div>
+        <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
         <div class="kc-due">Due {{ wo.due_date|date:"M d" }}</div>
       </a>
       {% empty %}
@@ -109,8 +70,8 @@
           <span class="kc-id">WO-{{ wo.pk }}</span>
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
         </div>
-        <div class="kc-piano">{{ wo.piano.name }}</div>
-        <div class="kc-meta">{{ wo.piano.venue.name }}</div>
+        <div class="kc-piano">{{ wo.piano_name }}</div>
+        <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
         <div class="kc-due">Due {{ wo.due_date|date:"M d" }}</div>
       </a>
       {% empty %}
@@ -130,8 +91,8 @@
           <span class="kc-id">WO-{{ wo.pk }}</span>
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
         </div>
-        <div class="kc-piano">{{ wo.piano.name }}</div>
-        <div class="kc-meta">{{ wo.piano.venue.name }}</div>
+        <div class="kc-piano">{{ wo.piano_name }}</div>
+        <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
       </a>
       {% empty %}
       <p class="text-dim text-sm" style="text-align:center; padding:1rem;">None</p>

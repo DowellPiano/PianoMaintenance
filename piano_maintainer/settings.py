@@ -153,3 +153,19 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
+
+# ── Security ──────────────────────────────────────────────────────────────────
+# These are safe for development and essential for production.
+SESSION_COOKIE_HTTPONLY = True       # JS cannot read the session cookie
+CSRF_COOKIE_HTTPONLY = True          # JS cannot read the CSRF cookie
+SECURE_CONTENT_TYPE_NOSNIFF = True   # Prevent MIME-type sniffing
+SECURE_BROWSER_XSS_FILTER = True     # Legacy XSS filter header
+X_FRAME_OPTIONS = 'DENY'            # Prevent clickjacking via iframes
+
+# Enable these when serving over HTTPS in production:
+# SECURE_SSL_REDIRECT = True
+# SESSION_COOKIE_SECURE = True
+# CSRF_COOKIE_SECURE = True
+# SECURE_HSTS_SECONDS = 31536000
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# SECURE_HSTS_PRELOAD = True

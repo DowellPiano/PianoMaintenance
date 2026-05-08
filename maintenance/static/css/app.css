@@ -1,0 +1,500 @@
+/* ================================================================
+   Piano Maintainer — Page Styles
+   Consolidated from per-template <style> blocks.
+   Loaded after base.css in base.html.
+   ================================================================ */
+
+/* ----------------------------------------------------------------
+   Shared: filters
+   ---------------------------------------------------------------- */
+.filter-bar {
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+.filter-bar .form-input,
+.filter-bar .form-select { flex: none; }
+
+/* ----------------------------------------------------------------
+   Shared: hero sections (piano detail, work order detail, etc.)
+   ---------------------------------------------------------------- */
+.hero { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.hero-info { flex: 1; min-width: 240px; }
+.hero-name { font-size: 1.5rem; font-weight: 700; margin-bottom: .25rem; }
+.hero-sub { color: var(--clr-text-sec); margin-bottom: .15rem; }
+.hero-loc { color: var(--clr-text-dim); font-size: .88rem; }
+.hero-badges { display: flex; gap: .5rem; align-items: center; margin-top: .75rem; flex-wrap: wrap; }
+.hero-actions { display: flex; gap: .5rem; align-self: flex-start; flex-shrink: 0; flex-wrap: wrap; }
+
+/* ----------------------------------------------------------------
+   Shared: tabs
+   ---------------------------------------------------------------- */
+.tabs { display: flex; gap: 0; border-bottom: 2px solid var(--clr-border); margin-bottom: 1.25rem; }
+.tab-btn {
+  padding: .6rem 1.1rem;
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--clr-text-sec);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.tab-btn:hover { color: var(--clr-text); }
+.tab-btn.active { color: var(--clr-primary); border-bottom-color: var(--clr-primary); }
+
+/* ----------------------------------------------------------------
+   Shared: tags
+   ---------------------------------------------------------------- */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: .82rem;
+  font-weight: 500;
+  padding: .2rem .6rem;
+  border-radius: 999px;
+}
+.tag-chip-sm {
+  display: inline-block;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: .72rem;
+  font-weight: 500;
+  padding: .1rem .45rem;
+  border-radius: 999px;
+}
+.tag-remove {
+  background: none;
+  border: none;
+  color: #6366f1;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 .1rem;
+}
+.tag-remove:hover { color: #dc2626; }
+
+/* ----------------------------------------------------------------
+   Shared: QR / monospace URL boxes
+   ---------------------------------------------------------------- */
+.qr-box {
+  background: #f9fafb; border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm); padding: .6rem .8rem;
+  display: flex; align-items: center; gap: .6rem;
+  margin-top: .75rem;
+}
+.qr-url {
+  font-family: monospace; font-size: .72rem;
+  color: var(--clr-text-dim); word-break: break-all; flex: 1;
+}
+
+/* ----------------------------------------------------------------
+   Shared: photos
+   ---------------------------------------------------------------- */
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: .5rem;
+}
+.photo-thumb {
+  aspect-ratio: 1; border-radius: var(--radius-sm);
+  overflow: hidden; border: 1px solid var(--clr-border);
+  position: relative;
+}
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.photo-thumb .profile-star {
+  position: absolute; top: 4px; left: 4px;
+  background: var(--clr-primary); color: #fff;
+  font-size: .6rem; padding: .1rem .3rem;
+  border-radius: 3px; font-weight: 600;
+}
+
+/* ----------------------------------------------------------------
+   Shared: condition dots
+   ---------------------------------------------------------------- */
+.condition-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.condition-dot.excellent { background: #16a34a; }
+.condition-dot.good { background: #2563eb; }
+.condition-dot.fair { background: #f59e0b; }
+.condition-dot.poor { background: #dc2626; }
+.condition-dot.attention { background: #7f1d1d; }
+
+/* ----------------------------------------------------------------
+   Shared: parts rows (work order complete & log work forms)
+   ---------------------------------------------------------------- */
+.parts-row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+.parts-row select { flex: 2; }
+.parts-row input { flex: 1; max-width: 80px; }
+.parts-row .btn-remove { flex-shrink: 0; padding: .25rem .5rem; font-size: .8rem; }
+
+/* ----------------------------------------------------------------
+   Piano detail
+   ---------------------------------------------------------------- */
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.interval-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); gap: .75rem; }
+.interval-card {
+  padding: .75rem;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+}
+.interval-card .label { font-size: .82rem; font-weight: 600; color: var(--clr-text-sec); margin-bottom: .25rem; }
+.interval-card .value { font-size: .88rem; }
+.interval-card .due { margin-top: .35rem; font-size: .82rem; }
+.condition-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: .5rem;
+}
+.condition-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .45rem .6rem;
+  background: #f9fafb;
+  border-radius: var(--radius-sm);
+  font-size: .85rem;
+}
+.env-stats { display: flex; gap: 1.5rem; margin-top: 1rem; }
+.env-stat .label { font-size: .78rem; color: var(--clr-text-sec); }
+.env-stat .val { font-size: 1.1rem; font-weight: 700; }
+
+/* ----------------------------------------------------------------
+   Piano list (card grid)
+   ---------------------------------------------------------------- */
+.piano-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.piano-card {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: box-shadow .15s;
+}
+.piano-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.piano-card-photo {
+  height: 140px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  opacity: .3;
+  overflow: hidden;
+}
+.piano-card-photo img { width: 100%; height: 100%; object-fit: cover; opacity: 1; }
+.piano-card-body { padding: 1rem; }
+.piano-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; margin-bottom: .4rem; }
+.piano-card-name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--clr-text);
+  text-decoration: none;
+}
+.piano-card-name:hover { color: var(--clr-primary); text-decoration: none; }
+.piano-card-meta { color: var(--clr-text-sec); font-size: .875rem; margin-bottom: .2rem; }
+.piano-card-venue { color: var(--clr-text-dim); font-size: .82rem; }
+.piano-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-top: .75rem;
+  padding-top: .65rem;
+  border-top: 1px solid var(--clr-border);
+}
+.piano-card-conditions { display: flex; gap: .4rem; flex-wrap: wrap; }
+.next-due-label { font-size: .78rem; }
+.piano-card-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
+
+/* ----------------------------------------------------------------
+   Work order list
+   ---------------------------------------------------------------- */
+.wo-filters {
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+.wo-filters .form-input,
+.wo-filters .form-select {
+  width: auto;
+  min-width: 140px;
+}
+.wo-filters .search-input { min-width: 220px; }
+.wo-row-link { cursor: pointer; }
+.wo-row-link:hover td { background: #f0f4ff !important; }
+.wo-id { font-weight: 600; color: var(--clr-primary); }
+.wo-piano { font-weight: 500; }
+.wo-piano-loc { color: var(--clr-text-dim); font-size: .78rem; }
+.overdue-marker { color: var(--clr-danger); font-weight: 600; font-size: .78rem; }
+
+/* ----------------------------------------------------------------
+   Work order detail
+   ---------------------------------------------------------------- */
+.wo-hero { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.wo-hero-info { flex: 1; min-width: 240px; }
+.wo-hero-title { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
+.wo-hero-sub { color: var(--clr-text-sec); margin-bottom: .15rem; font-size: .9rem; }
+.wo-hero-badges { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
+.wo-hero-actions { display: flex; gap: .5rem; align-self: flex-start; flex-shrink: 0; flex-wrap: wrap; }
+.wo-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem; }
+.wo-meta-table td:first-child { font-weight: 500; width: 130px; color: var(--clr-text-sec); }
+.assign-cell { display: flex; align-items: center; gap: .5rem; }
+.assign-form { display: flex; align-items: center; gap: .4rem; }
+.assign-form select { padding: .3rem .5rem; font-size: .82rem; border: 1px solid var(--clr-border); border-radius: var(--radius-sm); }
+
+/* ----------------------------------------------------------------
+   Work order complete / log work forms
+   ---------------------------------------------------------------- */
+.cr-inline-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+.cr-section-title { font-size: .85rem; font-weight: 700; margin-bottom: .6rem; padding-bottom: .3rem; border-bottom: 1px solid var(--clr-border); }
+
+/* ----------------------------------------------------------------
+   Condition reading form
+   ---------------------------------------------------------------- */
+.cr-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+/* ----------------------------------------------------------------
+   Schedule (kanban)
+   ---------------------------------------------------------------- */
+.kanban { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+.kanban-col { min-width: 0; }
+.kanban-col-header {
+  font-size: .82rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; padding: .5rem .75rem;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.kanban-col-header .count {
+  background: rgba(255,255,255,.25); padding: .1rem .45rem;
+  border-radius: 999px; font-size: .75rem;
+}
+.col-overdue .kanban-col-header { background: #fee2e2; color: #991b1b; }
+.col-due-soon .kanban-col-header { background: #fef3c7; color: #92400e; }
+.col-upcoming .kanban-col-header { background: #dbeafe; color: #1e40af; }
+.col-no-date .kanban-col-header { background: #f3f4f6; color: #6b7280; }
+.kanban-col-body {
+  background: var(--clr-surface); border: 1px solid var(--clr-border);
+  border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  padding: .5rem; min-height: 100px;
+}
+.kanban-card {
+  background: #fff; border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm); padding: .65rem .75rem;
+  margin-bottom: .5rem; transition: box-shadow .12s;
+  display: block; text-decoration: none; color: inherit;
+}
+.kanban-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,.1); text-decoration: none; color: inherit; }
+.kanban-card:last-child { margin-bottom: 0; }
+.kc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: .2rem; }
+.kc-id { font-weight: 600; font-size: .82rem; color: var(--clr-primary); }
+.kc-piano { font-weight: 600; font-size: .88rem; }
+.kc-meta { font-size: .78rem; color: var(--clr-text-sec); }
+.kc-due { font-size: .78rem; margin-top: .25rem; }
+.schedule-actions { display: flex; gap: .5rem; margin-bottom: 1.25rem; }
+
+/* ----------------------------------------------------------------
+   Request list
+   ---------------------------------------------------------------- */
+.req-filters { display: flex; gap: .75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+.req-actions { display: flex; gap: .35rem; }
+
+/* ----------------------------------------------------------------
+   Organization list
+   ---------------------------------------------------------------- */
+.org-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+.org-card {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow .15s;
+}
+.org-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); text-decoration: none; color: inherit; }
+.org-card-name { font-weight: 700; font-size: 1.05rem; margin-bottom: .2rem; }
+.org-card-contact { color: var(--clr-text-sec); font-size: .85rem; margin-bottom: .6rem; }
+.org-card-stat {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .82rem; color: var(--clr-text-dim);
+}
+
+/* ----------------------------------------------------------------
+   Organization detail
+   ---------------------------------------------------------------- */
+.org-hero { margin-bottom: 1.5rem; }
+.org-hero-name { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
+.org-hero-meta { color: var(--clr-text-sec); font-size: .88rem; }
+.venue-mini {
+  background: #fff;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  text-decoration: none; color: inherit;
+  transition: box-shadow .12s;
+}
+.venue-mini:hover { box-shadow: 0 2px 6px rgba(0,0,0,.1); text-decoration: none; color: inherit; }
+.venue-mini-name { font-weight: 600; margin-bottom: .15rem; }
+.venue-mini-addr { font-size: .82rem; color: var(--clr-text-sec); margin-bottom: .4rem; }
+.venue-mini-stat { font-size: .82rem; color: var(--clr-text-dim); }
+
+/* ----------------------------------------------------------------
+   Venue list
+   ---------------------------------------------------------------- */
+.venue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.venue-card {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow .15s;
+}
+.venue-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); text-decoration: none; color: inherit; }
+.venue-card-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--clr-primary-bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; margin-bottom: .6rem;
+}
+.venue-card-name { font-weight: 700; font-size: 1.05rem; margin-bottom: .2rem; }
+.venue-card-org { color: var(--clr-text-sec); font-size: .82rem; margin-bottom: .15rem; }
+.venue-card-address { color: var(--clr-text-sec); font-size: .85rem; margin-bottom: .6rem; }
+.venue-card-stat {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .82rem; color: var(--clr-text-dim);
+}
+
+/* ----------------------------------------------------------------
+   Venue detail
+   ---------------------------------------------------------------- */
+.loc-hero { margin-bottom: 1.5rem; }
+.loc-hero-name { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
+.loc-hero-meta { color: var(--clr-text-sec); font-size: .88rem; margin-bottom: .1rem; }
+.piano-mini {
+  display: flex; align-items: center; gap: .75rem;
+  padding: .75rem; margin-bottom: .5rem;
+  background: #fff; border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  text-decoration: none; color: inherit;
+  transition: box-shadow .12s;
+}
+.piano-mini:hover { box-shadow: 0 2px 6px rgba(0,0,0,.1); text-decoration: none; color: inherit; }
+.piano-mini-icon { font-size: 1.5rem; }
+.piano-mini-name { font-weight: 600; }
+.piano-mini-meta { font-size: .82rem; color: var(--clr-text-sec); }
+.venue-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+
+/* ----------------------------------------------------------------
+   QR codes page
+   ---------------------------------------------------------------- */
+.qr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+.qr-card {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  text-align: center;
+}
+.qr-card-piano { font-weight: 700; font-size: 1rem; margin-bottom: .15rem; }
+.qr-card-loc { color: var(--clr-text-sec); font-size: .85rem; margin-bottom: .75rem; }
+.qr-card .qr-url {
+  padding: .4rem;
+  background: #f9fafb;
+  border-radius: var(--radius-sm);
+  margin-bottom: .5rem;
+}
+.qr-copy-btn { cursor: pointer; }
+
+/* ----------------------------------------------------------------
+   Parts inventory
+   ---------------------------------------------------------------- */
+.stock-low { color: var(--clr-danger); font-weight: 600; }
+
+/* ----------------------------------------------------------------
+   Reports page
+   ---------------------------------------------------------------- */
+.report-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.report-card {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+}
+.report-card-title { font-weight: 700; font-size: 1rem; margin-bottom: .25rem; }
+.report-card-desc { color: var(--clr-text-sec); font-size: .88rem; margin-bottom: 1rem; }
+
+/* ----------------------------------------------------------------
+   Template apply (piano checklist)
+   ---------------------------------------------------------------- */
+.piano-check-list { list-style: none; }
+.piano-check-list li {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .5rem 0; border-bottom: 1px solid #f3f4f6;
+}
+.piano-check-list li:last-child { border-bottom: none; }
+.piano-check-list input[type="checkbox"] { width: 16px; height: 16px; }
+.select-controls { display: flex; gap: .5rem; margin-bottom: .75rem; }
+.select-controls a { font-size: .82rem; cursor: pointer; }
+
+/* ----------------------------------------------------------------
+   Print overrides (QR codes)
+   ---------------------------------------------------------------- */
+@media print {
+  .sidebar, .topbar, .page-header, .no-print { display: none !important; }
+  .main-area { margin-left: 0 !important; }
+  .qr-grid { grid-template-columns: repeat(3, 1fr); }
+  .qr-card { break-inside: avoid; border: 1px solid #ccc; }
+}
+
+/* ----------------------------------------------------------------
+   Responsive — page-specific overrides
+   ---------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .detail-grid { grid-template-columns: 1fr; }
+  .hero-actions { width: 100%; }
+  .wo-detail-grid { grid-template-columns: 1fr; }
+  .cr-inline-grid { grid-template-columns: 1fr; }
+  .cr-form-grid { grid-template-columns: 1fr; }
+  .venue-info-grid { grid-template-columns: 1fr; }
+  .piano-grid { grid-template-columns: 1fr; }
+  .filter-bar { flex-direction: column; }
+  .filter-bar .form-input,
+  .filter-bar .form-select { width: 100%; }
+}

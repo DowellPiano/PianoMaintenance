@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
+from django.utils import timezone
 from django.db.models import Q, Count, Sum, Max, DecimalField
 from django.db.models.functions import Coalesce
 from django.shortcuts import render, get_object_or_404, redirect
@@ -12,13 +13,14 @@ from django.contrib import messages
 
 from .models import (
     Organization, Venue, Piano, WorkOrder, MaintenanceRequest,
-    MaintenanceSchedule, ScheduleTemplate, ConditionReading, ServiceVisit,
+    MaintenanceSchedule, ScheduleTemplate, ConditionReading,
     Technician, Part, PartUsed, MaintenanceLog, TaskType, Photo, Tag,
 )
+from django.contrib.auth import login as auth_login
 from .forms import (
     OrganizationForm, VenueForm, PianoForm, WorkOrderForm, WorkOrderCompleteForm,
-    ConditionReadingForm, ScheduleTemplateForm,
-    ServiceVisitForm, ServiceVisitCompleteForm, PartForm,
+    WorkOrderLogWorkForm, ConditionReadingForm, ScheduleTemplateForm, PartForm,
+    SignUpForm,
 )
 
 
@@ -28,9 +30,21 @@ def maintenance_request_form(request, token):
     piano = get_object_or_404(Piano, qr_code_token=token)
 
     if request.method == 'POST':
-        issue = request.POST.get('issue_description', '').strip()
-        name  = request.POST.get('reported_by_name', '').strip()
-        email = request.POST.get('reported_by_email', '').strip()
+        # Basic rate limiting: max 5 requests per piano per hour
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        recent_count = MaintenanceRequest.objects.filter(
+            piano=piano, created_at__gte=one_hour_ago,
+        ).count()
+        if recent_count >= 5:
+            return HttpResponse(
+                '<h2>Too many requests.</h2>'
+                '<p>Please wait a while before submitting another request for this piano.</p>',
+                content_type='text/html', status=429,
+            )
+
+        issue = request.POST.get('issue_description', '').strip()[:2000]
+        name  = request.POST.get('reported_by_name', '').strip()[:200]
+        email = request.POST.get('reported_by_email', '').strip()[:254]
         if issue:
             mr = MaintenanceRequest.objects.create(
                 piano=piano,
@@ -56,6 +70,19 @@ def maintenance_request_form(request, token):
 
     return render(request, 'maintenance/maintenance_request_form.html',
                   {'piano': piano})
+
+
+def signup(request):
+    if request.method == 'POST':
+        form = SignUpForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            auth_login(request, user)
+            messages.success(request, f'Welcome, {user.get_short_name() or user.username}!')
+            return redirect('dashboard')
+    else:
+        form = SignUpForm()
+    return render(request, 'registration/signup.html', {'form': form})
 
 
 # ── Dashboard ──────────────────────────────────────────────────────
@@ -187,7 +214,7 @@ def piano_detail(request, pk):
     ctx['qr_url'] = request.build_absolute_uri(f'/maintenance_request/{piano.qr_code_token}/')
     ctx['photos'] = piano.photos.all()
     ctx['piano_tags'] = piano.tags.all()
-    ctx['all_tags'] = list(Tag.objects.values_list('name', flat=True))
+    ctx['available_tags'] = Tag.objects.filter(pianos__is_active=True).exclude(pk__in=piano.tags.all()).distinct()
     return render(request, 'maintenance/piano_detail.html', ctx)
 
 
@@ -261,6 +288,14 @@ def piano_deactivate(request, pk):
     })
 
 
+def _piano_tags_context(piano):
+    return {
+        'piano': piano,
+        'piano_tags': piano.tags.all(),
+        'available_tags': Tag.objects.filter(pianos__is_active=True).exclude(pk__in=piano.tags.all()).distinct(),
+    }
+
+
 @login_required
 def piano_add_tag(request, pk):
     piano = get_object_or_404(Piano, pk=pk)
@@ -269,6 +304,8 @@ def piano_add_tag(request, pk):
         if tag_name:
             tag, _ = Tag.objects.get_or_create(name=tag_name)
             piano.tags.add(tag)
+    if request.headers.get('HX-Request'):
+        return render(request, 'maintenance/partials/piano_tags.html', _piano_tags_context(piano))
     return redirect('piano_detail', pk=piano.pk)
 
 
@@ -277,6 +314,10 @@ def piano_remove_tag(request, pk, tag_pk):
     piano = get_object_or_404(Piano, pk=pk)
     if request.method == 'POST':
         piano.tags.remove(tag_pk)
+        if not Tag.objects.filter(pk=tag_pk, pianos__is_active=True).exists():
+            Tag.objects.filter(pk=tag_pk).delete()
+    if request.headers.get('HX-Request'):
+        return render(request, 'maintenance/partials/piano_tags.html', _piano_tags_context(piano))
     return redirect('piano_detail', pk=piano.pk)
 
 
@@ -346,15 +387,8 @@ def organization_delete(request, pk):
     venue_count = organization.venues.count()
 
     if request.method == 'POST':
-        if venue_count > 0:
-            messages.error(
-                request,
-                f'Cannot delete "{organization.name}" — it still has {venue_count} '
-                f'venue{"s" if venue_count != 1 else ""}. Remove all venues first.',
-            )
-            return redirect('organization_detail', pk=organization.pk)
         name = organization.name
-        organization.delete()
+        organization.delete()  # venues SET_NULL'd, keep existing
         messages.success(request, f'Organization "{name}" deleted.')
         return redirect('organization_list')
 
@@ -432,6 +466,27 @@ def venue_edit(request, pk):
     })
 
 
+@login_required
+def venue_delete(request, pk):
+    venue = get_object_or_404(Venue.objects.select_related('organization'), pk=pk)
+    piano_count = Piano.objects.filter(venue=venue).count()
+
+    if request.method == 'POST':
+        name = venue.name
+        org_pk = venue.organization_id
+        venue.delete()  # stamps venue_display on pianos, then SET_NULL
+        messages.success(request, f'Venue "{name}" deleted.')
+        if org_pk:
+            return redirect('organization_detail', pk=org_pk)
+        return redirect('venue_list')
+
+    return render(request, 'maintenance/venue_confirm_delete.html', {
+        'active_nav': 'venues',
+        'venue': venue,
+        'piano_count': piano_count,
+    })
+
+
 # ── Work Orders ───────────────────────────────────────────────────
 
 @login_required
@@ -447,6 +502,8 @@ def workorder_list(request):
     status_filter = request.GET.get('status', '')
     priority_filter = request.GET.get('priority', '')
     type_filter = request.GET.get('type', '')
+    org_filter = request.GET.get('org', '')
+    venue_filter = request.GET.get('venue', '')
 
     if search_query:
         qs = qs.filter(
@@ -460,6 +517,10 @@ def workorder_list(request):
         qs = qs.filter(priority=priority_filter)
     if type_filter:
         qs = qs.filter(order_type=type_filter)
+    if org_filter:
+        qs = qs.filter(piano__venue__organization_id=org_filter)
+    if venue_filter:
+        qs = qs.filter(piano__venue_id=venue_filter)
 
     return render(request, 'maintenance/workorder_list.html', {
         'active_nav': 'workorders',
@@ -468,6 +529,10 @@ def workorder_list(request):
         'status_filter': status_filter,
         'priority_filter': priority_filter,
         'type_filter': type_filter,
+        'org_filter': org_filter,
+        'venue_filter': venue_filter,
+        'organizations': Organization.objects.all(),
+        'venues': Venue.objects.all(),
         'status_choices': WorkOrder.Status.choices,
         'priority_choices': WorkOrder.Priority.choices,
         'type_choices': WorkOrder.OrderType.choices,
@@ -526,7 +591,10 @@ def workorder_assign(request, pk):
     if request.method == 'POST':
         tech_id = request.POST.get('assigned_tech')
         if tech_id:
-            wo.assigned_tech_id = int(tech_id)
+            try:
+                wo.assigned_tech_id = int(tech_id)
+            except (ValueError, TypeError):
+                pass
         else:
             wo.assigned_tech = None
         if wo.status == WorkOrder.Status.OPEN and wo.assigned_tech_id:
@@ -562,9 +630,10 @@ def workorder_complete(request, pk):
                 notes=form.cleaned_data['notes'],
             )
 
-            # Handle photo uploads
+            # Handle photo uploads (validate type and size)
             for f in request.FILES.getlist('photos'):
-                Photo.objects.create(work_order=wo, image=f, caption='')
+                if _validate_upload(f) is None:
+                    Photo.objects.create(work_order=wo, image=f, caption='')
 
             # Handle parts used
             part_ids = request.POST.getlist('part_id')
@@ -656,7 +725,106 @@ def workorder_complete(request, pk):
     })
 
 
+@login_required
+def workorder_delete(request, pk):
+    wo = get_object_or_404(
+        WorkOrder.objects.select_related('piano', 'piano__venue'),
+        pk=pk,
+    )
+    log_count = wo.logs.count()
+
+    if request.method == 'POST':
+        wo_id = wo.pk
+        wo.delete()
+        messages.success(request, f'Work Order WO-{wo_id} deleted.')
+        return redirect('workorder_list')
+
+    return render(request, 'maintenance/workorder_confirm_delete.html', {
+        'active_nav': 'workorders',
+        'wo': wo,
+        'log_count': log_count,
+    })
+
+
+@login_required
+def workorder_log_work(request, pk):
+    """Log work against a work order without completing it."""
+    wo = get_object_or_404(
+        WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech'),
+        pk=pk,
+    )
+    parts = Part.objects.all().order_by('name')
+
+    if request.method == 'POST':
+        form = WorkOrderLogWorkForm(request.POST)
+        if form.is_valid():
+            tech = wo.assigned_tech or request.user
+            log = MaintenanceLog.objects.create(
+                work_order=wo,
+                technician=tech,
+                piano=wo.piano,
+                hours_worked=form.cleaned_data['hours_worked'],
+                work_performed=form.cleaned_data['work_performed'],
+                notes=form.cleaned_data['notes'],
+            )
+
+            # Handle photo uploads
+            for f in request.FILES.getlist('photos'):
+                if _validate_upload(f) is None:
+                    Photo.objects.create(work_order=wo, image=f, caption='')
+
+            # Handle parts used
+            part_ids = request.POST.getlist('part_id')
+            part_qtys = request.POST.getlist('part_qty')
+            for pid, qty in zip(part_ids, part_qtys):
+                if pid and qty:
+                    try:
+                        part = Part.objects.get(pk=int(pid))
+                        qty_int = int(qty)
+                        if qty_int > 0:
+                            PartUsed.objects.create(
+                                log=log,
+                                part=part,
+                                quantity_used=qty_int,
+                                cost_at_time=part.unit_cost,
+                            )
+                            part.stock_quantity = max(0, part.stock_quantity - qty_int)
+                            part.save(update_fields=['stock_quantity'])
+                    except (Part.DoesNotExist, ValueError):
+                        pass
+
+            # Move to In Progress if still Open
+            if wo.status == WorkOrder.Status.OPEN:
+                wo.status = WorkOrder.Status.IN_PROGRESS
+                wo.save(update_fields=['status'])
+
+            messages.success(request, f'Work logged for WO-{wo.pk}.')
+            return redirect('workorder_detail', pk=wo.pk)
+    else:
+        form = WorkOrderLogWorkForm()
+
+    return render(request, 'maintenance/workorder_log_work.html', {
+        'active_nav': 'workorders',
+        'wo': wo,
+        'form': form,
+        'parts': parts,
+    })
+
+
 # ── Photo Upload ─────────────────────────────────────────────────
+
+ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+def _validate_upload(f):
+    """Return an error string if the file is not a valid image, else None."""
+    if f.size > MAX_UPLOAD_SIZE:
+        return f'{f.name}: file too large ({f.size / 1024 / 1024:.1f} MB, max 10 MB)'
+    if f.content_type not in ALLOWED_IMAGE_TYPES:
+        return f'{f.name}: unsupported file type ({f.content_type})'
+    return None
+
 
 @login_required
 def piano_photo_upload(request, pk):
@@ -664,10 +832,17 @@ def piano_photo_upload(request, pk):
     if request.method == 'POST':
         caption = request.POST.get('caption', '')
         files = request.FILES.getlist('photos')
+        uploaded = 0
         for f in files:
-            is_profile = not piano.photos.exists()  # first photo = profile
+            err = _validate_upload(f)
+            if err:
+                messages.error(request, err)
+                continue
+            is_profile = not piano.photos.exists() and uploaded == 0
             Photo.objects.create(piano=piano, image=f, caption=caption, is_profile_photo=is_profile)
-        messages.success(request, f'{len(files)} photo(s) uploaded.')
+            uploaded += 1
+        if uploaded:
+            messages.success(request, f'{uploaded} photo(s) uploaded.')
         return redirect('piano_detail', pk=piano.pk)
 
     return render(request, 'maintenance/piano_photo_upload.html', {
@@ -966,7 +1141,10 @@ def template_apply(request, pk):
         piano_ids = request.POST.getlist('pianos')
         created = 0
         for pid in piano_ids:
-            piano = Piano.objects.get(pk=pid)
+            try:
+                piano = Piano.objects.get(pk=int(pid))
+            except (Piano.DoesNotExist, ValueError, TypeError):
+                continue
             MaintenanceSchedule.objects.create(
                 piano=piano,
                 template=tmpl,
@@ -1164,14 +1342,47 @@ def part_edit(request, pk):
 # ── Slice 10: CSV Import ────────────────────────────────────────
 
 @login_required
+def piano_import_sample_csv(request):
+    """Return a sample CSV file the user can fill in and re-upload."""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="piano_import_sample.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        'name', 'make', 'model', 'serial_number', 'piano_type',
+        'organization', 'venue', 'section', 'room',
+        'year_built', 'year_acquired', 'notes',
+    ])
+    writer.writerow([
+        'Concert Hall Steinway', 'Steinway & Sons', 'D-274', 'SN-123456', 'Grand',
+        'City Symphony Orchestra', 'Main Concert Hall', 'Stage', 'Main Stage',
+        '2015', '2016', 'Primary concert instrument',
+    ])
+    writer.writerow([
+        'Practice Room 1', 'Yamaha', 'U3', 'YU3-789012', 'Upright',
+        'City Symphony Orchestra', 'Rehearsal Center', 'Floor 2', 'Room 201',
+        '2010', '2012', '',
+    ])
+    return response
+
+
+@login_required
 def piano_import_csv(request):
+    MAX_CSV_SIZE = 5 * 1024 * 1024  # 5 MB
+    MAX_CSV_ROWS = 5000
+
     if request.method == 'POST' and request.FILES.get('csv_file'):
         csv_file = request.FILES['csv_file']
+        if csv_file.size > MAX_CSV_SIZE:
+            messages.error(request, f'CSV file too large ({csv_file.size / 1024 / 1024:.1f} MB, max 5 MB).')
+            return redirect('piano_import')
         decoded = csv_file.read().decode('utf-8')
         reader = csv.DictReader(io.StringIO(decoded))
         created = 0
         errors = []
         for i, row in enumerate(reader, start=2):
+            if i - 2 >= MAX_CSV_ROWS:
+                errors.append(f'Stopped after {MAX_CSV_ROWS} rows (limit reached).')
+                break
             try:
                 org_name = row.get('organization', '').strip()
                 venue_name = row.get('venue', '').strip()
@@ -1230,6 +1441,29 @@ def qr_codes(request):
     })
 
 
+@login_required
+def qr_codes_csv(request):
+    pianos = Piano.objects.filter(is_active=True).select_related('venue').order_by('venue__name', 'name')
+    base_url = request.build_absolute_uri('/maintenance_request/')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="piano_qr_labels.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Piano Name', 'Make', 'Model', 'Serial Number', 'Venue', 'Section', 'Room', 'QR Code URL'])
+    for p in pianos:
+        writer.writerow([
+            p.name,
+            p.make,
+            p.model,
+            p.serial_number,
+            p.venue_name,
+            p.section,
+            p.room,
+            f'{base_url}{p.qr_code_token}/',
+        ])
+    return response
+
+
 # ── Slice 10: Reports ───────────────────────────────────────────
 
 @login_required
@@ -1279,136 +1513,3 @@ def report_export_pianos(request):
             p.year_acquired or '', p.notes,
         ])
     return response
-
-
-# ── Service Visits ───────────────────────────────────────────────
-
-@login_required
-def service_visit_list(request):
-    qs = (
-        ServiceVisit.objects
-        .select_related('venue', 'venue__organization', 'technician')
-        .order_by('-date', '-created_at')
-    )
-
-    venue_filter = request.GET.get('venue', '')
-    tech_filter = request.GET.get('technician', '')
-    date_from = request.GET.get('date_from', '')
-    date_to = request.GET.get('date_to', '')
-
-    if venue_filter:
-        qs = qs.filter(venue_id=venue_filter)
-    if tech_filter:
-        qs = qs.filter(technician_id=tech_filter)
-    if date_from:
-        qs = qs.filter(date__gte=date_from)
-    if date_to:
-        qs = qs.filter(date__lte=date_to)
-
-    return render(request, 'maintenance/service_visit_list.html', {
-        'active_nav': 'visits',
-        'visits': qs,
-        'venues': Venue.objects.all(),
-        'technicians': Technician.objects.filter(is_active=True).order_by('first_name', 'last_name'),
-        'venue_filter': venue_filter,
-        'tech_filter': tech_filter,
-        'date_from': date_from,
-        'date_to': date_to,
-    })
-
-
-@login_required
-def service_visit_detail(request, pk):
-    visit = get_object_or_404(
-        ServiceVisit.objects.select_related('venue', 'venue__organization', 'technician'),
-        pk=pk,
-    )
-    linked_wos = visit.work_orders.select_related('piano', 'assigned_tech').order_by('-created_at')
-    available_wos = (
-        WorkOrder.objects
-        .filter(
-            piano__venue=visit.venue,
-            status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
-            service_visit__isnull=True,
-        )
-        .select_related('piano', 'assigned_tech')
-        .order_by('-created_at')
-    )
-    return render(request, 'maintenance/service_visit_detail.html', {
-        'active_nav': 'visits',
-        'visit': visit,
-        'linked_wos': linked_wos,
-        'available_wos': available_wos,
-    })
-
-
-@login_required
-def service_visit_create(request):
-    if request.method == 'POST':
-        form = ServiceVisitForm(request.POST)
-        if form.is_valid():
-            visit = form.save()
-            messages.success(request, f'Service visit planned for {visit.date}.')
-            return redirect('service_visit_detail', pk=visit.pk)
-    else:
-        form = ServiceVisitForm()
-
-    return render(request, 'maintenance/service_visit_form.html', {
-        'active_nav': 'visits',
-        'form': form,
-        'venues': Venue.objects.all(),
-        'technicians': Technician.objects.filter(is_active=True).order_by('first_name', 'last_name'),
-        'visit': None,
-    })
-
-
-@login_required
-def service_visit_complete(request, pk):
-    visit = get_object_or_404(
-        ServiceVisit.objects.select_related('venue', 'technician'),
-        pk=pk,
-    )
-    if request.method == 'POST':
-        form = ServiceVisitCompleteForm(request.POST)
-        if form.is_valid():
-            if form.cleaned_data.get('time_in'):
-                visit.time_in = form.cleaned_data['time_in']
-            if form.cleaned_data.get('time_out'):
-                visit.time_out = form.cleaned_data['time_out']
-            if form.cleaned_data.get('miles_driven') is not None:
-                visit.miles_driven = form.cleaned_data['miles_driven']
-            if form.cleaned_data.get('notes'):
-                visit.notes = form.cleaned_data['notes']
-            visit.status = ServiceVisit.VisitStatus.COMPLETE
-            visit.save()
-            messages.success(request, f'Service visit on {visit.date} marked complete.')
-            return redirect('service_visit_detail', pk=visit.pk)
-    else:
-        form = ServiceVisitCompleteForm(initial={
-            'time_in': visit.time_in,
-            'time_out': visit.time_out,
-            'miles_driven': visit.miles_driven,
-            'notes': visit.notes,
-        })
-
-    return render(request, 'maintenance/service_visit_complete.html', {
-        'active_nav': 'visits',
-        'visit': visit,
-        'form': form,
-    })
-
-
-@login_required
-def service_visit_add_workorder(request, pk):
-    visit = get_object_or_404(ServiceVisit, pk=pk)
-    if request.method == 'POST':
-        wo_id = request.POST.get('work_order_id')
-        if wo_id:
-            try:
-                wo = WorkOrder.objects.get(pk=int(wo_id))
-                wo.service_visit = visit
-                wo.save(update_fields=['service_visit'])
-                messages.success(request, f'WO-{wo.pk} linked to this visit.')
-            except (WorkOrder.DoesNotExist, ValueError):
-                messages.error(request, 'Work order not found.')
-    return redirect('service_visit_detail', pk=visit.pk)

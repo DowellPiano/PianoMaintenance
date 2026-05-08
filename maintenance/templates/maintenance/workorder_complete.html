@@ -3,17 +3,6 @@
 {% block title %}Complete WO-{{ wo.pk }} — Piano Maintainer{% endblock %}
 {% block topbar_title %}Complete WO-{{ wo.pk }}{% endblock %}
 
-{% block extra_css %}
-<style>
-.cr-inline-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
-.cr-section-title { font-size: .85rem; font-weight: 700; margin-bottom: .6rem; padding-bottom: .3rem; border-bottom: 1px solid var(--clr-border); }
-.parts-row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
-.parts-row select { flex: 2; }
-.parts-row input { flex: 1; max-width: 80px; }
-.parts-row .btn-remove { flex-shrink: 0; padding: .25rem .5rem; font-size: .8rem; }
-@media (max-width: 768px) { .cr-inline-grid { grid-template-columns: 1fr; } }
-</style>
-{% endblock %}
 
 {% block content %}
 <div style="margin-bottom:1rem;">
@@ -26,8 +15,8 @@
   </div>
   <div class="card-body">
     <div style="background:#f9fafb; border-radius:var(--radius-sm); padding:.75rem 1rem; margin-bottom:1.25rem;">
-      <div style="font-weight:600;">WO-{{ wo.pk }} · {{ wo.piano.name }}</div>
-      <div class="text-sm text-muted">{{ wo.piano.venue.name }} · {{ wo.order_type }}{% if wo.task_type %} · {{ wo.task_type }}{% endif %}</div>
+      <div style="font-weight:600;">WO-{{ wo.pk }} · {{ wo.piano_name }}</div>
+      <div class="text-sm text-muted">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }} · {% endif %}{{ wo.order_type }}{% if wo.task_type %} · {{ wo.task_type }}{% endif %}</div>
       {% if wo.description %}<div class="text-sm" style="margin-top:.35rem;">{{ wo.description|truncatechars:120 }}</div>{% endif %}
     </div>
 
