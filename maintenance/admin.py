@@ -8,7 +8,6 @@ from .models import (
     Piano,
     Tag,
     Technician,
-    Team,
     ScheduleTemplate,
     MaintenanceSchedule,
     WorkOrder,
@@ -303,20 +302,3 @@ class MaintenanceRequestAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related("piano__venue", "work_order")
 
 
-# ---------------------------------------------------------------------------
-# Team
-# ---------------------------------------------------------------------------
-@admin.register(Team)
-class TeamAdmin(admin.ModelAdmin):
-    list_display  = ("name", "manager", "member_count", "created_at")
-    search_fields = ("name",)
-    readonly_fields = ("created_at",)
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related("manager").annotate(
-            _member_count=Count("members")
-        )
-
-    @admin.display(description="Members")
-    def member_count(self, obj):
-        return obj._member_count

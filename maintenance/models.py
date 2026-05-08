@@ -290,12 +290,6 @@ class Technician(AbstractUser):
     explicitly to satisfy the spec and set the default clearly.
     """
     is_active = models.BooleanField(default=True)
-    team = models.ForeignKey(
-        'Team',
-        null=True, blank=True,
-        on_delete=models.SET_NULL,
-        related_name='members',
-    )
 
     class Meta:
         verbose_name = "Technician"
@@ -305,22 +299,6 @@ class Technician(AbstractUser):
         full = self.get_full_name()
         return full if full else self.username
 
-
-# ---------------------------------------------------------------------------
-# Team
-# ---------------------------------------------------------------------------
-class Team(models.Model):
-    name = models.CharField(max_length=200, unique=True)
-    manager = models.ForeignKey(
-        'Technician',
-        null=True, blank=True,
-        on_delete=models.SET_NULL,
-        related_name='managed_teams',
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.name
 
 
 # ---------------------------------------------------------------------------
@@ -706,47 +684,3 @@ class Photo(models.Model):
         return f"Photo #{self.pk}"
 
 
-class Alert(models.Model):
-    class AlertType(models.TextChoices):
-        OVERDUE = "Overdue", "Overdue"
-        DUE_SOON = "Due Soon", "Due Soon"
-
-    work_order = models.ForeignKey(
-        WorkOrder, on_delete=models.CASCADE, related_name="alerts"
-    )
-    alert_type = models.CharField(max_length=20, choices=AlertType.choices)
-    sent_at = models.DateTimeField(auto_now_add=True)
-    acknowledged = models.BooleanField(default=False)
-
-    class Meta:
-        ordering = ["-sent_at"]
-
-    def __str__(self):
-        return f"Alert #{self.pk} · {self.alert_type} · WO-{self.work_order_id}"
-
-
-
-class Attachment(models.Model):
-    piano = models.ForeignKey(
-        Piano,
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name="attachments",
-    )
-    work_order = models.ForeignKey(
-        WorkOrder,
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name="attachments",
-    )
-    file = models.FileField(upload_to="attachments/%Y/%m/")
-    filename = models.CharField(max_length=255)
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-uploaded_at"]
-
-    def __str__(self):
-        return self.filename
