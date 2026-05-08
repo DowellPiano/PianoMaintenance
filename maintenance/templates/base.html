@@ -1,0 +1,77 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Piano Maintainer{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">Piano Maintainer</div>
+      <nav class="sidebar-nav">
+        <a href="{% url 'dashboard' %}" class="{% if active_nav == 'dashboard' %}active{% endif %}">
+          <span class="nav-icon">📊</span> Dashboard
+        </a>
+        <a href="{% url 'piano_list' %}" class="{% if active_nav == 'pianos' %}active{% endif %}">
+          <span class="nav-icon">🎹</span> Pianos
+        </a>
+        <a href="{% url 'location_list' %}" class="{% if active_nav == 'locations' %}active{% endif %}">
+          <span class="nav-icon">📍</span> Locations
+        </a>
+        <a href="{% url 'workorder_list' %}" class="{% if active_nav == 'workorders' %}active{% endif %}">
+          <span class="nav-icon">🔧</span> Work Orders
+        </a>
+        <a href="{% url 'schedule' %}" class="{% if active_nav == 'schedule' %}active{% endif %}">
+          <span class="nav-icon">📅</span> Schedule
+        </a>
+        <a href="{% url 'request_list' %}" class="{% if active_nav == 'requests' %}active{% endif %}">
+          <span class="nav-icon">📨</span> Requests
+        </a>
+        <div class="sidebar-sep"></div>
+        <a href="{% url 'technician_list' %}" class="{% if active_nav == 'technicians' %}active{% endif %}">
+          <span class="nav-icon">👤</span> Technicians
+        </a>
+        <a href="{% url 'part_list' %}" class="{% if active_nav == 'parts' %}active{% endif %}">
+          <span class="nav-icon">⚙️</span> Parts
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="{% url 'logout' %}">Sign out ({{ user.get_short_name|default:user.username }})</a>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="main-area">
+      <header class="topbar">
+        <div class="gap-row">
+          <button class="hamburger" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Menu">☰</button>
+          <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>
+        </div>
+        <div class="topbar-actions">
+          {% block topbar_actions %}{% endblock %}
+        </div>
+      </header>
+
+      <main class="page-content" onclick="document.getElementById('sidebar').classList.remove('open')">
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <div id="modal-container"></div>
+
+  <script src="{% static 'js/htmx.min.js' %}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

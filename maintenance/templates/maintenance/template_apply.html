@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Apply Template — Piano Maintainer{% endblock %}
+{% block topbar_title %}Apply Template{% endblock %}
+
+{% block extra_css %}
+<style>
+.piano-check-list { list-style: none; }
+.piano-check-list li {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .5rem 0; border-bottom: 1px solid #f3f4f6;
+}
+.piano-check-list li:last-child { border-bottom: none; }
+.piano-check-list input[type="checkbox"] { width: 16px; height: 16px; }
+.select-controls { display: flex; gap: .5rem; margin-bottom: .75rem; }
+.select-controls a { font-size: .82rem; cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'template_list' %}" class="text-muted text-sm">← Back to Templates</a>
+</div>
+
+<div class="card" style="max-width:560px;">
+  <div class="card-header">
+    <h2>Apply "{{ template_obj.name }}" to Pianos</h2>
+  </div>
+  <div class="card-body">
+    <p class="text-sm text-muted mb-2">
+      This will create a <strong>{{ template_obj.task_name }}</strong> schedule
+      (every {{ template_obj.interval_days }} days) on each selected piano.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="select-controls">
+        <a onclick="document.querySelectorAll('.piano-check-list input').forEach(c=>c.checked=true)">Select all</a>
+        <a onclick="document.querySelectorAll('.piano-check-list input').forEach(c=>c.checked=false)">Clear</a>
+      </div>
+
+      <ul class="piano-check-list">
+        {% for p in pianos %}
+        <li>
+          <input type="checkbox" name="pianos" value="{{ p.pk }}" id="piano_{{ p.pk }}">
+          <label for="piano_{{ p.pk }}" style="cursor:pointer;">
+            <span class="fw-medium">{{ p.name }}</span>
+            <span class="text-dim text-sm">· {{ p.location.name }}</span>
+          </label>
+        </li>
+        {% endfor %}
+      </ul>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <a href="{% url 'template_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Apply Template</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

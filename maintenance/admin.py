@@ -35,7 +35,7 @@ class LocationAdmin(admin.ModelAdmin):
 class PianoAdmin(admin.ModelAdmin):
     list_display = (
         "name",
-        "brand",
+        "make",
         "model",
         "piano_type",
         "location",
@@ -43,8 +43,8 @@ class PianoAdmin(admin.ModelAdmin):
         "year_built",
         "year_acquired",
     )
-    list_filter    = ("piano_type", "location", "brand")
-    search_fields  = ("name", "brand", "model", "serial_number")
+    list_filter    = ("piano_type", "location", "make")
+    search_fields  = ("name", "make", "model", "serial_number")
     readonly_fields = ("qr_code_token",)
 
     def get_queryset(self, request):
@@ -111,7 +111,7 @@ class MaintenanceScheduleAdmin(admin.ModelAdmin):
         "is_active",
     )
     list_filter   = ("task_type", "is_active", "piano__location")
-    search_fields = ("task_name", "piano__name", "piano__brand")
+    search_fields = ("task_name", "piano__name", "piano__make")
 
     def get_queryset(self, request):
         # piano column + piano__location filter — one join covers both
@@ -141,7 +141,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_filter    = ("status", "order_type", "priority", "piano__location")
-    search_fields  = ("piano__name", "piano__brand", "description")
+    search_fields  = ("piano__name", "piano__make", "description")
     raw_id_fields  = ("piano", "assigned_tech", "schedule")
     readonly_fields = ("created_at",)
     inlines        = [MaintenanceLogInline]

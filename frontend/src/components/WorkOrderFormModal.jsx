@@ -118,7 +118,7 @@ export default function WorkOrderFormModal({ workOrder, prefill, onClose, onSave
               <option value="">{loadingDropdowns ? 'Loading…' : '— Select piano —'}</option>
               {pianos.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.name} — {p.brand} ({p.location_name})
+                  {p.name} — {p.make} ({p.location_name})
                 </option>
               ))}
             </select>

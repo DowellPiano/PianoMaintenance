@@ -107,7 +107,7 @@ function SchedulesTab() {
             ) : (
               schedules.map(s => (
                 <tr key={s.id}>
-                  <td className="fw-medium">{s.piano_name}<br /><span className="meta">{s.piano_brand}</span></td>
+                  <td className="fw-medium">{s.piano_name}<br /><span className="meta">{s.piano_make}</span></td>
                   <td>{s.piano_location}</td>
                   <td>{s.task_name}</td>
                   <td><TaskBadge type={s.task_type} /></td>

@@ -4,18 +4,6 @@
   margin: 0 auto;
 }
 
-.page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1.25rem;
-  gap: 1rem;
-}
-
-.page-header h2 { font-size: 1.5rem; font-weight: 600; margin: 0 0 0.2rem; }
-.page-subtitle   { font-size: 0.85rem; color: #6b7280; margin: 0; }
-
-/* ── Filter pill bar ─────────────────────────────────────────────────────── */
 .req-filter-bar {
   display: flex;
   gap: 0.4rem;
@@ -52,22 +40,6 @@
 }
 .req-filter-btn.active .req-filter-count { background: rgba(255,255,255,0.2); }
 
-.page-error {
-  padding: 0.75rem 1rem;
-  background: #fef2f2;
-  border: 1px solid #fca5a5;
-  border-radius: 5px;
-  color: #b91c1c;
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-}
-
-.table-wrapper {
-  overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
 .requests-table {
   width: 100%;
   border-collapse: collapse;
@@ -96,31 +68,18 @@
 }
 
 .requests-table tbody tr:last-child td { border-bottom: none; }
-.requests-table tbody tr:hover td      { background: #f9fafb; }
-.row-resolved td                       { color: #9ca3af; }
+.requests-table tbody tr:hover td { background: #f9fafb; }
+.row-resolved td { color: #9ca3af; }
 
-.req-id     { color: #6b7280; font-size: 0.8rem; white-space: nowrap; }
-.req-piano  { font-weight: 500; }
-.req-issue  { max-width: 260px; color: #4b5563; }
-.req-date   { white-space: nowrap; color: #6b7280; font-size: 0.85rem; }
+.req-id    { color: #6b7280; font-size: 0.8rem; white-space: nowrap; }
+.req-piano { font-weight: 500; }
+.req-issue { max-width: 260px; color: #4b5563; }
+.req-date  { white-space: nowrap; color: #6b7280; font-size: 0.85rem; }
 
 .reporter-name  { font-weight: 500; }
 .reporter-email { font-size: 0.78rem; color: #9ca3af; }
 
-.req-tech-name  { font-size: 0.76rem; color: #6b7280; margin-top: 3px; }
-
-.empty { color: #d1d5db; }
-
-.badge {
-  display: inline-block;
-  padding: 0.2rem 0.55rem;
-  border-radius: 10px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.actions { display: flex; gap: 0.4rem; white-space: nowrap; }
+.req-tech-name { font-size: 0.76rem; color: #6b7280; margin-top: 3px; }
 
 .btn-assign {
   padding: 0.28rem 0.65rem;
@@ -144,10 +103,3 @@
   cursor: pointer;
 }
 .btn-view-wo:hover { background: #e5e7eb; }
-
-.td-loading, .td-empty {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: #9ca3af;
-  font-size: 0.9rem;
-}

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}New Work Order — Piano Maintainer{% endblock %}
+{% block topbar_title %}New Work Order{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'workorder_list' %}" class="text-muted text-sm">← Back to Work Orders</a>
+</div>
+
+<div class="card" style="max-width:640px;">
+  <div class="card-header"><h2>Create Work Order</h2></div>
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label class="form-label" for="id_piano">Piano *</label>
+        <select name="piano" id="id_piano" class="form-select" required>
+          <option value="">— Select Piano —</option>
+          {% for p in pianos %}
+            <option value="{{ p.pk }}" {% if form.piano.value|stringformat:"s" == p.pk|stringformat:"s" %}selected{% endif %}>
+              {{ p.name }} — {{ p.location.name }}
+            </option>
+          {% endfor %}
+        </select>
+        {% if form.piano.errors %}<span class="form-error">{{ form.piano.errors.0 }}</span>{% endif %}
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_order_type">Type *</label>
+          <select name="order_type" id="id_order_type" class="form-select" required>
+            {% for val, label in type_choices %}
+              <option value="{{ val }}" {% if form.order_type.value == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_priority">Priority *</label>
+          <select name="priority" id="id_priority" class="form-select" required>
+            {% for val, label in priority_choices %}
+              <option value="{{ val }}" {% if form.priority.value == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_task_type">Task Type</label>
+        <select name="task_type" id="id_task_type" class="form-select">
+          <option value="">— None —</option>
+          {% for val, label in task_type_choices %}
+            <option value="{{ val }}" {% if form.task_type.value == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <span class="text-dim text-sm">Links completion to the piano's maintenance schedule</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_assigned_tech">Assign To</label>
+        <select name="assigned_tech" id="id_assigned_tech" class="form-select">
+          <option value="">— Unassigned —</option>
+          {% for tech in technicians %}
+            <option value="{{ tech.pk }}" {% if form.assigned_tech.value|stringformat:"s" == tech.pk|stringformat:"s" %}selected{% endif %}>
+              {{ tech.get_full_name|default:tech.username }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_due_date">Due Date</label>
+        <input type="date" name="due_date" id="id_due_date" class="form-input"
+               value="{{ form.due_date.value|default:'' }}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_description">Description</label>
+        <textarea name="description" id="id_description" class="form-textarea" rows="4">{{ form.description.value|default:'' }}</textarea>
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <a href="{% url 'workorder_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Create Work Order</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Maintenance Templates — Piano Maintainer{% endblock %}
+{% block topbar_title %}Maintenance Templates{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Maintenance Templates</h1>
+    <p class="page-subtitle">{{ templates|length }} template{{ templates|length|pluralize }}</p>
+  </div>
+  <a href="{% url 'template_create' %}" class="btn btn-primary">+ New Template</a>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Task</th>
+          <th>Type</th>
+          <th>Interval</th>
+          <th>Warning</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tmpl in templates %}
+        <tr>
+          <td class="fw-medium">{{ tmpl.name }}</td>
+          <td>{{ tmpl.task_name }}</td>
+          <td>{{ tmpl.task_type }}</td>
+          <td>Every {{ tmpl.interval_days }} days</td>
+          <td class="text-sm text-muted">{{ tmpl.warning_days_before }}d before</td>
+          <td>
+            <div style="display:flex; gap:.35rem;">
+              <a href="{% url 'template_edit' tmpl.pk %}" class="btn btn-xs btn-secondary">Edit</a>
+              <a href="{% url 'template_apply' tmpl.pk %}" class="btn btn-xs btn-primary">Apply to Pianos</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" style="text-align:center; padding:2rem;">
+            <div class="empty-state" style="padding:1rem;">
+              <div class="empty-icon">📋</div>
+              <p>No templates yet. <a href="{% url 'template_create' %}">Create one.</a></p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

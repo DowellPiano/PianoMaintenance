@@ -1,0 +1,61 @@
+<div class="card">
+  <div class="card-header"><h2>Maintenance Schedule</h2></div>
+  <div class="card-body">
+    <div class="interval-cards">
+      {% for label, interval_val, interval_unit, due in maintenance_intervals %}
+      <div class="interval-card">
+        <div class="label">{{ label }}</div>
+        <div class="value">Every {{ interval_val }} {{ interval_unit }}</div>
+        <div class="due">
+          {% if due %}
+            {% if due < today %}
+              <span class="text-danger fw-bold">Overdue: {{ due }}</span>
+            {% else %}
+              <span class="text-muted">Due: {{ due }}</span>
+            {% endif %}
+          {% else %}
+            <span class="text-dim">No date set</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% if custom_schedules %}
+<div class="card" style="margin-top:1rem;">
+  <div class="card-header"><h2>Custom Maintenance</h2></div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>Task</th><th>Type</th><th>Interval</th><th>Status</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for sched in custom_schedules %}
+        <tr>
+          <td class="fw-medium">{{ sched.task_name }}</td>
+          <td>{{ sched.task_type }}</td>
+          <td>{{ sched.interval_days }} days</td>
+          <td>{% if sched.is_active %}<span class="badge badge-good">Active</span>{% else %}<span class="badge badge-cancelled">Paused</span>{% endif %}</td>
+          <td>
+            <div style="display:flex; gap:.35rem;">
+              <form method="post" action="{% url 'schedule_toggle' sched.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-xs btn-secondary">
+                  {% if sched.is_active %}Pause{% else %}Resume{% endif %}
+                </button>
+              </form>
+              <form method="post" action="{% url 'schedule_delete' sched.pk %}" onsubmit="return confirm('Remove this schedule?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-xs btn-danger">Remove</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}

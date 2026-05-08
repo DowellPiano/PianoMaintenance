@@ -29,7 +29,7 @@ from .api import (
 
 router = DefaultRouter()
 router.register(r'locations',            LocationViewSet,            basename='location')
-router.register(r'pianos',              PianoViewSet)
+router.register(r'pianos',              PianoViewSet,               basename='piano')
 router.register(r'technicians',         TechnicianViewSet,          basename='technician')
 router.register(r'teams',               TeamViewSet,                basename='team')
 router.register(r'schedules',           MaintenanceScheduleViewSet, basename='schedule')

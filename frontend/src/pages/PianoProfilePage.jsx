@@ -38,7 +38,7 @@ function fmt(val, fallback = '—') {
 
 function DetailsTab({ piano }) {
   const rows = [
-    ['Brand',         fmt(piano.brand)],
+    ['Make',          fmt(piano.make)],
     ['Model',         fmt(piano.model)],
     ['Piano Type',    piano.piano_type],
     ['Serial Number', fmt(piano.serial_number)],
@@ -420,7 +420,7 @@ export default function PianoProfilePage() {
             <h2 className="hero-name">{piano.name}</h2>
             <span className={`badge ${typeClass(piano.piano_type)}`}>{piano.piano_type}</span>
           </div>
-          <p className="hero-sub">{piano.brand}{piano.model ? ` — ${piano.model}` : ''}</p>
+          <p className="hero-sub">{piano.make}{piano.model ? ` — ${piano.model}` : ''}</p>
           <p className="hero-location">{piano.location_name}</p>
 
           <div className="hero-stats">

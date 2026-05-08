@@ -49,7 +49,7 @@ class PianoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Piano
         fields = [
-            'id', 'name', 'brand', 'model', 'serial_number',
+            'id', 'name', 'make', 'model', 'serial_number',
             'piano_type', 'location', 'location_name',
             'year_built', 'year_acquired', 'notes', 'is_active', 'qr_code_token',
             'profile_photo_url',
@@ -77,7 +77,7 @@ class ScheduleTemplateSerializer(serializers.ModelSerializer):
 
 class MaintenanceScheduleSerializer(serializers.ModelSerializer):
     piano_name = serializers.CharField(source='piano.name', read_only=True)
-    piano_brand = serializers.CharField(source='piano.brand', read_only=True)
+    piano_make = serializers.CharField(source='piano.make', read_only=True)
     piano_location = serializers.CharField(source='piano.location.name', read_only=True)
     template_name = serializers.CharField(source='template.name', read_only=True)
     next_due = serializers.SerializerMethodField()
@@ -97,7 +97,7 @@ class MaintenanceScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = MaintenanceSchedule
         fields = [
-            'id', 'piano', 'piano_name', 'piano_brand', 'piano_location',
+            'id', 'piano', 'piano_name', 'piano_make', 'piano_location',
             'template', 'template_name', 'task_name', 'task_type',
             'interval_days', 'warning_days_before', 'is_active',
             'last_service_date', 'next_due',
@@ -143,14 +143,14 @@ class MaintenanceLogSerializer(serializers.ModelSerializer):
 
 class WorkOrderSerializer(serializers.ModelSerializer):
     piano_name = serializers.CharField(source='piano.name', read_only=True)
-    piano_brand = serializers.CharField(source='piano.brand', read_only=True)
+    piano_make = serializers.CharField(source='piano.make', read_only=True)
     piano_location = serializers.CharField(source='piano.location.name', read_only=True)
     assigned_tech_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = WorkOrder
         fields = [
-            'id', 'piano', 'piano_name', 'piano_brand', 'piano_location',
+            'id', 'piano', 'piano_name', 'piano_make', 'piano_location',
             'assigned_tech', 'assigned_tech_name', 'schedule',
             'order_type', 'status', 'priority',
             'description', 'due_date', 'completed_date', 'created_at',
@@ -171,6 +171,9 @@ class ConditionReadingSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'piano', 'piano_name', 'log',
             'pitch_before_cents', 'pitch_after_cents', 'humidity_pct', 'temperature_f',
+            'regulation_condition', 'voicing_condition', 'belly_condition',
+            'soundboard_condition', 'pinblock_condition', 'strings_condition',
+            'hammers_condition', 'keys_condition', 'pedals_condition', 'case_condition',
             'overall_rating', 'notes', 'recorded_at',
         ]
 

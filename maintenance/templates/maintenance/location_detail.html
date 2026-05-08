@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}{{ location.name }} — Piano Maintainer{% endblock %}
+{% block topbar_title %}{{ location.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.loc-hero { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; }
+.loc-hero-icon {
+  width: 64px; height: 64px;
+  background: #eff6ff; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; flex-shrink: 0;
+}
+.loc-hero-info { flex: 1; min-width: 200px; }
+.loc-hero-name { font-size: 1.5rem; font-weight: 700; margin-bottom: .25rem; }
+.loc-hero-meta { color: var(--clr-text-sec); font-size: .9rem; }
+.loc-stats { display: flex; gap: 1rem; flex-shrink: 0; }
+.loc-stat {
+  display: flex; flex-direction: column; align-items: center;
+  background: #f9fafb; border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm); padding: .5rem 1rem; min-width: 75px;
+}
+.loc-stat-val { font-size: 1.5rem; font-weight: 700; color: var(--clr-primary); line-height: 1; }
+.loc-stat-label { font-size: .7rem; text-transform: uppercase; color: var(--clr-text-sec); margin-top: .15rem; }
+.piano-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+.piano-mini-card {
+  background: var(--clr-surface); border: 1px solid var(--clr-border);
+  border-radius: var(--radius); padding: 1rem;
+  transition: box-shadow .15s;
+}
+.piano-mini-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,.1); }
+.piano-mini-name { font-weight: 700; margin-bottom: .2rem; }
+.piano-mini-name a { color: var(--clr-text); text-decoration: none; }
+.piano-mini-name a:hover { color: var(--clr-primary); }
+.piano-mini-meta { font-size: .85rem; color: var(--clr-text-sec); margin-bottom: .5rem; }
+.piano-mini-actions { display: flex; gap: .4rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'location_list' %}" class="text-muted text-sm">← Back to Locations</a>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-body">
+    <div class="loc-hero">
+      <div class="loc-hero-icon">📍</div>
+      <div class="loc-hero-info">
+        <h1 class="loc-hero-name">{{ location.name }}</h1>
+        {% if location.building %}<p class="loc-hero-meta">{{ location.building }}</p>{% endif %}
+        {% if location.address %}<p class="loc-hero-meta">{{ location.address }}</p>{% endif %}
+      </div>
+      <div class="loc-stats">
+        <div class="loc-stat">
+          <span class="loc-stat-val">{{ pianos|length }}</span>
+          <span class="loc-stat-label">Pianos</span>
+        </div>
+        <div class="loc-stat">
+          <span class="loc-stat-val">{{ open_wo_count }}</span>
+          <span class="loc-stat-label">Open WOs</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2>Pianos at this location</h2>
+    <a href="{% url 'piano_create' %}?location={{ location.pk }}" class="btn btn-xs btn-primary">+ Add Piano</a>
+  </div>
+  <div class="card-body">
+    {% if pianos %}
+    <div class="piano-grid">
+      {% for piano in pianos %}
+      <div class="piano-mini-card">
+        <div class="piano-mini-name">
+          <a href="{% url 'piano_detail' piano.pk %}">{{ piano.name }}</a>
+          <span class="badge badge-{{ piano.piano_type|lower }}">{{ piano.piano_type }}</span>
+        </div>
+        <p class="piano-mini-meta">{{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %}{% if piano.location_in_venue %} · {{ piano.location_in_venue }}{% endif %}</p>
+        <div class="piano-mini-actions">
+          <a href="{% url 'piano_detail' piano.pk %}" class="btn btn-xs btn-secondary">View</a>
+          <a href="{% url 'piano_edit' piano.pk %}" class="btn btn-xs btn-secondary">Edit</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">🎹</div>
+      <p>No pianos at this location. <a href="{% url 'piano_create' %}?location={{ location.pk }}">Add one.</a></p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

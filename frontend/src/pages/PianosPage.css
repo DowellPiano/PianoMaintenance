@@ -4,68 +4,6 @@
   margin: 0 auto;
 }
 
-.page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
-}
-
-.page-header h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0 0 0.2rem;
-}
-
-.page-subtitle {
-  font-size: 0.85rem;
-  color: #6b7280;
-  margin: 0;
-}
-
-.page-error {
-  padding: 0.75rem 1rem;
-  background: #fef2f2;
-  border: 1px solid #fca5a5;
-  border-radius: 5px;
-  color: #b91c1c;
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-}
-
-.loading {
-  color: #6b7280;
-  padding: 2rem 0;
-  text-align: center;
-}
-
-.btn-link {
-  background: none;
-  border: none;
-  color: #4f46e5;
-  cursor: pointer;
-  font-size: inherit;
-  padding: 0;
-  text-decoration: underline;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 4rem 2rem;
-  color: #6b7280;
-}
-
-.empty-state p {
-  margin-bottom: 1rem;
-  font-size: 1rem;
-}
-
-.table-wrapper {
-  overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
 .pianos-table {
   width: 100%;
   border-collapse: collapse;
@@ -92,17 +30,10 @@
   vertical-align: middle;
 }
 
-.pianos-table tbody tr:last-child td {
-  border-bottom: none;
-}
+.pianos-table tbody tr:last-child td { border-bottom: none; }
+.pianos-table tbody tr:hover td { background: #f9fafb; }
 
-.pianos-table tbody tr:hover td {
-  background: #f9fafb;
-}
-
-.piano-name {
-  font-weight: 500;
-}
+.piano-name { font-weight: 500; }
 
 .piano-name-cell {
   display: flex;
@@ -139,40 +70,24 @@
   color: #9ca3af;
 }
 
-.empty {
-  color: #d1d5db;
-}
+.type-grand   { background: #ede9fe; color: #5b21b6; }
+.type-upright { background: #dbeafe; color: #1e40af; }
+.type-digital { background: #d1fae5; color: #065f46; }
 
-.badge {
-  display: inline-block;
-  padding: 0.2rem 0.6rem;
-  border-radius: 12px;
-  font-size: 0.78rem;
-  font-weight: 500;
-}
-
-.type-grand    { background: #ede9fe; color: #5b21b6; }
-.type-upright  { background: #dbeafe; color: #1e40af; }
-.type-digital  { background: #d1fae5; color: #065f46; }
-
-/* Header actions group (toggle + add button) */
 .header-actions {
   display: flex;
   gap: 0.75rem;
   align-items: center;
 }
 
-/* Active state for the toggle button */
 .btn-secondary.active {
   background: #e5e7eb;
   border-color: #9ca3af;
 }
 
-/* Inactive piano rows */
 .inactive-row { opacity: 0.65; }
 .inactive-row .piano-name { color: #888; }
 
-/* Banner shown above the inactive table */
 .inactive-banner {
   padding: 0.6rem 1rem;
   margin-bottom: 0.75rem;
@@ -183,7 +98,6 @@
   color: #92400e;
 }
 
-/* Reactivate button (mirrors TechniciansPage) */
 .btn-reactivate {
   padding: 0.3rem 0.75rem;
   background: #d1fae5;
@@ -195,106 +109,3 @@
   font-weight: 500;
 }
 .btn-reactivate:hover { background: #a7f3d0; }
-
-.actions {
-  display: flex;
-  gap: 0.5rem;
-  white-space: nowrap;
-}
-
-.btn-edit {
-  padding: 0.3rem 0.75rem;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-
-.btn-edit:hover { background: #e5e7eb; }
-
-.btn-delete {
-  padding: 0.3rem 0.75rem;
-  background: #fff;
-  color: #dc2626;
-  border: 1px solid #fca5a5;
-  border-radius: 4px;
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-
-.btn-delete:hover { background: #fef2f2; }
-
-/* Confirm dialog reuses modal-overlay from PianoFormModal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.confirm-dialog {
-  background: #fff;
-  border-radius: 8px;
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 380px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-}
-
-.confirm-dialog h3 {
-  margin: 0 0 0.75rem;
-  font-size: 1rem;
-}
-
-.confirm-dialog p {
-  margin: 0 0 1.25rem;
-  font-size: 0.9rem;
-  color: #374151;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-.btn-danger {
-  padding: 0.5rem 1.25rem;
-  background: #dc2626;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-.btn-danger:hover { background: #b91c1c; }
-
-.btn-primary {
-  padding: 0.5rem 1.25rem;
-  background: #1a1a2e;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-.btn-primary:hover { background: #2d2d4e; }
-
-.btn-secondary {
-  padding: 0.5rem 1.25rem;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-.btn-secondary:hover { background: #e5e7eb; }

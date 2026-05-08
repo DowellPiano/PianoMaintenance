@@ -75,8 +75,8 @@ class PianoViewSet(viewsets.ModelViewSet):
     serializer_class = PianoSerializer
     filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_fields = ['location', 'piano_type']
-    search_fields = ['name', 'brand', 'serial_number']
-    ordering_fields = ['name', 'brand', 'piano_type', 'location__name', 'year_built', 'year_acquired']
+    search_fields = ['name', 'make', 'serial_number']
+    ordering_fields = ['name', 'make', 'piano_type', 'location__name', 'year_built', 'year_acquired']
 
     def get_queryset(self):
         qs = Piano.objects.select_related('location').prefetch_related('photos').order_by('location__name', 'name')
@@ -664,7 +664,7 @@ def calendar_events(request):
             'color': '#ef4444' if is_overdue else STATUS_COLOR.get(wo.status, '#3b82f6'),
             'priority_dot': PRIORITY_DOT.get(wo.priority, '🔵'),
             'piano_name': wo.piano.name,
-            'piano_brand': wo.piano.brand,
+            'piano_make': wo.piano.make,
             'piano_location': wo.piano.location.name,
             'piano_id': wo.piano_id,
             'work_order_id': wo.id,
@@ -705,7 +705,7 @@ def calendar_events(request):
                     'color': '#ef4444' if is_overdue else ('#f59e0b' if is_warning else TASK_COLOR.get(sched.task_type, '#6b7280')),
                     'task_type': sched.task_type,
                     'piano_name': sched.piano.name,
-                    'piano_brand': sched.piano.brand,
+                    'piano_make': sched.piano.make,
                     'piano_location': sched.piano.location.name,
                     'piano_id': sched.piano_id,
                     'schedule_id': sched.id,

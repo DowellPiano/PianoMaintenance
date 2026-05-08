@@ -1,24 +1,8 @@
-/* ── Reports Page ────────────────────────────────────────────────────────────── */
-
 .rp-page {
   padding: 2rem;
   max-width: 1100px;
   margin: 0 auto;
 }
-
-.page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1.25rem;
-}
-.page-header h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-/* ── Date range row ──────────────────────────────────────────────────────────── */
 
 .rp-date-row {
   display: flex;
@@ -50,8 +34,6 @@
   border-color: #1a1a2e;
 }
 
-/* ── Tab nav ─────────────────────────────────────────────────────────────────── */
-
 .rp-tabs {
   display: flex;
   gap: 0;
@@ -76,8 +58,6 @@
   color: #1a1a2e;
   border-bottom-color: #1a1a2e;
 }
-
-/* ── Report section ──────────────────────────────────────────────────────────── */
 
 .report-section {
   display: flex;
@@ -107,8 +87,6 @@
 }
 .btn-export:hover { background: #e5e7eb; }
 
-/* ── Summary bar ─────────────────────────────────────────────────────────────── */
-
 .rp-summary {
   display: flex;
   align-items: center;
@@ -122,14 +100,6 @@
 }
 .rp-summary-total { color: #111827; }
 .rp-summary-total strong { font-size: 1rem; }
-
-/* ── Table ───────────────────────────────────────────────────────────────────── */
-
-.table-wrapper {
-  overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
 
 .rp-table {
   width: 100%;
@@ -161,14 +131,6 @@
 
 .fw-medium { font-weight: 500; }
 
-.td-empty {
-  text-align: center;
-  color: #9ca3af;
-  padding: 2rem !important;
-}
-
-/* ── Empty / error states ────────────────────────────────────────────────────── */
-
 .rp-empty {
   color: #9ca3af;
   text-align: center;
@@ -187,17 +149,3 @@
   padding: 0.65rem 1rem;
   font-size: 0.88rem;
 }
-
-/* ── Shared button ───────────────────────────────────────────────────────────── */
-
-.btn-primary {
-  padding: 0.5rem 1.25rem;
-  background: #1a1a2e;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.btn-primary:hover:not(:disabled) { background: #2d2d4e; }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }

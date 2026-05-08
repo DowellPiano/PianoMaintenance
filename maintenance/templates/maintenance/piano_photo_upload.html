@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Photos — {{ piano.name }}{% endblock %}
+{% block topbar_title %}Upload Photos{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'piano_detail' piano.pk %}" class="text-muted text-sm">← Back to {{ piano.name }}</a>
+</div>
+
+<div class="card" style="max-width:520px;">
+  <div class="card-header"><h2>Upload Photos for {{ piano.name }}</h2></div>
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label class="form-label" for="id_photos">Select Photos *</label>
+        <input type="file" name="photos" id="id_photos" accept="image/*" multiple required class="form-input">
+        <span class="text-dim text-sm">You can select multiple images at once</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_caption">Caption</label>
+        <input type="text" name="caption" id="id_caption" class="form-input" maxlength="300"
+               placeholder="Optional caption for these photos">
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <a href="{% url 'piano_detail' piano.pk %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

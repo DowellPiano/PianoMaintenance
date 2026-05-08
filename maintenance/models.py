@@ -1,10 +1,24 @@
 import uuid
+from datetime import date, timedelta
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 YEAR_VALIDATORS = [MinValueValidator(1700), MaxValueValidator(2100)]
+
+
+class ConditionLevel(models.TextChoices):
+    EXCELLENT = "Excellent", "Excellent"
+    GOOD = "Good", "Good"
+    FAIR = "Fair", "Fair"
+    POOR = "Poor", "Poor"
+    NEEDS_ATTENTION = "Needs Immediate Attention", "Needs Immediate Attention"
+
+
+class IntervalUnit(models.TextChoices):
+    MONTHS = "months", "Months"
+    DAYS = "days", "Days"
 
 
 # ---------------------------------------------------------------------------
@@ -35,21 +49,138 @@ class Piano(models.Model):
         Location, on_delete=models.PROTECT, related_name="pianos"
     )
     name = models.CharField(max_length=200)
-    brand = models.CharField(max_length=100)
+    make = models.CharField(max_length=100)
     model = models.CharField(max_length=100, blank=True)
     serial_number = models.CharField(max_length=100, blank=True)
     piano_type = models.CharField(max_length=20, choices=PianoType.choices)
     year_built    = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
     year_acquired = models.IntegerField(null=True, blank=True, validators=YEAR_VALIDATORS)
+    location_in_venue = models.CharField(max_length=200, blank=True)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     qr_code_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    # -- Maintenance intervals (core 4 types) --------------------------------
+    tuning_interval_value = models.IntegerField(default=6)
+    tuning_interval_unit = models.CharField(
+        max_length=10, choices=IntervalUnit.choices, default=IntervalUnit.MONTHS
+    )
+    regulation_interval_value = models.IntegerField(default=12)
+    regulation_interval_unit = models.CharField(
+        max_length=10, choices=IntervalUnit.choices, default=IntervalUnit.MONTHS
+    )
+    voicing_interval_value = models.IntegerField(default=12)
+    voicing_interval_unit = models.CharField(
+        max_length=10, choices=IntervalUnit.choices, default=IntervalUnit.MONTHS
+    )
+    cleaning_interval_value = models.IntegerField(default=6)
+    cleaning_interval_unit = models.CharField(
+        max_length=10, choices=IntervalUnit.choices, default=IntervalUnit.MONTHS
+    )
+
+    # -- Next due dates (computed from intervals + last service) --------------
+    next_tuning_due = models.DateField(null=True, blank=True)
+    next_regulation_due = models.DateField(null=True, blank=True)
+    next_voicing_due = models.DateField(null=True, blank=True)
+    next_cleaning_due = models.DateField(null=True, blank=True)
+
+    # -- Current environment (updated from latest ConditionReading) -----------
+    current_pitch = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True
+    )
+    current_humidity = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    current_temperature = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+
+    # -- Current component conditions (updated from latest ConditionReading) --
+    regulation_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    voicing_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    belly_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    soundboard_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    pinblock_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    strings_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    hammers_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    keys_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    pedals_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    case_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+
+    CONDITION_FIELDS = [
+        'regulation_condition', 'voicing_condition', 'belly_condition',
+        'soundboard_condition', 'pinblock_condition', 'strings_condition',
+        'hammers_condition', 'keys_condition', 'pedals_condition',
+        'case_condition',
+    ]
 
     class Meta:
         ordering = ["location", "name"]
 
     def __str__(self):
-        return f"{self.brand} {self.model} — {self.name}".strip(" —")
+        return f"{self.make} {self.model} — {self.name}".strip(" —")
+
+    @property
+    def has_any_condition(self):
+        return any(getattr(self, f) for f in self.CONDITION_FIELDS)
+
+    @property
+    def condition_dots(self):
+        mapping = {
+            'Excellent': 'excellent', 'Good': 'good', 'Fair': 'fair',
+            'Poor': 'poor', 'Needs Immediate Attention': 'attention',
+        }
+        return [mapping.get(getattr(self, f), '') for f in self.CONDITION_FIELDS if getattr(self, f)]
+
+    @property
+    def profile_photo(self):
+        try:
+            return self.photos.filter(is_profile_photo=True).first()
+        except Exception:
+            return None
+
+    def _interval_to_days(self, value, unit):
+        """Convert interval value + unit to timedelta days."""
+        if unit == 'months':
+            return value * 30
+        return value
+
+    def advance_schedule(self, task_type, completed_date):
+        """
+        After completing a work order of the given task_type, advance the
+        corresponding next-due date on this piano.
+        """
+        mapping = {
+            'Tuning': ('tuning_interval_value', 'tuning_interval_unit', 'next_tuning_due'),
+            'Regulation': ('regulation_interval_value', 'regulation_interval_unit', 'next_regulation_due'),
+            'Voicing': ('voicing_interval_value', 'voicing_interval_unit', 'next_voicing_due'),
+            'Cleaning': ('cleaning_interval_value', 'cleaning_interval_unit', 'next_cleaning_due'),
+        }
+        if task_type in mapping:
+            val_field, unit_field, due_field = mapping[task_type]
+            days = self._interval_to_days(getattr(self, val_field), getattr(self, unit_field))
+            setattr(self, due_field, completed_date + timedelta(days=days))
+            self.save(update_fields=[due_field])
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +286,24 @@ class MaintenanceSchedule(models.Model):
     def __str__(self):
         return f"{self.task_name} — every {self.interval_days}d"
 
+    @property
+    def next_due(self):
+        if self.last_service_date:
+            return self.last_service_date + timedelta(days=self.interval_days)
+        return None
+
+    @property
+    def is_overdue(self):
+        nd = self.next_due
+        return nd is not None and nd < date.today()
+
+    @property
+    def is_due_soon(self):
+        nd = self.next_due
+        if nd is None:
+            return False
+        return nd <= date.today() + timedelta(days=self.warning_days_before)
+
 
 # ---------------------------------------------------------------------------
 # WorkOrder
@@ -195,6 +344,10 @@ class WorkOrder(models.Model):
         related_name="work_orders",
     )
     order_type = models.CharField(max_length=20, choices=OrderType.choices)
+    task_type = models.CharField(
+        max_length=20, choices=TaskType.choices, blank=True,
+        help_text="Matches against piano maintenance schedule (Tuning, Regulation, etc.)",
+    )
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.OPEN
     )
@@ -242,12 +395,6 @@ class MaintenanceLog(models.Model):
 # ConditionReading
 # ---------------------------------------------------------------------------
 class ConditionReading(models.Model):
-    class OverallRating(models.TextChoices):
-        POOR = "Poor", "Poor"
-        FAIR = "Fair", "Fair"
-        GOOD = "Good", "Good"
-        EXCELLENT = "Excellent", "Excellent"
-
     piano = models.ForeignKey(
         Piano, on_delete=models.PROTECT, related_name="condition_readings"
     )
@@ -258,6 +405,8 @@ class ConditionReading(models.Model):
         on_delete=models.SET_NULL,
         related_name="condition_readings",
     )
+
+    # -- Environment readings -------------------------------------------------
     pitch_before_cents = models.DecimalField(
         max_digits=6, decimal_places=2, null=True, blank=True,
         db_column='pitch_before_cents',
@@ -271,17 +420,74 @@ class ConditionReading(models.Model):
     temperature_f = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True
     )
+
+    # -- Component conditions -------------------------------------------------
+    regulation_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    voicing_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    belly_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    soundboard_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    pinblock_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    strings_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    hammers_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    keys_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    pedals_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+    case_condition = models.CharField(
+        max_length=30, choices=ConditionLevel.choices, blank=True
+    )
+
     overall_rating = models.CharField(
-        max_length=10, choices=OverallRating.choices, blank=True
+        max_length=30, choices=ConditionLevel.choices, blank=True
     )
     notes = models.TextField(blank=True)
     recorded_at = models.DateTimeField(default=timezone.now)
+
+    CONDITION_FIELDS = [
+        'regulation_condition', 'voicing_condition', 'belly_condition',
+        'soundboard_condition', 'pinblock_condition', 'strings_condition',
+        'hammers_condition', 'keys_condition', 'pedals_condition',
+        'case_condition',
+    ]
+    ENVIRONMENT_FIELDS = [
+        ('pitch_after_cents', 'current_pitch'),
+        ('humidity_pct', 'current_humidity'),
+        ('temperature_f', 'current_temperature'),
+    ]
 
     class Meta:
         ordering = ["-recorded_at"]
 
     def __str__(self):
         return f"Reading #{self.pk} ({self.recorded_at:%Y-%m-%d})"
+
+    def update_piano_current_state(self):
+        piano = self.piano
+        for field in self.CONDITION_FIELDS:
+            value = getattr(self, field)
+            if value:
+                setattr(piano, field, value)
+        for reading_field, piano_field in self.ENVIRONMENT_FIELDS:
+            value = getattr(self, reading_field)
+            if value is not None:
+                setattr(piano, piano_field, value)
+        piano.save()
 
 
 # ---------------------------------------------------------------------------
@@ -389,9 +595,26 @@ class Photo(models.Model):
         return f"Photo #{self.pk}"
 
 
-# ---------------------------------------------------------------------------
-# Attachment  (legacy file attachment model)
-# ---------------------------------------------------------------------------
+class Alert(models.Model):
+    class AlertType(models.TextChoices):
+        OVERDUE = "Overdue", "Overdue"
+        DUE_SOON = "Due Soon", "Due Soon"
+
+    work_order = models.ForeignKey(
+        WorkOrder, on_delete=models.CASCADE, related_name="alerts"
+    )
+    alert_type = models.CharField(max_length=20, choices=AlertType.choices)
+    sent_at = models.DateTimeField(auto_now_add=True)
+    acknowledged = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-sent_at"]
+
+    def __str__(self):
+        return f"Alert #{self.pk} · {self.alert_type} · WO-{self.work_order_id}"
+
+
+
 class Attachment(models.Model):
     piano = models.ForeignKey(
         Piano,

@@ -1,0 +1,50 @@
+<div class="detail-grid">
+  <div class="card">
+    <div class="card-header"><h2>Details</h2></div>
+    <div class="card-body">
+      <table class="data-table" style="font-size:.88rem;">
+        <tbody>
+          <tr><td class="fw-medium" style="width:140px;">Make</td><td>{{ piano.make }}</td></tr>
+          <tr><td class="fw-medium">Model</td><td>{{ piano.model|default:"—" }}</td></tr>
+          <tr><td class="fw-medium">Serial Number</td><td>{{ piano.serial_number|default:"—" }}</td></tr>
+          <tr><td class="fw-medium">Year Built</td><td>{{ piano.year_built|default:"—" }}</td></tr>
+          <tr><td class="fw-medium">Year Acquired</td><td>{{ piano.year_acquired|default:"—" }}</td></tr>
+          <tr><td class="fw-medium">Location</td><td>{{ piano.location.name }}</td></tr>
+          {% if piano.location_in_venue %}<tr><td class="fw-medium">Room/Area</td><td>{{ piano.location_in_venue }}</td></tr>{% endif %}
+          {% if piano.notes %}<tr><td class="fw-medium">Notes</td><td>{{ piano.notes }}</td></tr>{% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Current Condition</h2></div>
+    <div class="card-body">
+      {% if has_condition %}
+      <div class="condition-grid">
+        {% for label, value in condition_fields %}
+        <div class="condition-item">
+          <span>{{ label }}</span>
+          {% if value %}
+            <span class="badge badge-{{ value|lower|cut:' '|truncatechars:9 }}">{{ value|truncatechars:12 }}</span>
+          {% else %}
+            <span class="text-dim">—</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% if piano.current_pitch is not None or piano.current_humidity is not None %}
+      <div class="env-stats">
+        {% if piano.current_pitch is not None %}<div class="env-stat"><div class="label">Pitch</div><div class="val">{{ piano.current_pitch }}¢</div></div>{% endif %}
+        {% if piano.current_humidity is not None %}<div class="env-stat"><div class="label">Humidity</div><div class="val">{{ piano.current_humidity }}%</div></div>{% endif %}
+        {% if piano.current_temperature is not None %}<div class="env-stat"><div class="label">Temp</div><div class="val">{{ piano.current_temperature }}°F</div></div>{% endif %}
+      </div>
+      {% endif %}
+      {% else %}
+      <div class="empty-state" style="padding:1.5rem;">
+        <p>No condition readings yet.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>

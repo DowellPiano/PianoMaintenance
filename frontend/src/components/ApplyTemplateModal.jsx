@@ -111,7 +111,7 @@ export default function ApplyTemplateModal({ template, onClose, onApplied }) {
                       onChange={() => togglePiano(p.id)}
                     />
                     <span className="piano-check-name">{p.name}</span>
-                    <span className="piano-check-meta">{p.brand} {p.model} · {p.piano_type}</span>
+                    <span className="piano-check-meta">{p.make} {p.model} · {p.piano_type}</span>
                   </label>
                 ))}
               </div>

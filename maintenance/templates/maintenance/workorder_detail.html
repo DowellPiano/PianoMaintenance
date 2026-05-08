@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}WO-{{ wo.pk }} — Piano Maintainer{% endblock %}
+{% block topbar_title %}WO-{{ wo.pk }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.wo-hero { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.wo-hero-info { flex: 1; min-width: 240px; }
+.wo-hero-title { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
+.wo-hero-sub { color: var(--clr-text-sec); margin-bottom: .15rem; font-size: .9rem; }
+.wo-hero-badges { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
+.wo-hero-actions { display: flex; gap: .5rem; align-self: flex-start; flex-shrink: 0; flex-wrap: wrap; }
+.wo-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem; }
+.wo-meta-table td:first-child { font-weight: 500; width: 130px; color: var(--clr-text-sec); }
+.assign-cell { display: flex; align-items: center; gap: .5rem; }
+.assign-form { display: flex; align-items: center; gap: .4rem; }
+.assign-form select { padding: .3rem .5rem; font-size: .82rem; border: 1px solid var(--clr-border); border-radius: var(--radius-sm); }
+@media (max-width: 768px) { .wo-detail-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'workorder_list' %}" class="text-muted text-sm">← Back to Work Orders</a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="wo-hero">
+      <div class="wo-hero-info">
+        <h1 class="wo-hero-title">WO-{{ wo.pk }}</h1>
+        <p class="wo-hero-sub">{{ wo.description|truncatechars:120|default:"No description" }}</p>
+        <p class="wo-hero-sub">
+          <a href="{% url 'piano_detail' wo.piano.pk %}">{{ wo.piano.name }}</a>
+          · {{ wo.piano.location.name }}
+        </p>
+        <div class="wo-hero-badges">
+          <span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span>
+          <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
+          <span class="badge badge-{{ wo.order_type|lower }}">{{ wo.order_type }}</span>
+          {% if wo.due_date and wo.due_date < today and wo.status != "Complete" and wo.status != "Cancelled" %}
+            <span class="badge badge-overdue">Overdue</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="wo-hero-actions">
+        {% if wo.status != "Complete" and wo.status != "Cancelled" %}
+          <a href="{% url 'workorder_complete' wo.pk %}" class="btn btn-sm btn-success">
+            Mark Complete
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wo-detail-grid">
+  <div class="card">
+    <div class="card-header"><h2>Details</h2></div>
+    <div class="card-body">
+      <table class="data-table wo-meta-table" style="font-size:.88rem;">
+        <tbody>
+          <tr><td>Piano</td><td><a href="{% url 'piano_detail' wo.piano.pk %}">{{ wo.piano.name }}</a></td></tr>
+          <tr><td>Location</td><td>{{ wo.piano.location.name }}</td></tr>
+          <tr><td>Type</td><td>{{ wo.order_type }}</td></tr>
+          <tr><td>Priority</td><td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td></tr>
+          <tr><td>Status</td><td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td></tr>
+          <tr>
+            <td>Assigned To</td>
+            <td>
+              <div id="assign-cell">
+                {% include "maintenance/partials/workorder_assign_cell.html" %}
+              </div>
+            </td>
+          </tr>
+          <tr><td>Due Date</td><td>{{ wo.due_date|date:"M d, Y"|default:"—" }}</td></tr>
+          <tr><td>Created</td><td>{{ wo.created_at|date:"M d, Y g:i A" }}</td></tr>
+          {% if wo.completed_date %}
+          <tr><td>Completed</td><td>{{ wo.completed_date|date:"M d, Y" }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Description</h2></div>
+    <div class="card-body">
+      {% if wo.description %}
+        <p style="white-space:pre-wrap; font-size:.9rem;">{{ wo.description }}</p>
+      {% else %}
+        <p class="text-dim">No description provided.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1.5rem;">
+  <div class="card-header"><h2>Service Logs</h2></div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Technician</th>
+          <th>Hours</th>
+          <th>Work Performed</th>
+          <th>Parts Used</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td class="text-sm">{{ log.logged_at|date:"M d, Y" }}</td>
+          <td class="text-sm">{{ log.technician.get_full_name|default:log.technician.username }}</td>
+          <td class="text-sm">{{ log.hours_worked }}h</td>
+          <td style="max-width:280px;">{{ log.work_performed|truncatechars:100 }}</td>
+          <td class="text-sm">
+            {% for pu in log.parts_used.all %}
+              {{ pu.quantity_used }}× {{ pu.part.name }}{% if not forloop.last %}<br>{% endif %}
+            {% empty %}
+              <span class="text-dim">—</span>
+            {% endfor %}
+          </td>
+          <td class="text-sm text-muted" style="max-width:180px;">{{ log.notes|truncatechars:60|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:2rem;">No service logs yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

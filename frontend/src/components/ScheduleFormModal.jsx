@@ -101,7 +101,7 @@ export default function ScheduleFormModal({ schedule, onClose, onSaved }) {
               <option value="">{loadingPianos ? 'Loading…' : '— Select piano —'}</option>
               {pianos.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.name} — {p.brand} ({p.location_name})
+                  {p.name} — {p.make} ({p.location_name})
                 </option>
               ))}
             </select>

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Piano Maintainer{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-label">Overdue</div>
+    <div class="kpi-value danger">{{ overdue_count }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Open Work Orders</div>
+    <div class="kpi-value primary">{{ open_wo_count }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">In Progress</div>
+    <div class="kpi-value warning">{{ in_progress_count }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Pending Requests</div>
+    <div class="kpi-value primary">{{ pending_request_count }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Pianos</div>
+    <div class="kpi-value">{{ piano_count }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Locations</div>
+    <div class="kpi-value">{{ location_count }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Completed This Month</div>
+    <div class="kpi-value success">{{ completed_this_month }}</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2>Recent Work Orders</h2>
+    <a href="{% url 'workorder_list' %}" class="btn btn-sm btn-secondary">View All</a>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Piano</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Priority</th>
+          <th>Due</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for wo in recent_work_orders %}
+        <tr>
+          <td class="text-muted">WO-{{ wo.pk }}</td>
+          <td><a href="{% url 'piano_detail' wo.piano_id %}">{{ wo.piano.name }}</a></td>
+          <td>{{ wo.order_type }}</td>
+          <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
+          <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
+          <td class="text-muted text-sm">{{ wo.due_date|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:2rem;">No work orders yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

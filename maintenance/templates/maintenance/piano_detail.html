@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}{{ piano.name }} — Piano Maintainer{% endblock %}
+{% block topbar_title %}{{ piano.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.hero { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.hero-info { flex: 1; min-width: 240px; }
+.hero-name { font-size: 1.5rem; font-weight: 700; margin-bottom: .25rem; }
+.hero-sub { color: var(--clr-text-sec); margin-bottom: .15rem; }
+.hero-loc { color: var(--clr-text-dim); font-size: .88rem; }
+.hero-badges { display: flex; gap: .5rem; align-items: center; margin-top: .75rem; flex-wrap: wrap; }
+.hero-actions { display: flex; gap: .5rem; align-self: flex-start; flex-shrink: 0; flex-wrap: wrap; }
+.tabs { display: flex; gap: 0; border-bottom: 2px solid var(--clr-border); margin-bottom: 1.25rem; }
+.tab-btn {
+  padding: .6rem 1.1rem;
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--clr-text-sec);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.tab-btn:hover { color: var(--clr-text); }
+.tab-btn.active { color: var(--clr-primary); border-bottom-color: var(--clr-primary); }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.interval-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); gap: .75rem; }
+.interval-card {
+  padding: .75rem;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+}
+.interval-card .label { font-size: .82rem; font-weight: 600; color: var(--clr-text-sec); margin-bottom: .25rem; }
+.interval-card .value { font-size: .88rem; }
+.interval-card .due { margin-top: .35rem; font-size: .82rem; }
+.condition-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: .5rem;
+}
+.condition-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .45rem .6rem;
+  background: #f9fafb;
+  border-radius: var(--radius-sm);
+  font-size: .85rem;
+}
+.env-stats { display: flex; gap: 1.5rem; margin-top: 1rem; }
+.env-stat .label { font-size: .78rem; color: var(--clr-text-sec); }
+.env-stat .val { font-size: 1.1rem; font-weight: 700; }
+.qr-box {
+  background: #f9fafb; border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm); padding: .6rem .8rem;
+  display: flex; align-items: center; gap: .6rem;
+  margin-top: .75rem;
+}
+.qr-url {
+  font-family: monospace; font-size: .72rem;
+  color: var(--clr-text-dim); word-break: break-all; flex: 1;
+}
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: .5rem;
+}
+.photo-thumb {
+  aspect-ratio: 1; border-radius: var(--radius-sm);
+  overflow: hidden; border: 1px solid var(--clr-border);
+  position: relative;
+}
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.photo-thumb .profile-star {
+  position: absolute; top: 4px; left: 4px;
+  background: var(--clr-primary); color: #fff;
+  font-size: .6rem; padding: .1rem .3rem;
+  border-radius: 3px; font-weight: 600;
+}
+@media (max-width: 768px) {
+  .detail-grid { grid-template-columns: 1fr; }
+  .hero-actions { width: 100%; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'piano_list' %}" class="text-muted text-sm">← Back to Pianos</a>
+</div>
+
+<!-- Hero -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-body">
+    <div class="hero">
+      <div class="hero-info">
+        <h1 class="hero-name">{{ piano.name }}</h1>
+        <p class="hero-sub">{{ piano.make }}{% if piano.model %} — {{ piano.model }}{% endif %}</p>
+        <p class="hero-loc">{{ piano.location.name }}{% if piano.location_in_venue %} · {{ piano.location_in_venue }}{% endif %}</p>
+        <div class="hero-badges">
+          <span class="badge badge-{{ piano.piano_type|lower }}">{{ piano.piano_type }}</span>
+          {% if piano.serial_number %}<span class="text-dim text-sm">S/N: {{ piano.serial_number }}</span>{% endif %}
+          {% if piano.year_built %}<span class="text-dim text-sm">Built {{ piano.year_built }}</span>{% endif %}
+        </div>
+        <div class="qr-box">
+          <span style="font-size:1.2rem;">📱</span>
+          <span class="qr-url">{{ qr_url }}</span>
+          <button class="btn btn-xs btn-secondary"
+                  onclick="navigator.clipboard.writeText('{{ qr_url }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)">
+            Copy
+          </button>
+        </div>
+      </div>
+      <div class="hero-actions">
+        <a href="{% url 'piano_edit' piano.pk %}" class="btn btn-sm btn-secondary">Edit</a>
+        <a href="{% url 'piano_photo_upload' piano.pk %}" class="btn btn-sm btn-secondary">Photos</a>
+        <a href="{% url 'condition_reading_create' piano.pk %}" class="btn btn-sm btn-secondary">Condition Report</a>
+        <a href="{% url 'workorder_create' %}?piano={{ piano.pk }}" class="btn btn-sm btn-primary">+ Work Order</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if photos %}
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-header">
+    <h2>Photos</h2>
+    <a href="{% url 'piano_photo_upload' piano.pk %}" class="btn btn-xs btn-secondary">+ Upload</a>
+  </div>
+  <div class="card-body">
+    <div class="photo-grid">
+      {% for photo in photos %}
+      <div class="photo-thumb">
+        <img src="{{ photo.image.url }}" alt="{{ photo.caption|default:piano.name }}" loading="lazy">
+        {% if photo.is_profile_photo %}<span class="profile-star">Profile</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active"
+          hx-get="{% url 'piano_tab' piano.pk 'overview' %}"
+          hx-target="#tab-content" hx-swap="innerHTML"
+          onclick="document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">
+    Overview
+  </button>
+  <button class="tab-btn"
+          hx-get="{% url 'piano_tab' piano.pk 'work-orders' %}"
+          hx-target="#tab-content" hx-swap="innerHTML"
+          onclick="document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">
+    Work Orders
+  </button>
+  <button class="tab-btn"
+          hx-get="{% url 'piano_tab' piano.pk 'maintenance' %}"
+          hx-target="#tab-content" hx-swap="innerHTML"
+          onclick="document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">
+    Maintenance
+  </button>
+  <button class="tab-btn"
+          hx-get="{% url 'piano_tab' piano.pk 'condition' %}"
+          hx-target="#tab-content" hx-swap="innerHTML"
+          onclick="document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">
+    Condition
+  </button>
+</div>
+
+<div id="tab-content">
+  {% include "maintenance/partials/piano_tab_overview.html" %}
+</div>
+{% endblock %}

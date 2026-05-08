@@ -4,14 +4,6 @@
   margin: 0 auto;
 }
 
-.page-header { margin-bottom: 1.25rem; }
-.page-header h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-/* Tabs */
 .tabs {
   display: flex;
   border-bottom: 2px solid #e5e7eb;
@@ -32,13 +24,11 @@
 .tab-btn:hover { color: #111827; }
 .tab-btn.active { color: #1a1a2e; border-bottom-color: #1a1a2e; }
 
-/* Calendar layout */
 .cal-layout {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1.25rem;
   transition: grid-template-columns 0.2s;
-  /* Prevent the grid from ever exceeding the page content width */
   max-width: 100%;
   overflow: hidden;
 }
@@ -59,7 +49,6 @@
   z-index: 10;
 }
 
-/* Day Sidebar */
 .day-sidebar {
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -141,30 +130,10 @@
   flex-wrap: wrap;
 }
 
-.sev-type {
-  font-size: 0.75rem;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.sev-title {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
-}
-
-.sev-meta {
-  font-size: 0.78rem;
-  color: #9ca3af;
-  margin: 0;
-}
-
-.sev-desc {
-  font-size: 0.82rem;
-  color: #374151;
-  margin: 0;
-}
+.sev-type  { font-size: 0.75rem; color: #6b7280; font-weight: 500; }
+.sev-title { font-size: 0.88rem; font-weight: 600; color: #111827; margin: 0; }
+.sev-meta  { font-size: 0.78rem; color: #9ca3af; margin: 0; }
+.sev-desc  { font-size: 0.82rem; color: #374151; margin: 0; }
 
 .sev-edit-btn {
   margin-top: 0.4rem;
@@ -178,7 +147,6 @@
 }
 .sev-edit-btn:hover { background: #e5e7eb; }
 
-/* List view */
 .list-filters {
   display: flex;
   align-items: center;
@@ -209,13 +177,6 @@
 .list-add-btn {
   margin-left: auto;
   white-space: nowrap;
-}
-
-/* Shared table */
-.table-wrapper {
-  overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
 }
 
 .data-table {
@@ -250,16 +211,6 @@
 .ev-date   { font-size: 0.85rem; color: #374151; white-space: nowrap; }
 .fw-medium { font-weight: 500; }
 .meta      { font-size: 0.78rem; color: #9ca3af; }
-.actions   { display: flex; gap: 0.5rem; }
-
-.badge {
-  display: inline-block;
-  padding: 0.2rem 0.6rem;
-  border-radius: 12px;
-  font-size: 0.78rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
 
 .type-tag {
   font-size: 0.78rem;
@@ -267,42 +218,6 @@
   white-space: nowrap;
 }
 
-/* Buttons */
-.btn-primary {
-  padding: 0.5rem 1.25rem;
-  background: #1a1a2e;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.btn-primary:hover { background: #2d2d4e; }
-
-.btn-edit {
-  padding: 0.3rem 0.75rem;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-.btn-edit:hover { background: #e5e7eb; }
-
-.loading {
-  color: #6b7280;
-  padding: 2rem 0;
-  text-align: center;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 4rem 2rem;
-  color: #6b7280;
-}
-
-/* ── Calendar filter bar ────────────────────────────────────────────────── */
 .cal-filter-bar {
   display: flex;
   align-items: center;
@@ -322,7 +237,6 @@
 }
 .loc-select:focus { outline: none; border-color: #1a1a2e; }
 
-/* ── Sidebar event action row ───────────────────────────────────────────── */
 .sev-actions {
   display: flex;
   gap: 0.5rem;
@@ -337,7 +251,6 @@
 }
 .sev-goto-btn:hover { background: #dbeafe; }
 
-/* ── Schedule management table ──────────────────────────────────────────── */
 .active-only-toggle {
   display: flex;
   align-items: center;
@@ -388,72 +301,8 @@
 
 .row-paused td { color: #9ca3af; }
 
-/* ── Confirm dialog (shared) ────────────────────────────────────────────── */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.confirm-dialog {
-  background: #fff;
-  border-radius: 10px;
-  padding: 1.75rem;
-  max-width: 420px;
-  width: 90%;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.18);
-}
-
-.confirm-dialog h3 {
-  font-size: 1.05rem;
-  font-weight: 600;
-  margin-bottom: 0.75rem;
-}
-
-.confirm-dialog p {
-  font-size: 0.9rem;
-  color: #374151;
-  line-height: 1.5;
-  margin-bottom: 1.25rem;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
-}
-
-.btn-secondary {
-  padding: 0.5rem 1.1rem;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 5px;
-  font-size: 0.88rem;
-  cursor: pointer;
-}
-.btn-secondary:hover { background: #e5e7eb; }
-
-.btn-danger {
-  padding: 0.5rem 1.1rem;
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  font-size: 0.88rem;
-  cursor: pointer;
-}
-.btn-danger:hover { background: #dc2626; }
-
-.page-error {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  padding: 0.75rem 1rem;
-  font-size: 0.88rem;
+@media (max-width: 768px) {
+  .cal-layout.with-sidebar {
+    grid-template-columns: 1fr;
+  }
 }

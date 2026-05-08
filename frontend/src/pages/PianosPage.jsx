@@ -121,7 +121,7 @@ export default function PianosPage() {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Brand</th>
+                  <th>Make</th>
                   <th>Model</th>
                   <th>Type</th>
                   <th>Location</th>
@@ -143,7 +143,7 @@ export default function PianosPage() {
                         <Link to={`/pianos/${piano.id}`}>{piano.name}</Link>
                       </div>
                     </td>
-                    <td>{piano.brand}</td>
+                    <td>{piano.make}</td>
                     <td>{piano.model || <span className="empty">—</span>}</td>
                     <td>
                       <span className={`badge type-${piano.piano_type.toLowerCase()}`}>

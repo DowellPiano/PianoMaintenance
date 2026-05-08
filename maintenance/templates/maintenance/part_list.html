@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Parts — Piano Maintainer{% endblock %}
+{% block topbar_title %}Parts{% endblock %}
+
+{% block extra_css %}
+<style>
+.stock-low { color: var(--clr-danger); font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Parts Inventory</h1>
+    <p class="page-subtitle">{{ parts|length }} part{{ parts|length|pluralize }}</p>
+  </div>
+  <a href="{% url 'part_create' %}" class="btn btn-primary">+ Add Part</a>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Part #</th>
+          <th>Supplier</th>
+          <th>Unit Cost</th>
+          <th>Stock</th>
+          <th>Reorder At</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for part in parts %}
+        <tr>
+          <td class="fw-medium">{{ part.name }}</td>
+          <td class="text-sm text-muted">{{ part.part_number|default:"—" }}</td>
+          <td class="text-sm">{{ part.supplier|default:"—" }}</td>
+          <td class="text-sm">{% if part.unit_cost is not None %}${{ part.unit_cost }}{% else %}—{% endif %}</td>
+          <td class="text-sm {% if part.needs_reorder %}stock-low{% endif %}">
+            {{ part.stock_quantity }}
+            {% if part.needs_reorder %}<span class="badge badge-overdue" style="margin-left:.3rem;">Low</span>{% endif %}
+          </td>
+          <td class="text-sm text-muted">{{ part.reorder_threshold }}</td>
+          <td>
+            <a href="{% url 'part_edit' part.pk %}" class="btn btn-xs btn-secondary">Edit</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" style="text-align:center; padding:2rem;">
+            <div class="empty-state" style="padding:1rem;">
+              <div class="empty-icon">⚙️</div>
+              <p>No parts yet. <a href="{% url 'part_create' %}">Add one.</a></p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

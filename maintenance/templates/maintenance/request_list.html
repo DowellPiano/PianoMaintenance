@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Requests — Piano Maintainer{% endblock %}
+{% block topbar_title %}Requests{% endblock %}
+
+{% block extra_css %}
+<style>
+.req-filters { display: flex; gap: .75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+.req-actions { display: flex; gap: .35rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Maintenance Requests</h1>
+    <p class="page-subtitle">{{ requests|length }} request{{ requests|length|pluralize }}</p>
+  </div>
+</div>
+
+<div class="req-filters">
+  <form method="get" style="display:contents;">
+    <select name="status" class="form-select" style="width:auto; min-width:140px;" onchange="this.form.submit()">
+      <option value="">All Statuses</option>
+      {% for val, label in status_choices %}
+        <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    {% if status_filter %}
+      <a href="{% url 'request_list' %}" class="btn btn-xs btn-secondary">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Piano</th>
+          <th>Reported By</th>
+          <th>Issue</th>
+          <th>Status</th>
+          <th>Work Order</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for req in requests %}
+        <tr>
+          <td class="text-sm fw-medium">#{{ req.pk }}</td>
+          <td>
+            <a href="{% url 'piano_detail' req.piano.pk %}">{{ req.piano.name }}</a>
+            <div class="text-dim text-sm">{{ req.piano.location.name }}</div>
+          </td>
+          <td class="text-sm">
+            {{ req.reported_by_name|default:"Anonymous" }}
+            {% if req.reported_by_email %}<div class="text-dim">{{ req.reported_by_email }}</div>{% endif %}
+          </td>
+          <td style="max-width:260px;">{{ req.issue_description|truncatechars:100 }}</td>
+          <td>
+            {% if req.status == "New" %}
+              <span class="badge badge-urgent">New</span>
+            {% elif req.status == "Assigned" %}
+              <span class="badge badge-in-progress">Assigned</span>
+            {% else %}
+              <span class="badge badge-complete">Resolved</span>
+            {% endif %}
+          </td>
+          <td class="text-sm">
+            {% if req.work_order %}
+              <a href="{% url 'workorder_detail' req.work_order.pk %}">WO-{{ req.work_order.pk }}</a>
+            {% else %}
+              <span class="text-dim">—</span>
+            {% endif %}
+          </td>
+          <td class="text-sm text-muted">{{ req.created_at|date:"M d, Y" }}</td>
+          <td>
+            {% if req.status == "New" %}
+            <div class="req-actions">
+              <form method="post" action="{% url 'request_approve' req.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-xs btn-success">Approve</button>
+              </form>
+              <form method="post" action="{% url 'request_reject' req.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-xs btn-secondary">Dismiss</button>
+              </form>
+            </div>
+            {% else %}
+              <span class="text-dim text-sm">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" style="text-align:center; padding:2rem;">
+            <div class="empty-state" style="padding:1rem;">
+              <div class="empty-icon">📨</div>
+              <p>No maintenance requests.</p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -5,7 +5,7 @@ import './PianoFormModal.css'
 
 const EMPTY_FORM = {
   name: '',
-  brand: '',
+  make: '',
   model: '',
   serial_number: '',
   piano_type: 'Grand',
@@ -35,7 +35,7 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
     if (piano) {
       setForm({
         name: piano.name ?? '',
-        brand: piano.brand ?? '',
+        make: piano.make ?? '',
         model: piano.model ?? '',
         serial_number: piano.serial_number ?? '',
         piano_type: piano.piano_type ?? 'Grand',
@@ -115,15 +115,15 @@ export default function PianoFormModal({ piano, onClose, onSaved }) {
               {fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
             </label>
             <label>
-              Brand *
+              Make *
               <input
-                name="brand"
-                value={form.brand}
+                name="make"
+                value={form.make}
                 onChange={handleChange}
                 required
-                className={fieldErrors.brand ? 'input-error' : undefined}
+                className={fieldErrors.make ? 'input-error' : undefined}
               />
-              {fieldErrors.brand && <span className="field-error">{fieldErrors.brand}</span>}
+              {fieldErrors.make && <span className="field-error">{fieldErrors.make}</span>}
             </label>
           </div>
 

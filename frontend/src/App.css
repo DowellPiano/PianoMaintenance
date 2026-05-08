@@ -4,60 +4,64 @@
   padding: 0;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #f5f5f5;
-  color: #333;
-}
+/* ── App header ────────────────────────────────────────────────────────────── */
 
 .app-header {
   background: #1a1a2e;
   color: white;
-  padding: 1rem 2rem;
+  padding: 0.75rem 1.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 .app-header h1 {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
   color: #fff;
+  white-space: nowrap;
+  margin: 0;
 }
 
 .app-header nav {
   display: flex;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .app-header nav a {
   color: #ccc;
   text-decoration: none;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   padding: 0.25rem 0;
   border-bottom: 2px solid transparent;
   transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
 }
 
-.app-header nav a:hover {
-  color: white;
-}
+.app-header nav a:hover { color: white; }
+.app-header nav a.active { color: white; border-bottom-color: white; }
 
-.app-header nav a.active {
-  color: white;
-  border-bottom-color: white;
+/* ── Header right cluster ──────────────────────────────────────────────────── */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .header-user {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-left: 1.5rem;
 }
 
 .header-username {
   color: #ccc;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
 }
 
 .btn-logout {
@@ -71,81 +75,10 @@ body {
   transition: color 0.15s, border-color 0.15s;
 }
 
-.btn-logout:hover {
-  color: #fff;
-  border-color: #9ca3af;
-}
+.btn-logout:hover { color: #fff; border-color: #9ca3af; }
 
-/* ─── Global spinner ────────────────────────────────────────────────────────── */
+/* ── Alert bell ────────────────────────────────────────────────────────────── */
 
-.spinner {
-  display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid #e5e7eb;
-  border-top-color: #1a1a2e;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  vertical-align: middle;
-  flex-shrink: 0;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ─── Table loading / empty rows ────────────────────────────────────────────── */
-
-.td-loading,
-.td-empty {
-  text-align: center;
-  padding: 2.5rem 1rem;
-  color: #6b7280;
-  font-size: 0.9rem;
-}
-
-.td-loading {
-  display: flex;           /* only works in a <td> with display:table-cell override */
-}
-
-/* Use a wrapper inside the <td> instead of flexing the td itself */
-.td-loading-inner {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-/* ─── Modal dropdown loading ────────────────────────────────────────────────── */
-
-select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.app-main {
-  padding: 3rem 2rem;
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.app-main h2 {
-  font-size: 1.8rem;
-  margin-bottom: 0.75rem;
-}
-
-.app-main p {
-  color: #666;
-  font-size: 1rem;
-}
-
-/* ── Header right cluster (bell + user) ─────────────────────────────────── */
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-/* ── Alert bell ──────────────────────────────────────────────────────────── */
 .bell-btn {
   position: relative;
   background: none;
@@ -160,6 +93,7 @@ select:disabled {
   line-height: 1;
   color: #fff;
 }
+
 .bell-btn:hover { background: rgba(255,255,255,0.1); }
 
 .bell-badge {
@@ -181,3 +115,263 @@ select:disabled {
   pointer-events: none;
 }
 
+/* ── Hamburger button (hidden on desktop) ──────────────────────────────────── */
+
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.35rem;
+  color: #fff;
+  line-height: 0;
+}
+
+/* ── Mobile nav ────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .app-header {
+    flex-wrap: wrap;
+    padding: 0.65rem 1rem;
+    gap: 0;
+  }
+
+  .hamburger-btn { display: block; }
+
+  .app-header nav {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    gap: 0;
+    order: 10;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    margin-top: 0.5rem;
+  }
+
+  .app-header nav.nav-open { display: flex; }
+
+  .app-header nav a {
+    padding: 0.6rem 0.25rem;
+    border-bottom: none;
+    font-size: 0.95rem;
+  }
+
+  .app-header nav a.active {
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+    padding-left: 0.5rem;
+  }
+
+  .header-username { display: none; }
+
+  .header-user { gap: 0.5rem; }
+}
+
+/* ── Shared page layout ────────────────────────────────────────────────────── */
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  gap: 1rem;
+}
+
+.page-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 0.2rem;
+}
+
+.page-subtitle {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ── Shared error banner ───────────────────────────────────────────────────── */
+
+.page-error {
+  padding: 0.75rem 1rem;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 5px;
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Shared loading / empty ────────────────────────────────────────────────── */
+
+.loading {
+  color: #6b7280;
+  padding: 2rem 0;
+  text-align: center;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #6b7280;
+}
+
+.empty-state p { margin-bottom: 1rem; font-size: 1rem; }
+
+.empty { color: #d1d5db; }
+
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #e5e7eb;
+  border-top-color: #1a1a2e;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.td-loading, .td-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+/* ── Shared buttons ────────────────────────────────────────────────────────── */
+
+.btn-primary {
+  padding: 0.5rem 1.25rem;
+  background: #1a1a2e;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.btn-primary:hover:not(:disabled) { background: #2d2d4e; }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btn-secondary {
+  padding: 0.5rem 1.25rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.btn-secondary:hover { background: #e5e7eb; }
+
+.btn-danger {
+  padding: 0.5rem 1.25rem;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.btn-danger:hover { background: #b91c1c; }
+
+.btn-edit {
+  padding: 0.3rem 0.75rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.btn-edit:hover { background: #e5e7eb; }
+
+.btn-delete, .btn-delete-row {
+  padding: 0.28rem 0.65rem;
+  background: #fff;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.btn-delete:hover, .btn-delete-row:hover { background: #fef2f2; }
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+/* ── Shared badge ──────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── Shared table ──────────────────────────────────────────────────────────── */
+
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+/* ── Shared modal / confirm dialog ─────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.confirm-dialog {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+
+.confirm-dialog h3 { margin: 0 0 0.75rem; font-size: 1rem; }
+.confirm-dialog p  { margin: 0 0 1.25rem; font-size: 0.9rem; color: #374151; }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+select:disabled { opacity: 0.6; cursor: not-allowed; }

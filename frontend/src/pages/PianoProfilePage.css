@@ -1,12 +1,9 @@
-/* ─── Page Shell ─────────────────────────────────────────────────────────── */
-
 .profile-page {
   padding: 1.5rem 2rem 3rem;
   max-width: 1200px;
   margin: 0 auto;
 }
 
-/* Legacy alias kept for compatibility */
 .pp-page {
   padding: 2rem;
   max-width: 1200px;
@@ -31,8 +28,6 @@
   margin: 2rem;
 }
 
-/* ─── Back button ─────────────────────────────────────────────────────────── */
-
 .back-btn {
   display: inline-flex;
   align-items: center;
@@ -47,23 +42,15 @@
   margin-bottom: 1.5rem;
   transition: background 0.15s;
 }
+.back-btn:hover { background: #e5e7eb; }
 
-.back-btn:hover {
-  background: #e5e7eb;
-}
-
-.pp-breadcrumb {
-  margin-bottom: 1rem;
-}
-
+.pp-breadcrumb { margin-bottom: 1rem; }
 .pp-back {
   font-size: 0.88rem;
   color: #6b7280;
   text-decoration: none;
 }
 .pp-back:hover { color: #111827; }
-
-/* ─── Hero Header ─────────────────────────────────────────────────────────── */
 
 .profile-hero {
   display: flex;
@@ -78,9 +65,7 @@
   position: relative;
 }
 
-.hero-photo-wrap {
-  flex-shrink: 0;
-}
+.hero-photo-wrap { flex-shrink: 0; }
 
 .hero-photo {
   width: 160px;
@@ -136,9 +121,7 @@
   gap: 0.3rem;
 }
 
-.location-icon {
-  font-size: 0.85rem;
-}
+.location-icon { font-size: 0.85rem; }
 
 .hero-stats {
   display: flex;
@@ -195,26 +178,11 @@
   cursor: pointer;
   transition: background 0.15s;
 }
-
-.hero-edit-btn:hover {
-  background: #2d2d4e;
-}
-
-/* ─── Type badges (shared with PianosPage) ────────────────────────────────── */
-
-.badge {
-  display: inline-block;
-  padding: 0.25rem 0.7rem;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
+.hero-edit-btn:hover { background: #2d2d4e; }
 
 .type-grand   { background: #ede9fe; color: #5b21b6; }
 .type-upright { background: #dbeafe; color: #1e40af; }
 .type-digital { background: #d1fae5; color: #065f46; }
-
-/* ─── Tabs ────────────────────────────────────────────────────────────────── */
 
 .profile-tabs {
   display: flex;
@@ -240,10 +208,7 @@
   white-space: nowrap;
   transition: color 0.15s;
 }
-
-.tab-btn:hover {
-  color: #111827;
-}
+.tab-btn:hover { color: #111827; }
 
 .tab-btn--active {
   color: #1a1a2e;
@@ -268,13 +233,7 @@
   color: #fff;
 }
 
-/* ─── Tab content container ───────────────────────────────────────────────── */
-
-.profile-tab-content {
-  min-height: 200px;
-}
-
-/* ─── Details Tab ─────────────────────────────────────────────────────────── */
+.profile-tab-content { min-height: 200px; }
 
 .details-grid {
   display: grid;
@@ -286,9 +245,7 @@
   overflow: hidden;
 }
 
-.details-row {
-  display: contents;
-}
+.details-row { display: contents; }
 
 .details-row dt,
 .details-row dd {
@@ -297,9 +254,7 @@
 }
 
 .details-row:last-child dt,
-.details-row:last-child dd {
-  border-bottom: none;
-}
+.details-row:last-child dd { border-bottom: none; }
 
 .details-row dt {
   font-size: 0.82rem;
@@ -318,11 +273,7 @@
   word-break: break-word;
 }
 
-.details-row dd.empty {
-  color: #d1d5db;
-}
-
-/* ─── Photos Tab ──────────────────────────────────────────────────────────── */
+.details-row dd.empty { color: #d1d5db; }
 
 .photo-upload-form {
   display: flex;
@@ -358,7 +309,6 @@
   min-width: 200px;
   flex: 1;
 }
-
 .caption-input:focus {
   outline: none;
   border-color: #4f46e5;
@@ -398,10 +348,7 @@
   position: relative;
   transition: box-shadow 0.15s;
 }
-
-.photo-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-}
+.photo-card:hover { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); }
 
 .photo-card--profile {
   border-color: #f59e0b;
@@ -430,10 +377,7 @@
   display: block;
   transition: opacity 0.15s;
 }
-
-.photo-thumb:hover {
-  opacity: 0.88;
-}
+.photo-thumb:hover { opacity: 0.88; }
 
 .photo-caption {
   padding: 0.5rem 0.75rem;
@@ -461,22 +405,14 @@
   color: #374151;
   transition: background 0.15s;
 }
-
-.btn-sm:hover {
-  background: #e5e7eb;
-}
+.btn-sm:hover { background: #e5e7eb; }
 
 .btn-danger-sm {
   background: #fff;
   color: #dc2626;
   border-color: #fca5a5;
 }
-
-.btn-danger-sm:hover {
-  background: #fef2f2;
-}
-
-/* ─── Lightbox ────────────────────────────────────────────────────────────── */
+.btn-danger-sm:hover { background: #fef2f2; }
 
 .lightbox {
   position: fixed;
@@ -521,14 +457,6 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
-/* ─── Shared table styles ─────────────────────────────────────────────────── */
-
-.table-wrapper {
-  overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
 .profile-table {
   width: 100%;
   border-collapse: collapse;
@@ -556,15 +484,9 @@
   vertical-align: top;
 }
 
-.profile-table tbody tr:last-child td {
-  border-bottom: none;
-}
+.profile-table tbody tr:last-child td { border-bottom: none; }
+.profile-table tbody tr:hover td { background: #fafafa; }
 
-.profile-table tbody tr:hover td {
-  background: #fafafa;
-}
-
-/* Legacy pp-table alias */
 .pp-table {
   width: 100%;
   border-collapse: collapse;
@@ -606,18 +528,12 @@
   font-size: 0.85rem;
 }
 
-.empty {
-  color: #d1d5db;
-}
-
 .empty-tab {
   text-align: center;
   padding: 3rem;
   color: #9ca3af;
   font-size: 0.95rem;
 }
-
-/* ─── Status badges ───────────────────────────────────────────────────────── */
 
 .status-badge {
   display: inline-block;
@@ -636,11 +552,8 @@
 .status-duesoon    { background: #fef3c7; color: #92400e; }
 .status-upcoming   { background: #ede9fe; color: #4c1d95; }
 
-/* Legacy status aliases */
 .status-due-soon { background: #fef9c3; color: #854d0e; }
 .status-on-track { background: #d1fae5; color: #065f46; }
-
-/* ─── Priority badges ─────────────────────────────────────────────────────── */
 
 .priority-badge {
   display: inline-block;
@@ -656,13 +569,10 @@
 .pri-normal { background: #dbeafe; color: #1e40af; }
 .pri-low    { background: #f3f4f6; color: #6b7280; }
 
-/* Legacy priority aliases */
 .priority-urgent { background: #fee2e2; color: #991b1b; }
 .priority-high   { background: #fef3c7; color: #92400e; }
 .priority-normal { background: #eff6ff; color: #1d4ed8; }
 .priority-low    { background: #f3f4f6; color: #374151; }
-
-/* ─── Event type badge (Upcoming tab) ────────────────────────────────────── */
 
 .event-type-badge {
   display: inline-block;
@@ -675,8 +585,6 @@
 
 .event-type-work_order { background: #dbeafe; color: #1e40af; }
 .event-type-schedule   { background: #ede9fe; color: #4c1d95; }
-
-/* ─── Schedules tab: source indicators ───────────────────────────────────── */
 
 .source-template {
   font-size: 0.8rem;
@@ -694,60 +602,6 @@
   border-radius: 8px;
 }
 
-/* ─── Shared buttons ──────────────────────────────────────────────────────── */
-
-.btn-primary {
-  padding: 0.5rem 1.25rem;
-  background: #1a1a2e;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.btn-primary:hover { background: #2d2d4e; }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.btn-secondary {
-  padding: 0.5rem 1.25rem;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.btn-secondary:hover { background: #e5e7eb; }
-
-.btn-danger {
-  padding: 0.5rem 1.25rem;
-  background: #dc2626;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.btn-danger:hover { background: #b91c1c; }
-
-.btn-edit {
-  padding: 0.3rem 0.75rem;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 0.82rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.btn-edit:hover { background: #e5e7eb; }
-
-/* Legacy action buttons */
 .btn-start-wo {
   padding: 0.3rem 0.75rem;
   background: #1a1a2e;
@@ -796,23 +650,6 @@
 }
 .btn-delete-sm:hover { background: #fef2f2; }
 
-/* ─── Spinner ─────────────────────────────────────────────────────────────── */
-
-.spinner {
-  width: 1.25rem;
-  height: 1.25rem;
-  border: 2px solid #e5e7eb;
-  border-top-color: #1a1a2e;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ─── Legacy pp-* helpers ─────────────────────────────────────────────────── */
-
 .pp-card {
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -858,9 +695,7 @@
   white-space: pre-wrap;
 }
 
-.pp-section {
-  margin-bottom: 2rem;
-}
+.pp-section { margin-bottom: 2rem; }
 
 .pp-section-header {
   display: flex;
@@ -877,9 +712,7 @@
   margin-bottom: 0.75rem;
 }
 
-.pp-section-header .pp-section-title {
-  margin-bottom: 0;
-}
+.pp-section-header .pp-section-title { margin-bottom: 0; }
 
 .pp-empty {
   color: #9ca3af;
@@ -939,62 +772,8 @@
   cursor: pointer;
 }
 
-/* Shared confirm dialog */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.confirm-dialog {
-  background: #fff;
-  border-radius: 8px;
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 380px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-}
-.confirm-dialog h3 { margin: 0 0 0.75rem; font-size: 1rem; }
-.confirm-dialog p  { margin: 0 0 1.25rem; font-size: 0.9rem; color: #374151; }
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-.page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
-}
-.page-header h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0 0 0.2rem;
-}
-.page-subtitle {
-  font-size: 0.85rem;
-  color: #6b7280;
-  margin: 0;
-}
-.loading {
-  color: #6b7280;
-  padding: 2rem 0;
-  text-align: center;
-}
-
-/* ─── Responsive ──────────────────────────────────────────────────────────── */
-
 @media (max-width: 720px) {
-  .profile-page {
-    padding: 1rem;
-  }
+  .profile-page { padding: 1rem; }
 
   .profile-hero {
     flex-direction: column;
@@ -1002,13 +781,8 @@
     text-align: center;
   }
 
-  .hero-location {
-    justify-content: center;
-  }
-
-  .hero-stats {
-    justify-content: center;
-  }
+  .hero-location { justify-content: center; }
+  .hero-stats { justify-content: center; }
 
   .hero-edit-btn {
     position: static;
@@ -1016,13 +790,9 @@
     align-self: center;
   }
 
-  .hero-name-row {
-    justify-content: center;
-  }
+  .hero-name-row { justify-content: center; }
 
-  .details-grid {
-    grid-template-columns: 1fr;
-  }
+  .details-grid { grid-template-columns: 1fr; }
 
   .details-row dt {
     border-right: none;
@@ -1030,9 +800,7 @@
     padding-bottom: 0.25rem;
   }
 
-  .details-row dd {
-    padding-top: 0.25rem;
-  }
+  .details-row dd { padding-top: 0.25rem; }
 
   .photo-grid {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

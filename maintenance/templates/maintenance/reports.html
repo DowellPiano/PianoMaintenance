@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Reports — Piano Maintainer{% endblock %}
+{% block topbar_title %}Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+.report-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.report-card {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+}
+.report-card-title { font-weight: 700; font-size: 1rem; margin-bottom: .25rem; }
+.report-card-desc { color: var(--clr-text-sec); font-size: .88rem; margin-bottom: 1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Reports & Exports</h1>
+</div>
+
+<div class="report-cards">
+  <div class="report-card">
+    <div class="report-card-title">Work Orders Export</div>
+    <div class="report-card-desc">Download all work orders as a CSV file with status, assignment, and dates.</div>
+    <a href="{% url 'report_export_workorders' %}" class="btn btn-sm btn-primary">Download CSV</a>
+  </div>
+
+  <div class="report-card">
+    <div class="report-card-title">Piano Inventory Export</div>
+    <div class="report-card-desc">Download all active pianos as a CSV file with location and details.</div>
+    <a href="{% url 'report_export_pianos' %}" class="btn btn-sm btn-primary">Download CSV</a>
+  </div>
+
+  <div class="report-card">
+    <div class="report-card-title">QR Code Sheet</div>
+    <div class="report-card-desc">View and print QR request links for all pianos.</div>
+    <a href="{% url 'qr_codes' %}" class="btn btn-sm btn-secondary">View QR Codes</a>
+  </div>
+
+  <div class="report-card">
+    <div class="report-card-title">Import Pianos</div>
+    <div class="report-card-desc">Bulk import pianos from a CSV file.</div>
+    <a href="{% url 'piano_import' %}" class="btn btn-sm btn-secondary">Import CSV</a>
+  </div>
+</div>
+{% endblock %}

@@ -313,7 +313,7 @@ function ListView({ onCreateWO, onEditWO }) {
                       {ev.type === 'work_order' ? 'Work Order' : 'Schedule'}
                     </span>
                   </td>
-                  <td className="fw-medium">{ev.piano_name}<br /><span className="meta">{ev.piano_brand}</span></td>
+                  <td className="fw-medium">{ev.piano_name}<br /><span className="meta">{ev.piano_make}</span></td>
                   <td>{ev.piano_location}</td>
                   <td>{ev.description || ev.title}</td>
                   <td><StatusBadge status={ev.status} /></td>

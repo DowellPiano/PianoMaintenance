@@ -22,8 +22,8 @@ function AppShell() {
   const { user, logout } = useAuth()
   const [alertCount, setAlertCount] = useState(0)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
 
-  // Poll for unacknowledged alert count
   useEffect(() => {
     function fetchAlerts() {
       apiFetch('/api/alerts/unread-count/')
@@ -43,8 +43,20 @@ function AppShell() {
   return (
     <div className="app">
       <header className="app-header">
+        <button
+          className="hamburger-btn"
+          onClick={() => setNavOpen(o => !o)}
+          aria-label="Toggle navigation"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            {navOpen
+              ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
+              : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+            }
+          </svg>
+        </button>
         <h1>Piano Maintainer</h1>
-        <nav>
+        <nav className={navOpen ? 'nav-open' : ''} onClick={() => setNavOpen(false)}>
           <NavLink to="/" end>Dashboard</NavLink>
           <NavLink to="/pianos">Pianos</NavLink>
           <NavLink to="/locations">Locations</NavLink>

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Import Pianos — Piano Maintainer{% endblock %}
+{% block topbar_title %}Import Pianos{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'piano_list' %}" class="text-muted text-sm">← Back to Pianos</a>
+</div>
+
+<div class="card" style="max-width:600px;">
+  <div class="card-header"><h2>Import Pianos from CSV</h2></div>
+  <div class="card-body">
+    <p class="text-sm text-muted mb-2">
+      Upload a CSV file with the following columns:
+    </p>
+    <div class="card" style="margin-bottom:1rem; background:#f9fafb;">
+      <div class="card-body" style="padding:.75rem; font-family:monospace; font-size:.82rem; overflow-x:auto; white-space:nowrap;">
+        name, make, model, serial_number, piano_type, location, location_in_venue, year_built, year_acquired, notes
+      </div>
+    </div>
+    <p class="text-sm text-muted mb-2">
+      <strong>piano_type</strong> must be one of: Grand, Upright, Digital.<br>
+      <strong>location</strong> will be created if it doesn't exist.<br>
+      Empty optional fields are fine.
+    </p>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="form-group">
+        <label class="form-label" for="csv_file">CSV File *</label>
+        <input type="file" name="csv_file" id="csv_file" accept=".csv" required class="form-input">
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <a href="{% url 'piano_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Import</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

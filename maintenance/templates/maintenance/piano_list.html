@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}Pianos — Piano Maintainer{% endblock %}
+{% block topbar_title %}Pianos{% endblock %}
+
+{% block extra_css %}
+<style>
+.piano-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.piano-card {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: box-shadow .15s;
+}
+.piano-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.piano-card-photo {
+  height: 140px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  opacity: .3;
+  overflow: hidden;
+}
+.piano-card-photo img { width: 100%; height: 100%; object-fit: cover; opacity: 1; }
+.piano-card-body { padding: 1rem; }
+.piano-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; margin-bottom: .4rem; }
+.piano-card-name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--clr-text);
+  text-decoration: none;
+}
+.piano-card-name:hover { color: var(--clr-primary); text-decoration: none; }
+.piano-card-meta { color: var(--clr-text-sec); font-size: .875rem; margin-bottom: .2rem; }
+.piano-card-location { color: var(--clr-text-dim); font-size: .82rem; }
+.piano-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-top: .75rem;
+  padding-top: .65rem;
+  border-top: 1px solid var(--clr-border);
+}
+.piano-card-conditions { display: flex; gap: .4rem; flex-wrap: wrap; }
+.condition-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.condition-dot.excellent { background: #16a34a; }
+.condition-dot.good { background: #2563eb; }
+.condition-dot.fair { background: #f59e0b; }
+.condition-dot.poor { background: #dc2626; }
+.condition-dot.attention { background: #7f1d1d; }
+.next-due-label { font-size: .78rem; }
+.filter-bar {
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+.filter-bar .form-input,
+.filter-bar .form-select { flex: none; }
+@media (max-width: 768px) {
+  .piano-grid { grid-template-columns: 1fr; }
+  .filter-bar { flex-direction: column; }
+  .filter-bar .form-input,
+  .filter-bar .form-select { width: 100%; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Pianos</h1>
+    <p class="page-subtitle">{{ pianos|length }} piano{{ pianos|length|pluralize }} registered</p>
+  </div>
+  <div class="gap-row">
+    <a href="{% url 'piano_create' %}" class="btn btn-primary">+ Add Piano</a>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <input type="text" name="q" value="{{ search_query }}" placeholder="Search pianos…"
+         class="form-input" style="width:240px;">
+  <select name="location" class="form-select" style="width:180px;" onchange="this.form.submit()">
+    <option value="">All Locations</option>
+    {% for loc in locations %}
+      <option value="{{ loc.id }}" {% if loc.id|stringformat:"d" == location_filter %}selected{% endif %}>{{ loc.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="type" class="form-select" style="width:150px;" onchange="this.form.submit()">
+    <option value="">All Types</option>
+    <option value="Grand" {% if type_filter == "Grand" %}selected{% endif %}>Grand</option>
+    <option value="Upright" {% if type_filter == "Upright" %}selected{% endif %}>Upright</option>
+    <option value="Digital" {% if type_filter == "Digital" %}selected{% endif %}>Digital</option>
+  </select>
+</form>
+
+<div class="piano-grid">
+  {% for piano in pianos %}
+  <div class="piano-card">
+    <div class="piano-card-photo">
+      {% if piano.profile_photo %}
+        <img src="{{ piano.profile_photo.image.url }}" alt="{{ piano.name }}">
+      {% else %}
+        🎹
+      {% endif %}
+    </div>
+    <div class="piano-card-body">
+      <div class="piano-card-top">
+        <a href="{% url 'piano_detail' piano.pk %}" class="piano-card-name">{{ piano.name }}</a>
+        <span class="badge badge-{{ piano.piano_type|lower }}">{{ piano.piano_type }}</span>
+      </div>
+      <p class="piano-card-meta">{{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %}{% if piano.year_built %} · {{ piano.year_built }}{% endif %}</p>
+      <p class="piano-card-location">{{ piano.location.name }}{% if piano.location_in_venue %} · {{ piano.location_in_venue }}{% endif %}</p>
+
+      <div class="piano-card-footer">
+        <div>
+          {% with piano.next_tuning_due as due %}
+            {% if due %}
+              {% if due < today %}
+                <span class="next-due-label text-danger fw-bold">Tuning overdue</span>
+              {% elif due <= soon %}
+                <span class="next-due-label text-muted">Tuning due {{ due }}</span>
+              {% else %}
+                <span class="next-due-label text-dim">Tuning {{ due }}</span>
+              {% endif %}
+            {% else %}
+              <span class="next-due-label text-dim">No schedule</span>
+            {% endif %}
+          {% endwith %}
+        </div>
+        {% if piano.has_any_condition %}
+        <div class="piano-card-conditions" title="Component conditions">
+          {% for dot in piano.condition_dots %}
+            <span class="condition-dot {{ dot }}"></span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div style="grid-column: 1 / -1;">
+    <div class="card">
+      <div class="card-body">
+        <div class="empty-state">
+          <div class="empty-icon">🎹</div>
+          <p>No pianos found. <a href="{% url 'piano_create' %}">Add your first piano.</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

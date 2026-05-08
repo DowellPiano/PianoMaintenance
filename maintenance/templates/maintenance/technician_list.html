@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Technicians — Piano Maintainer{% endblock %}
+{% block topbar_title %}Technicians{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Technicians</h1>
+    <p class="page-subtitle">{{ technicians|length }} active technician{{ technicians|length|pluralize }}</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Username</th>
+          <th>Email</th>
+          <th>Open WOs</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tech in technicians %}
+        <tr>
+          <td class="fw-medium">{{ tech.get_full_name|default:tech.username }}</td>
+          <td class="text-sm text-muted">{{ tech.username }}</td>
+          <td class="text-sm">{{ tech.email|default:"—" }}</td>
+          <td class="text-sm">{{ tech.work_orders.count }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" style="text-align:center; padding:2rem;">
+            <div class="empty-state" style="padding:1rem;">
+              <div class="empty-icon">👤</div>
+              <p>No technicians found. Add users via Django Admin.</p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

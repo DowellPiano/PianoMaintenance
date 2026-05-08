@@ -1,0 +1,20 @@
+<div class="assign-cell">
+  {% if wo.status == "Complete" or wo.status == "Cancelled" %}
+    <span>{{ wo.assigned_tech.get_full_name|default:"—" }}</span>
+  {% else %}
+    <form class="assign-form"
+          hx-post="{% url 'workorder_assign' wo.pk %}"
+          hx-target="#assign-cell"
+          hx-swap="innerHTML">
+      {% csrf_token %}
+      <select name="assigned_tech" onchange="this.form.requestSubmit()">
+        <option value="">Unassigned</option>
+        {% for tech in technicians %}
+          <option value="{{ tech.pk }}" {% if wo.assigned_tech_id == tech.pk %}selected{% endif %}>
+            {{ tech.get_full_name|default:tech.username }}
+          </option>
+        {% endfor %}
+      </select>
+    </form>
+  {% endif %}
+</div>

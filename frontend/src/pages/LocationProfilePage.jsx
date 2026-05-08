@@ -115,7 +115,7 @@ export default function LocationProfilePage() {
                   </div>
 
                   <p className="lp-piano-meta">
-                    {piano.brand}{piano.model ? ` ${piano.model}` : ''}
+                    {piano.make}{piano.model ? ` ${piano.model}` : ''}
                   </p>
 
                   {piano.serial_number && (

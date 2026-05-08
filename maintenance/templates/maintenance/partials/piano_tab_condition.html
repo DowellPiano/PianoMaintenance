@@ -1,0 +1,39 @@
+<div class="card">
+  <div class="card-header">
+    <h2>Condition History</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Overall</th>
+          <th>Pitch</th>
+          <th>Humidity</th>
+          <th>Temp</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cr in condition_readings %}
+        <tr>
+          <td class="text-sm">{{ cr.recorded_at|date:"M d, Y" }}</td>
+          <td>
+            {% if cr.overall_rating %}
+              <span class="badge badge-{{ cr.overall_rating|lower|cut:' '|truncatechars:9 }}">{{ cr.overall_rating }}</span>
+            {% else %}
+              <span class="text-dim">—</span>
+            {% endif %}
+          </td>
+          <td class="text-sm">{% if cr.pitch_after_cents is not None %}{{ cr.pitch_after_cents }}¢{% else %}—{% endif %}</td>
+          <td class="text-sm">{% if cr.humidity_pct is not None %}{{ cr.humidity_pct }}%{% else %}—{% endif %}</td>
+          <td class="text-sm">{% if cr.temperature_f is not None %}{{ cr.temperature_f }}°F{% else %}—{% endif %}</td>
+          <td class="text-sm" style="max-width:200px;">{{ cr.notes|truncatechars:60|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:2rem;">No condition readings yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

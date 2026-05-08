@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}{% if piano %}Edit {{ piano.name }}{% else %}Add Piano{% endif %} — Piano Maintainer{% endblock %}
+{% block topbar_title %}{% if piano %}Edit Piano{% else %}Add Piano{% endif %}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% if piano %}{% url 'piano_detail' piano.pk %}{% else %}{% url 'piano_list' %}{% endif %}" class="text-muted text-sm">← Back</a>
+</div>
+
+<div class="card" style="max-width:640px;">
+  <div class="card-header">
+    <h2>{% if piano %}Edit {{ piano.name }}{% else %}Add New Piano{% endif %}</h2>
+  </div>
+  <div class="card-body">
+    {% if form.errors %}
+      <div class="alert alert-error">Please fix the errors below.</div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_name">Name *</label>
+          <input class="form-input" type="text" name="name" id="id_name"
+                 value="{{ form.name.value|default:'' }}" required>
+          {% if form.name.errors %}<span class="form-error">{{ form.name.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_make">Make *</label>
+          <input class="form-input" type="text" name="make" id="id_make"
+                 value="{{ form.make.value|default:'' }}" required>
+          {% if form.make.errors %}<span class="form-error">{{ form.make.errors.0 }}</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_model">Model</label>
+          <input class="form-input" type="text" name="model" id="id_model"
+                 value="{{ form.model.value|default:'' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_serial_number">Serial Number</label>
+          <input class="form-input" type="text" name="serial_number" id="id_serial_number"
+                 value="{{ form.serial_number.value|default:'' }}">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_piano_type">Type *</label>
+          <select class="form-select" name="piano_type" id="id_piano_type" required>
+            {% for val, label in type_choices %}
+              <option value="{{ val }}" {% if form.piano_type.value == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_location">Location *</label>
+          <select class="form-select" name="location" id="id_location" required>
+            <option value="">— Select —</option>
+            {% for loc in locations %}
+              <option value="{{ loc.pk }}" {% if form.location.value|stringformat:"d" == loc.pk|stringformat:"d" %}selected{% endif %}>{{ loc.name }}</option>
+            {% endfor %}
+          </select>
+          {% if form.location.errors %}<span class="form-error">{{ form.location.errors.0 }}</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_location_in_venue">Room / Area within Location</label>
+        <input class="form-input" type="text" name="location_in_venue" id="id_location_in_venue"
+               value="{{ form.location_in_venue.value|default:'' }}" placeholder="e.g. Room 405, Main Stage">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_year_built">Year Built</label>
+          <input class="form-input" type="number" name="year_built" id="id_year_built"
+                 value="{{ form.year_built.value|default:'' }}" min="1700" max="2100">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_year_acquired">Year Acquired</label>
+          <input class="form-input" type="number" name="year_acquired" id="id_year_acquired"
+                 value="{{ form.year_acquired.value|default:'' }}" min="1700" max="2100">
+        </div>
+      </div>
+
+      <h3 style="font-size:.95rem; font-weight:600; margin:1.25rem 0 .75rem; border-top:1px solid var(--clr-border); padding-top:1rem;">Maintenance Intervals</h3>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tuning</label>
+          <div class="gap-row">
+            <input class="form-input" type="number" name="tuning_interval_value" min="1"
+                   value="{{ form.tuning_interval_value.value|default:'6' }}" style="width:70px;">
+            <select class="form-select" name="tuning_interval_unit" style="width:110px;">
+              <option value="months" {% if form.tuning_interval_unit.value != "days" %}selected{% endif %}>months</option>
+              <option value="days" {% if form.tuning_interval_unit.value == "days" %}selected{% endif %}>days</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Regulation</label>
+          <div class="gap-row">
+            <input class="form-input" type="number" name="regulation_interval_value" min="1"
+                   value="{{ form.regulation_interval_value.value|default:'12' }}" style="width:70px;">
+            <select class="form-select" name="regulation_interval_unit" style="width:110px;">
+              <option value="months" {% if form.regulation_interval_unit.value != "days" %}selected{% endif %}>months</option>
+              <option value="days" {% if form.regulation_interval_unit.value == "days" %}selected{% endif %}>days</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Voicing</label>
+          <div class="gap-row">
+            <input class="form-input" type="number" name="voicing_interval_value" min="1"
+                   value="{{ form.voicing_interval_value.value|default:'12' }}" style="width:70px;">
+            <select class="form-select" name="voicing_interval_unit" style="width:110px;">
+              <option value="months" {% if form.voicing_interval_unit.value != "days" %}selected{% endif %}>months</option>
+              <option value="days" {% if form.voicing_interval_unit.value == "days" %}selected{% endif %}>days</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cleaning</label>
+          <div class="gap-row">
+            <input class="form-input" type="number" name="cleaning_interval_value" min="1"
+                   value="{{ form.cleaning_interval_value.value|default:'6' }}" style="width:70px;">
+            <select class="form-select" name="cleaning_interval_unit" style="width:110px;">
+              <option value="months" {% if form.cleaning_interval_unit.value != "days" %}selected{% endif %}>months</option>
+              <option value="days" {% if form.cleaning_interval_unit.value == "days" %}selected{% endif %}>days</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_notes">Notes</label>
+        <textarea class="form-textarea" name="notes" id="id_notes" rows="3">{{ form.notes.value|default:'' }}</textarea>
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
+        <a href="{% if piano %}{% url 'piano_detail' piano.pk %}{% else %}{% url 'piano_list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">{% if piano %}Save Changes{% else %}Add Piano{% endif %}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
