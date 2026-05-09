@@ -5,8 +5,8 @@
     {# Admin: full dropdown to assign any technician #}
     <form class="assign-form"
           hx-post="{% url 'workorder_assign' wo.pk %}"
-          hx-target="#assign-cell"
-          hx-swap="innerHTML">
+          hx-target="closest .assign-cell"
+          hx-swap="outerHTML">
       {% csrf_token %}
       <select name="assigned_tech" onchange="this.form.requestSubmit()">
         <option value="">Unassigned</option>
@@ -21,8 +21,8 @@
     {# Tech: unassigned WO — show "Take" button #}
     <form class="assign-form"
           hx-post="{% url 'workorder_assign' wo.pk %}"
-          hx-target="#assign-cell"
-          hx-swap="innerHTML"
+          hx-target="closest .assign-cell"
+          hx-swap="outerHTML"
           style="display:inline;">
       {% csrf_token %}
       <input type="hidden" name="assign_action" value="assign_self">

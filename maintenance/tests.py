@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Technician
+from .models import Technician, WorkOrder
 
 
 class SignupTests(TestCase):
@@ -66,3 +66,58 @@ class TechnicianManagementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.admin.refresh_from_db()
         self.assertTrue(self.admin.role_admin)
+
+
+class WorkOrderAssignmentTests(TestCase):
+    def setUp(self):
+        self.tech = Technician.objects.create_user(
+            username='tech',
+            password='StrongPass123',
+            first_name='Test',
+            last_name='Tech',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.other_tech = Technician.objects.create_user(
+            username='othertech',
+            password='StrongPass123',
+            first_name='Other',
+            last_name='Tech',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.client.force_login(self.tech)
+
+    def test_technician_can_assign_self_to_unassigned_work_order(self):
+        wo = WorkOrder.objects.create(
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Unassigned request',
+        )
+
+        response = self.client.post(reverse('workorder_assign', args=[wo.pk]), {
+            'assign_action': 'assign_self',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        wo.refresh_from_db()
+        self.assertEqual(wo.assigned_tech, self.tech)
+        self.assertEqual(wo.status, WorkOrder.Status.IN_PROGRESS)
+
+    def test_technician_cannot_take_work_order_assigned_to_someone_else(self):
+        wo = WorkOrder.objects.create(
+            assigned_tech=self.other_tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.IN_PROGRESS,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Already assigned request',
+        )
+
+        response = self.client.post(reverse('workorder_assign', args=[wo.pk]), {
+            'assign_action': 'assign_self',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        wo.refresh_from_db()
+        self.assertEqual(wo.assigned_tech, self.other_tech)

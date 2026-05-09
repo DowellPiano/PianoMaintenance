@@ -80,7 +80,9 @@
           <td>{{ wo.order_type }}</td>
           <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
           <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
-          <td class="text-sm">{{ wo.assigned_tech.get_full_name|default:"—" }}</td>
+          <td class="text-sm" onclick="event.stopPropagation();">
+            {% include "maintenance/partials/workorder_assign_cell.html" %}
+          </td>
           <td class="text-sm">
             {% if wo.due_date %}
               {{ wo.due_date|date:"M d" }}
