@@ -4,7 +4,9 @@ Django settings for piano_maintainer project.
 
 from pathlib import Path
 from decouple import config, Csv
-import dj_database_url
+import dj-database-url
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -14,11 +16,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = config(
-    "ALLOWED_HOSTS",
-    default="localhost,127.0.0.1,.onrender.com",
-    cast=Csv(),
-)
+# Comma-separated in .env, e.g. ALLOWED_HOSTS=localhost,127.0.0.1,myapp.com
+ALLOWED_HOSTS = [".onrender.com"]
 
 CSRF_TRUSTED_ORIGINS = config(
     "CSRF_TRUSTED_ORIGINS",
@@ -77,9 +76,9 @@ WSGI_APPLICATION = "piano_maintainer.wsgi.application"
 # DATABASE
 DATABASES = {
     "default": dj_database_url.config(
-        default=config("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
+        default=os.environ.get("DATABASE_URL"),
         conn_max_age=0,
-        ssl_require=not DEBUG,
+        ssl_require=True,
     )
 }
 
@@ -131,6 +130,13 @@ CSRF_COOKIE_HTTPONLY = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 
-if not DEBUG:
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Enable these when serving over HTTPS in production:
+# SECURE_SSL_REDIRECT = True
+# SESSION_COOKIE_SECURE = True
+# CSRF_COOKIE_SECURE = True
+# SECURE_HSTS_SECONDS = 31536000
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# SECURE_HSTS_PRELOAD = True
