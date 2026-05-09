@@ -68,6 +68,15 @@
       <div class="photo-thumb">
         <img src="{{ photo.image.url }}" alt="{{ photo.caption|default:piano.name }}" loading="lazy">
         {% if photo.is_profile_photo %}<span class="profile-star">Profile</span>{% endif %}
+        {% if request.user.role_admin or request.user.role_technician %}
+        <form method="post"
+              action="{% url 'piano_photo_delete' piano.pk photo.pk %}"
+              class="photo-delete-form"
+              onsubmit="return confirm('Delete this photo?');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-xs btn-danger">Delete</button>
+        </form>
+        {% endif %}
       </div>
       {% endfor %}
     </div>

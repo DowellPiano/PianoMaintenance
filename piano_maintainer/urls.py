@@ -48,6 +48,7 @@ urlpatterns = [
     path('pianos/<int:piano_pk>/condition/new/', views.condition_reading_create, name='condition_reading_create'),
     path('pianos/<int:pk>/photos/upload/', views.piano_photo_upload, name='piano_photo_upload'),
     path('pianos/<int:pk>/photos/<int:photo_pk>/set-profile/', views.piano_set_profile_photo, name='piano_set_profile_photo'),
+    path('pianos/<int:pk>/photos/<int:photo_pk>/delete/', views.piano_photo_delete, name='piano_photo_delete'),
 
     # Work Orders
     path('work-orders/', views.workorder_list, name='workorder_list'),

@@ -1,7 +1,12 @@
+import os
+import tempfile
+
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.test import override_settings
 from django.urls import reverse
 
-from .models import Technician, WorkOrder
+from .models import Photo, Piano, Technician, WorkOrder
 
 
 class SignupTests(TestCase):
@@ -20,6 +25,120 @@ class SignupTests(TestCase):
         self.assertFalse(user.is_active)
         self.assertFalse(user.role_admin)
         self.assertTrue(user.role_technician)
+
+
+class QRCodeRoutingTests(TestCase):
+    def setUp(self):
+        self.piano = Piano.objects.create(
+            name='Studio Upright',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+        self.url = reverse('maintenance-request-form', args=[self.piano.qr_code_token])
+
+    def test_anonymous_qr_visit_shows_maintenance_request_form(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'maintenance/maintenance_request_form.html')
+        self.assertContains(response, 'Studio Upright')
+
+    def test_logged_in_qr_visit_redirects_to_piano_detail(self):
+        user = Technician.objects.create_user(
+            username='qrtech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(self.url)
+
+        self.assertRedirects(response, reverse('piano_detail', args=[self.piano.pk]))
+
+
+class PhotoDeletionTests(TestCase):
+    def setUp(self):
+        self.media_root = tempfile.TemporaryDirectory()
+        self.settings_override = override_settings(MEDIA_ROOT=self.media_root.name)
+        self.settings_override.enable()
+        self.piano = Piano.objects.create(
+            name='Photo Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+
+    def tearDown(self):
+        self.settings_override.disable()
+        self.media_root.cleanup()
+
+    def _create_photo(self, is_profile_photo=False):
+        return Photo.objects.create(
+            piano=self.piano,
+            image=SimpleUploadedFile(
+                'photo.jpg',
+                b'test image content',
+                content_type='image/jpeg',
+            ),
+            is_profile_photo=is_profile_photo,
+        )
+
+    def test_technician_can_delete_piano_photo(self):
+        user = Technician.objects.create_user(
+            username='phototech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        photo = self._create_photo()
+        image_path = photo.image.path
+        self.client.force_login(user)
+
+        response = self.client.post(reverse(
+            'piano_photo_delete',
+            args=[self.piano.pk, photo.pk],
+        ))
+
+        self.assertRedirects(response, reverse('piano_detail', args=[self.piano.pk]))
+        self.assertFalse(Photo.objects.filter(pk=photo.pk).exists())
+        self.assertFalse(os.path.exists(image_path))
+
+    def test_admin_can_delete_piano_photo(self):
+        user = Technician.objects.create_user(
+            username='photoadmin',
+            password='StrongPass123',
+            role_admin=True,
+            role_technician=False,
+        )
+        photo = self._create_photo()
+        self.client.force_login(user)
+
+        response = self.client.post(reverse(
+            'piano_photo_delete',
+            args=[self.piano.pk, photo.pk],
+        ))
+
+        self.assertRedirects(response, reverse('piano_detail', args=[self.piano.pk]))
+        self.assertFalse(Photo.objects.filter(pk=photo.pk).exists())
+
+    def test_deleting_profile_photo_promotes_next_photo(self):
+        user = Technician.objects.create_user(
+            username='profilephototech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        profile_photo = self._create_photo(is_profile_photo=True)
+        next_photo = self._create_photo()
+        self.client.force_login(user)
+
+        self.client.post(reverse(
+            'piano_photo_delete',
+            args=[self.piano.pk, profile_photo.pk],
+        ))
+
+        next_photo.refresh_from_db()
+        self.assertTrue(next_photo.is_profile_photo)
 
 
 class TechnicianManagementTests(TestCase):

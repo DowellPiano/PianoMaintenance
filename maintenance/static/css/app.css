@@ -114,6 +114,11 @@
   font-size: .6rem; padding: .1rem .3rem;
   border-radius: 3px; font-weight: 600;
 }
+.photo-delete-form {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+}
 
 /* ----------------------------------------------------------------
    Shared: condition dots

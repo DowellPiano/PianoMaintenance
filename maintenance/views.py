@@ -42,10 +42,25 @@ def admin_required(view_func):
     return wrapper
 
 
+def staff_required(view_func):
+    """Decorator: requires login + an app role."""
+    @wraps(view_func)
+    @login_required
+    def wrapper(request, *args, **kwargs):
+        if not (request.user.role_admin or request.user.role_technician):
+            messages.error(request, 'Technician access required.')
+            return redirect('dashboard')
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
 # ── Public (no login) ──────────────────────────────────────────────
 
 def maintenance_request_form(request, token):
     piano = get_object_or_404(Piano, qr_code_token=token)
+
+    if request.user.is_authenticated:
+        return redirect('piano_detail', pk=piano.pk)
 
     if request.method == 'POST':
         # Basic rate limiting: max 5 requests per piano per hour
@@ -994,6 +1009,27 @@ def piano_set_profile_photo(request, pk, photo_pk):
     if request.method == 'POST':
         piano.photos.update(is_profile_photo=False)
         Photo.objects.filter(pk=photo_pk, piano=piano).update(is_profile_photo=True)
+    return redirect('piano_detail', pk=piano.pk)
+
+
+@staff_required
+def piano_photo_delete(request, pk, photo_pk):
+    piano = get_object_or_404(Piano, pk=pk)
+    photo = get_object_or_404(Photo, pk=photo_pk, piano=piano)
+
+    if request.method == 'POST':
+        was_profile = photo.is_profile_photo
+        if photo.image:
+            photo.image.delete(save=False)
+        photo.delete()
+
+        if was_profile:
+            next_photo = piano.photos.order_by('-uploaded_at').first()
+            if next_photo:
+                next_photo.is_profile_photo = True
+                next_photo.save(update_fields=['is_profile_photo'])
+
+        messages.success(request, 'Photo deleted.')
     return redirect('piano_detail', pk=piano.pk)
 
 
