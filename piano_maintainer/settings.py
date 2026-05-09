@@ -140,6 +140,9 @@ SECURE_CONTENT_TYPE_NOSNIFF = True   # Prevent MIME-type sniffing
 SECURE_BROWSER_XSS_FILTER = True     # Legacy XSS filter header
 X_FRAME_OPTIONS = 'DENY'            # Prevent clickjacking via iframes
 
+STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 # Enable these when serving over HTTPS in production:
 # SECURE_SSL_REDIRECT = True
 # SESSION_COOKIE_SECURE = True
