@@ -121,3 +121,63 @@ class WorkOrderAssignmentTests(TestCase):
         self.assertEqual(response.status_code, 200)
         wo.refresh_from_db()
         self.assertEqual(wo.assigned_tech, self.other_tech)
+
+
+class TechnicianDashboardTests(TestCase):
+    def test_dashboard_shows_only_active_work_orders_assigned_to_technician(self):
+        tech = Technician.objects.create_user(
+            username='dashboardtech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        other_tech = Technician.objects.create_user(
+            username='otherdashboardtech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        assigned_open = WorkOrder.objects.create(
+            assigned_tech=tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Assigned open',
+        )
+        assigned_in_progress = WorkOrder.objects.create(
+            assigned_tech=tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.IN_PROGRESS,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Assigned in progress',
+        )
+        WorkOrder.objects.create(
+            assigned_tech=tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Assigned complete',
+        )
+        WorkOrder.objects.create(
+            assigned_tech=other_tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Other tech open',
+        )
+        WorkOrder.objects.create(
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Unassigned open',
+        )
+
+        self.client.force_login(tech)
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'My Work Orders')
+        self.assertQuerySetEqual(
+            response.context['dashboard_work_orders'],
+            [assigned_in_progress, assigned_open],
+            ordered=False,
+        )

@@ -47,7 +47,7 @@
 
 <div class="card">
   <div class="card-header">
-    <h2>{% if is_admin %}Recent Work Orders{% else %}My Recent Work Orders{% endif %}</h2>
+    <h2>{% if is_admin %}Recent Work Orders{% else %}My Work Orders{% endif %}</h2>
     <a href="{% url 'workorder_list' %}" class="btn btn-sm btn-secondary">View All</a>
   </div>
   <div class="table-wrap">
@@ -63,17 +63,17 @@
         </tr>
       </thead>
       <tbody>
-        {% for wo in recent_work_orders %}
-        <tr>
+        {% for wo in dashboard_work_orders %}
+        <tr class="wo-row-link" onclick="window.location='{% url 'workorder_detail' wo.pk %}'">
           <td class="text-muted">WO-{{ wo.pk }}</td>
-          <td>{% if wo.piano %}<a href="{% url 'piano_detail' wo.piano_id %}">{{ wo.piano.name }}</a>{% else %}<span class="text-dim">{{ wo.piano_name }}</span>{% endif %}</td>
+          <td>{% if wo.piano %}{{ wo.piano.name }}{% else %}<span class="text-dim">{{ wo.piano_name }}</span>{% endif %}</td>
           <td>{{ wo.order_type }}</td>
           <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
           <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
           <td class="text-muted text-sm">{{ wo.due_date|default:"—" }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:2rem;">No work orders yet.</td></tr>
+        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:2rem;">{% if is_admin %}No work orders yet.{% else %}No active work orders assigned to you.{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>

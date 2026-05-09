@@ -138,7 +138,7 @@ def dashboard(request):
             status=WorkOrder.Status.COMPLETE,
             completed_date__gte=month_start,
         ).count()
-        recent_work_orders = (
+        dashboard_work_orders = (
             wo_base
             .select_related('piano', 'piano__venue')
             .order_by('-created_at')[:10]
@@ -160,10 +160,11 @@ def dashboard(request):
             status=WorkOrder.Status.COMPLETE,
             completed_date__gte=month_start,
         ).count()
-        recent_work_orders = (
+        dashboard_work_orders = (
             my_wos
             .select_related('piano', 'piano__venue')
-            .order_by('-created_at')[:10]
+            .filter(status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS])
+            .order_by('due_date', '-created_at')
         )
 
     return render(request, 'maintenance/dashboard.html', {
@@ -177,7 +178,7 @@ def dashboard(request):
         'venue_count': venue_count,
         'org_count': org_count,
         'completed_this_month': completed_this_month,
-        'recent_work_orders': recent_work_orders,
+        'dashboard_work_orders': dashboard_work_orders,
     })
 
 
