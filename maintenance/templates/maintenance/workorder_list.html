@@ -15,6 +15,8 @@
 
 <div class="wo-filters">
   <form method="get" style="display:contents;">
+    <input type="hidden" name="sort" value="{{ sort_key }}">
+    <input type="hidden" name="dir" value="{{ sort_dir }}">
     <input type="text" name="q" value="{{ search_query }}" placeholder="Search pianos, descriptions…"
            class="form-input search-input">
     <select name="status" class="form-select" onchange="this.form.submit()">
@@ -54,59 +56,5 @@
   </form>
 </div>
 
-<div class="card">
-  <div class="table-wrap">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Piano</th>
-          <th>Type</th>
-          <th>Status</th>
-          <th>Priority</th>
-          <th>Assigned To</th>
-          <th>Due</th>
-          <th>Created</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for wo in work_orders %}
-        <tr class="wo-row-link" onclick="window.location='{% url 'workorder_detail' wo.pk %}'">
-          <td class="wo-id">WO-{{ wo.pk }}</td>
-          <td>
-            <div class="wo-piano">{{ wo.piano_name }}</div>
-            <div class="wo-piano-loc">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
-          </td>
-          <td>{{ wo.order_type }}</td>
-          <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
-          <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
-          <td class="text-sm" onclick="event.stopPropagation();">
-            {% include "maintenance/partials/workorder_assign_cell.html" %}
-          </td>
-          <td class="text-sm">
-            {% if wo.due_date %}
-              {{ wo.due_date|date:"M d" }}
-              {% if wo.due_date < today and wo.status != "Complete" and wo.status != "Cancelled" %}
-                <span class="overdue-marker">Overdue</span>
-              {% endif %}
-            {% else %}
-              <span class="text-dim">—</span>
-            {% endif %}
-          </td>
-          <td class="text-sm text-muted">{{ wo.created_at|date:"M d, Y" }}</td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="8" style="text-align:center; padding:2rem;">
-            <div class="empty-state" style="padding:1rem;">
-              <div class="empty-icon">🔧</div>
-              <p>No work orders found.</p>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+{% include "maintenance/partials/workorder_table.html" %}
 {% endblock %}

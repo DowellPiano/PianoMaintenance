@@ -546,11 +546,7 @@ def venue_delete(request, pk):
 @login_required
 def workorder_list(request):
     today = date.today()
-    qs = (
-        WorkOrder.objects
-        .select_related('piano', 'piano__venue', 'assigned_tech')
-        .order_by('-created_at')
-    )
+    qs = WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech')
 
     search_query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '')
@@ -558,6 +554,28 @@ def workorder_list(request):
     type_filter = request.GET.get('type', '')
     org_filter = request.GET.get('org', '')
     venue_filter = request.GET.get('venue', '')
+    sort_key = request.GET.get('sort', 'created')
+    sort_dir = request.GET.get('dir', 'desc')
+
+    sort_options = {
+        'id': ('pk',),
+        'piano': ('piano__name', 'piano_display', 'pk'),
+        'type': ('order_type', 'pk'),
+        'status': ('status', 'pk'),
+        'priority': ('priority', 'pk'),
+        'assigned': (
+            'assigned_tech__last_name',
+            'assigned_tech__first_name',
+            'assigned_tech__username',
+            'pk',
+        ),
+        'due': ('due_date', 'pk'),
+        'created': ('created_at', 'pk'),
+    }
+    if sort_key not in sort_options:
+        sort_key = 'created'
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'desc'
 
     if search_query:
         qs = qs.filter(
@@ -576,9 +594,38 @@ def workorder_list(request):
     if venue_filter:
         qs = qs.filter(piano__venue_id=venue_filter)
 
-    return render(request, 'maintenance/workorder_list.html', {
+    order_fields = sort_options[sort_key]
+    if sort_dir == 'desc':
+        order_fields = tuple(f'-{field}' for field in order_fields)
+    qs = qs.order_by(*order_fields)
+
+    sort_columns = []
+    for key, label in [
+        ('id', 'ID'),
+        ('piano', 'Piano'),
+        ('type', 'Type'),
+        ('status', 'Status'),
+        ('priority', 'Priority'),
+        ('assigned', 'Assigned To'),
+        ('due', 'Due'),
+        ('created', 'Created'),
+    ]:
+        params = request.GET.copy()
+        params['sort'] = key
+        params['dir'] = 'desc' if sort_key == key and sort_dir == 'asc' else 'asc'
+        sort_columns.append({
+            'key': key,
+            'label': label,
+            'url': f'?{params.urlencode()}',
+            'active': sort_key == key,
+        })
+
+    context = {
         'active_nav': 'workorders',
         'work_orders': qs,
+        'sort_key': sort_key,
+        'sort_dir': sort_dir,
+        'sort_columns': sort_columns,
         'search_query': search_query,
         'status_filter': status_filter,
         'priority_filter': priority_filter,
@@ -591,7 +638,11 @@ def workorder_list(request):
         'priority_choices': WorkOrder.Priority.choices,
         'type_choices': WorkOrder.OrderType.choices,
         'today': today,
-    })
+    }
+
+    if request.headers.get('HX-Request') == 'true':
+        return render(request, 'maintenance/partials/workorder_table.html', context)
+    return render(request, 'maintenance/workorder_list.html', context)
 
 
 @login_required

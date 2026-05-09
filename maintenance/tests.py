@@ -181,3 +181,58 @@ class TechnicianDashboardTests(TestCase):
             [assigned_in_progress, assigned_open],
             ordered=False,
         )
+
+
+class WorkOrderListSortingTests(TestCase):
+    def setUp(self):
+        self.tech = Technician.objects.create_user(
+            username='sorttech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.client.force_login(self.tech)
+        self.first_wo = WorkOrder.objects.create(
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='First work order',
+        )
+        self.second_wo = WorkOrder.objects.create(
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Second work order',
+        )
+
+    def test_work_order_list_sorts_by_clicked_column_and_direction(self):
+        response = self.client.get(reverse('workorder_list'), {
+            'sort': 'id',
+            'dir': 'asc',
+        })
+
+        self.assertQuerySetEqual(
+            response.context['work_orders'],
+            [self.first_wo, self.second_wo],
+        )
+
+        response = self.client.get(reverse('workorder_list'), {
+            'sort': 'id',
+            'dir': 'desc',
+        })
+
+        self.assertQuerySetEqual(
+            response.context['work_orders'],
+            [self.second_wo, self.first_wo],
+        )
+
+    def test_htmx_sort_returns_work_order_table_partial(self):
+        response = self.client.get(
+            reverse('workorder_list'),
+            {'sort': 'id', 'dir': 'asc'},
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertContains(response, 'id="workorder-results"')
+        self.assertContains(response, 'hx-get="?sort=id&amp;dir=desc"')
+        self.assertNotContains(response, '<h1>Work Orders</h1>')
