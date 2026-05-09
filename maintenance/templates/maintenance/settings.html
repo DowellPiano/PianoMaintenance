@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Settings — Piano Maintainer{% endblock %}
+{% block topbar_title %}Settings{% endblock %}
+
+{% block content %}
+<div style="max-width:720px;">
+
+  <!-- Company Information -->
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header">
+      <h2>Company Information</h2>
+    </div>
+    <div class="card-body">
+      {% if company_form.errors %}
+        <div class="alert alert-error" style="margin-bottom:1rem;">Please fix the errors below.</div>
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="company">
+
+        <div class="form-group">
+          <label class="form-label" for="id_company-company_name">Company Name</label>
+          <input class="form-input" type="text" name="company-company_name" id="id_company-company_name"
+                 value="{{ company_form.company_name.value|default:'' }}">
+          {% if company_form.company_name.errors %}<span class="form-error">{{ company_form.company_name.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="id_company-address">Address</label>
+          <textarea class="form-textarea" name="company-address" id="id_company-address" rows="2">{{ company_form.address.value|default:'' }}</textarea>
+          {% if company_form.address.errors %}<span class="form-error">{{ company_form.address.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="id_company-phone">Phone</label>
+            <input class="form-input" type="text" name="company-phone" id="id_company-phone"
+                   value="{{ company_form.phone.value|default:'' }}">
+            {% if company_form.phone.errors %}<span class="form-error">{{ company_form.phone.errors.0 }}</span>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="id_company-email">Email</label>
+            <input class="form-input" type="email" name="company-email" id="id_company-email"
+                   value="{{ company_form.email.value|default:'' }}">
+            {% if company_form.email.errors %}<span class="form-error">{{ company_form.email.errors.0 }}</span>{% endif %}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="id_company-default_labor_rate">Default Labor Rate ($/hr)</label>
+          <input class="form-input" type="number" step="0.01" name="company-default_labor_rate" id="id_company-default_labor_rate"
+                 value="{{ company_form.default_labor_rate.value|default:'0.00' }}" style="max-width:200px;">
+          <span class="text-muted text-sm">Used for cost calculations on work orders.</span>
+          {% if company_form.default_labor_rate.errors %}<span class="form-error">{{ company_form.default_labor_rate.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+          <button type="submit" class="btn btn-primary">Save Company Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- User Profile -->
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header">
+      <h2>Your Profile</h2>
+    </div>
+    <div class="card-body">
+      {% if profile_form.errors %}
+        <div class="alert alert-error" style="margin-bottom:1rem;">Please fix the errors below.</div>
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="profile">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="id_profile-first_name">First Name</label>
+            <input class="form-input" type="text" name="profile-first_name" id="id_profile-first_name"
+                   value="{{ profile_form.first_name.value|default:'' }}">
+            {% if profile_form.first_name.errors %}<span class="form-error">{{ profile_form.first_name.errors.0 }}</span>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="id_profile-last_name">Last Name</label>
+            <input class="form-input" type="text" name="profile-last_name" id="id_profile-last_name"
+                   value="{{ profile_form.last_name.value|default:'' }}">
+            {% if profile_form.last_name.errors %}<span class="form-error">{{ profile_form.last_name.errors.0 }}</span>{% endif %}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="id_profile-email">Email</label>
+          <input class="form-input" type="email" name="profile-email" id="id_profile-email"
+                 value="{{ profile_form.email.value|default:'' }}">
+          {% if profile_form.email.errors %}<span class="form-error">{{ profile_form.email.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+          <button type="submit" class="btn btn-primary">Update Profile</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Change Password -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Change Password</h2>
+    </div>
+    <div class="card-body">
+      {% if password_form.errors %}
+        <div class="alert alert-error" style="margin-bottom:1rem;">Please fix the errors below.</div>
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="password">
+
+        <div class="form-group">
+          <label class="form-label" for="id_password-old_password">Current Password</label>
+          <input class="form-input" type="password" name="password-old_password" id="id_password-old_password">
+          {% if password_form.old_password.errors %}<span class="form-error">{{ password_form.old_password.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="id_password-new_password1">New Password</label>
+            <input class="form-input" type="password" name="password-new_password1" id="id_password-new_password1">
+            {% if password_form.new_password1.errors %}<span class="form-error">{{ password_form.new_password1.errors.0 }}</span>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="id_password-new_password2">Confirm New Password</label>
+            <input class="form-input" type="password" name="password-new_password2" id="id_password-new_password2">
+            {% if password_form.new_password2.errors %}<span class="form-error">{{ password_form.new_password2.errors.0 }}</span>{% endif %}
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+          <button type="submit" class="btn btn-primary">Change Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

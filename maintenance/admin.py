@@ -16,6 +16,7 @@ from .models import (
     Part,
     PartUsed,
     MaintenanceRequest,
+    CompanySettings,
 )
 
 
@@ -300,5 +301,20 @@ class MaintenanceRequestAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("piano__venue", "work_order")
+
+
+# ---------------------------------------------------------------------------
+# CompanySettings (singleton)
+# ---------------------------------------------------------------------------
+@admin.register(CompanySettings)
+class CompanySettingsAdmin(admin.ModelAdmin):
+    list_display = ("company_name", "phone", "email", "default_labor_rate")
+
+    def has_add_permission(self, request):
+        # Only one instance allowed
+        return not CompanySettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
