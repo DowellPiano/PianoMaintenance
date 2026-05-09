@@ -2,6 +2,7 @@ import csv
 import io
 from datetime import date, timedelta
 from decimal import Decimal
+from functools import wraps
 
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
@@ -17,14 +18,28 @@ from .models import (
     Technician, Part, PartUsed, MaintenanceLog, TaskType, Photo, Tag,
     CompanySettings,
 )
-from django.contrib.auth import login as auth_login
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import update_session_auth_hash
 from .forms import (
     OrganizationForm, VenueForm, PianoForm, WorkOrderForm, WorkOrderCompleteForm,
     WorkOrderLogWorkForm, ConditionReadingForm, ScheduleTemplateForm, PartForm,
-    SignUpForm, CompanySettingsForm, UserProfileForm,
+    SignUpForm, CompanySettingsForm, UserProfileForm, TechnicianCreateForm,
+    TechnicianUpdateForm,
 )
+
+
+# ── Role-based access ────────────────────────────────────────────
+
+def admin_required(view_func):
+    """Decorator: requires login + admin role."""
+    @wraps(view_func)
+    @login_required
+    def wrapper(request, *args, **kwargs):
+        if not request.user.role_admin:
+            messages.error(request, 'Admin access required.')
+            return redirect('dashboard')
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 
 # ── Public (no login) ──────────────────────────────────────────────
@@ -80,12 +95,19 @@ def signup(request):
         form = SignUpForm(request.POST)
         if form.is_valid():
             user = form.save()
-            auth_login(request, user)
-            messages.success(request, f'Welcome, {user.get_short_name() or user.username}!')
-            return redirect('dashboard')
+            messages.success(
+                request,
+                f'Account request received for {user.get_short_name() or user.username}. '
+                'An admin must activate it before you can sign in.',
+            )
+            return redirect('signup_pending')
     else:
         form = SignUpForm()
     return render(request, 'registration/signup.html', {'form': form})
+
+
+def signup_pending(request):
+    return render(request, 'registration/signup_pending.html')
 
 
 # ── Dashboard ──────────────────────────────────────────────────────
@@ -94,31 +116,59 @@ def signup(request):
 def dashboard(request):
     today = date.today()
     month_start = today.replace(day=1)
+    user = request.user
+    is_admin = user.role_admin
 
-    overdue_count = WorkOrder.objects.filter(
-        status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
-        due_date__lt=today,
-    ).count()
-
-    open_wo_count = WorkOrder.objects.filter(status=WorkOrder.Status.OPEN).count()
-    in_progress_count = WorkOrder.objects.filter(status=WorkOrder.Status.IN_PROGRESS).count()
-    pending_request_count = MaintenanceRequest.objects.filter(status=MaintenanceRequest.RequestStatus.NEW).count()
-    piano_count = Piano.objects.filter(is_active=True).count()
-    venue_count = Venue.objects.count()
-    org_count = Organization.objects.count()
-    completed_this_month = WorkOrder.objects.filter(
-        status=WorkOrder.Status.COMPLETE,
-        completed_date__gte=month_start,
-    ).count()
-
-    recent_work_orders = (
-        WorkOrder.objects
-        .select_related('piano', 'piano__venue')
-        .order_by('-created_at')[:10]
-    )
+    if is_admin:
+        # Admin sees everything
+        wo_base = WorkOrder.objects
+        overdue_count = wo_base.filter(
+            status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
+            due_date__lt=today,
+        ).count()
+        open_wo_count = wo_base.filter(status=WorkOrder.Status.OPEN).count()
+        in_progress_count = wo_base.filter(status=WorkOrder.Status.IN_PROGRESS).count()
+        pending_request_count = MaintenanceRequest.objects.filter(
+            status=MaintenanceRequest.RequestStatus.NEW,
+        ).count()
+        piano_count = Piano.objects.filter(is_active=True).count()
+        venue_count = Venue.objects.count()
+        org_count = Organization.objects.count()
+        completed_this_month = wo_base.filter(
+            status=WorkOrder.Status.COMPLETE,
+            completed_date__gte=month_start,
+        ).count()
+        recent_work_orders = (
+            wo_base
+            .select_related('piano', 'piano__venue')
+            .order_by('-created_at')[:10]
+        )
+    else:
+        # Tech-only: show only their own assigned work
+        my_wos = WorkOrder.objects.filter(assigned_tech=user)
+        overdue_count = my_wos.filter(
+            status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
+            due_date__lt=today,
+        ).count()
+        open_wo_count = my_wos.filter(status=WorkOrder.Status.OPEN).count()
+        in_progress_count = my_wos.filter(status=WorkOrder.Status.IN_PROGRESS).count()
+        pending_request_count = None
+        piano_count = None
+        venue_count = None
+        org_count = None
+        completed_this_month = my_wos.filter(
+            status=WorkOrder.Status.COMPLETE,
+            completed_date__gte=month_start,
+        ).count()
+        recent_work_orders = (
+            my_wos
+            .select_related('piano', 'piano__venue')
+            .order_by('-created_at')[:10]
+        )
 
     return render(request, 'maintenance/dashboard.html', {
         'active_nav': 'dashboard',
+        'is_admin': is_admin,
         'overdue_count': overdue_count,
         'open_wo_count': open_wo_count,
         'in_progress_count': in_progress_count,
@@ -235,7 +285,7 @@ def piano_tab(request, pk, tab):
     return render(request, template, ctx)
 
 
-@login_required
+@admin_required
 def piano_create(request):
     if request.method == 'POST':
         form = PianoForm(request.POST)
@@ -255,7 +305,7 @@ def piano_create(request):
     })
 
 
-@login_required
+@admin_required
 def piano_edit(request, pk):
     piano = get_object_or_404(Piano, pk=pk)
 
@@ -277,7 +327,7 @@ def piano_edit(request, pk):
     })
 
 
-@login_required
+@admin_required
 def piano_deactivate(request, pk):
     piano = get_object_or_404(Piano, pk=pk)
     if request.method == 'POST':
@@ -299,7 +349,7 @@ def _piano_tags_context(piano):
     }
 
 
-@login_required
+@admin_required
 def piano_add_tag(request, pk):
     piano = get_object_or_404(Piano, pk=pk)
     if request.method == 'POST':
@@ -312,7 +362,7 @@ def piano_add_tag(request, pk):
     return redirect('piano_detail', pk=piano.pk)
 
 
-@login_required
+@admin_required
 def piano_remove_tag(request, pk, tag_pk):
     piano = get_object_or_404(Piano, pk=pk)
     if request.method == 'POST':
@@ -346,7 +396,7 @@ def organization_detail(request, pk):
     })
 
 
-@login_required
+@admin_required
 def organization_create(request):
     if request.method == 'POST':
         form = OrganizationForm(request.POST)
@@ -364,7 +414,7 @@ def organization_create(request):
     })
 
 
-@login_required
+@admin_required
 def organization_edit(request, pk):
     organization = get_object_or_404(Organization, pk=pk)
 
@@ -384,7 +434,7 @@ def organization_edit(request, pk):
     })
 
 
-@login_required
+@admin_required
 def organization_delete(request, pk):
     organization = get_object_or_404(Organization, pk=pk)
     venue_count = organization.venues.count()
@@ -429,7 +479,7 @@ def venue_detail(request, pk):
     })
 
 
-@login_required
+@admin_required
 def venue_create(request):
     if request.method == 'POST':
         form = VenueForm(request.POST)
@@ -448,7 +498,7 @@ def venue_create(request):
     })
 
 
-@login_required
+@admin_required
 def venue_edit(request, pk):
     venue = get_object_or_404(Venue, pk=pk)
 
@@ -469,7 +519,7 @@ def venue_edit(request, pk):
     })
 
 
-@login_required
+@admin_required
 def venue_delete(request, pk):
     venue = get_object_or_404(Venue.objects.select_related('organization'), pk=pk)
     piano_count = Piano.objects.filter(venue=venue).count()
@@ -549,18 +599,27 @@ def workorder_detail(request, pk):
         WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech'),
         pk=pk,
     )
+    user = request.user
     logs = wo.logs.select_related('technician').order_by('-logged_at')
-    technicians = Technician.objects.filter(is_active=True).order_by('first_name', 'last_name')
+    technicians = Technician.objects.filter(
+        is_active=True, role_technician=True,
+    ).order_by('first_name', 'last_name')
+
+    is_assigned_to_me = wo.assigned_tech_id == user.pk
+    can_edit_wo = user.role_admin or (user.role_technician and is_assigned_to_me)
+
     return render(request, 'maintenance/workorder_detail.html', {
         'active_nav': 'workorders',
         'wo': wo,
         'logs': logs,
         'technicians': technicians,
         'today': date.today(),
+        'can_edit_wo': can_edit_wo,
+        'is_assigned_to_me': is_assigned_to_me,
     })
 
 
-@login_required
+@admin_required
 def workorder_create(request):
     if request.method == 'POST':
         form = WorkOrderForm(request.POST)
@@ -580,7 +639,7 @@ def workorder_create(request):
         'form': form,
         'pianos': Piano.objects.filter(is_active=True).select_related('venue'),
         'venues': Venue.objects.all(),
-        'technicians': Technician.objects.filter(is_active=True),
+        'technicians': Technician.objects.filter(is_active=True, role_technician=True),
         'type_choices': WorkOrder.OrderType.choices,
         'task_type_choices': TaskType.choices,
         'status_choices': WorkOrder.Status.choices,
@@ -591,19 +650,32 @@ def workorder_create(request):
 @login_required
 def workorder_assign(request, pk):
     wo = get_object_or_404(WorkOrder, pk=pk)
+    user = request.user
+
     if request.method == 'POST':
-        tech_id = request.POST.get('assigned_tech')
-        if tech_id:
-            try:
-                wo.assigned_tech_id = int(tech_id)
-            except (ValueError, TypeError):
-                pass
-        else:
-            wo.assigned_tech = None
+        if user.role_admin:
+            # Admin can assign any technician
+            tech_id = request.POST.get('assigned_tech')
+            if tech_id:
+                try:
+                    wo.assigned_tech_id = int(tech_id)
+                except (ValueError, TypeError):
+                    pass
+            else:
+                wo.assigned_tech = None
+        elif user.role_technician:
+            # Tech can only assign self to unassigned WOs
+            action = request.POST.get('assign_action')
+            if action == 'assign_self' and wo.assigned_tech is None:
+                wo.assigned_tech = user
+
         if wo.status == WorkOrder.Status.OPEN and wo.assigned_tech_id:
             wo.status = WorkOrder.Status.IN_PROGRESS
         wo.save()
-    technicians = Technician.objects.filter(is_active=True).order_by('first_name', 'last_name')
+
+    technicians = Technician.objects.filter(
+        is_active=True, role_technician=True,
+    ).order_by('first_name', 'last_name')
     return render(request, 'maintenance/partials/workorder_assign_cell.html', {
         'wo': wo,
         'technicians': technicians,
@@ -616,6 +688,11 @@ def workorder_complete(request, pk):
         WorkOrder.objects.select_related('piano', 'assigned_tech'),
         pk=pk,
     )
+    user = request.user
+    if not user.role_admin and wo.assigned_tech_id != user.pk:
+        messages.error(request, 'You can only complete work orders assigned to you.')
+        return redirect('workorder_detail', pk=wo.pk)
+
     parts = Part.objects.all().order_by('name')
 
     if request.method == 'POST':
@@ -728,7 +805,7 @@ def workorder_complete(request, pk):
     })
 
 
-@login_required
+@admin_required
 def workorder_delete(request, pk):
     wo = get_object_or_404(
         WorkOrder.objects.select_related('piano', 'piano__venue'),
@@ -756,6 +833,11 @@ def workorder_log_work(request, pk):
         WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech'),
         pk=pk,
     )
+    user = request.user
+    if not user.role_admin and wo.assigned_tech_id != user.pk:
+        messages.error(request, 'You can only log work on work orders assigned to you.')
+        return redirect('workorder_detail', pk=wo.pk)
+
     parts = Part.objects.all().order_by('name')
 
     if request.method == 'POST':
@@ -1000,7 +1082,7 @@ def request_list(request):
     })
 
 
-@login_required
+@admin_required
 def request_approve(request, pk):
     mr = get_object_or_404(MaintenanceRequest, pk=pk)
     if request.method == 'POST' and not mr.work_order:
@@ -1018,7 +1100,7 @@ def request_approve(request, pk):
     return redirect('request_list')
 
 
-@login_required
+@admin_required
 def request_reject(request, pk):
     mr = get_object_or_404(MaintenanceRequest, pk=pk)
     if request.method == 'POST':
@@ -1090,7 +1172,7 @@ def condition_reading_create(request, piano_pk):
 
 # ── Slice 9: Maintenance Templates ──────────────────────────────
 
-@login_required
+@admin_required
 def template_list(request):
     templates = ScheduleTemplate.objects.all()
     return render(request, 'maintenance/template_list.html', {
@@ -1099,7 +1181,7 @@ def template_list(request):
     })
 
 
-@login_required
+@admin_required
 def template_create(request):
     if request.method == 'POST':
         form = ScheduleTemplateForm(request.POST)
@@ -1116,7 +1198,7 @@ def template_create(request):
     })
 
 
-@login_required
+@admin_required
 def template_edit(request, pk):
     tmpl = get_object_or_404(ScheduleTemplate, pk=pk)
     if request.method == 'POST':
@@ -1135,7 +1217,7 @@ def template_edit(request, pk):
     })
 
 
-@login_required
+@admin_required
 def template_apply(request, pk):
     tmpl = get_object_or_404(ScheduleTemplate, pk=pk)
     pianos = Piano.objects.filter(is_active=True).select_related('venue')
@@ -1168,7 +1250,7 @@ def template_apply(request, pk):
     })
 
 
-@login_required
+@admin_required
 def schedule_toggle(request, pk):
     sched = get_object_or_404(MaintenanceSchedule, pk=pk)
     if request.method == 'POST':
@@ -1179,7 +1261,7 @@ def schedule_toggle(request, pk):
     return redirect('piano_detail', pk=sched.piano_id)
 
 
-@login_required
+@admin_required
 def schedule_delete(request, pk):
     sched = get_object_or_404(MaintenanceSchedule, pk=pk)
     piano_pk = sched.piano_id
@@ -1191,16 +1273,74 @@ def schedule_delete(request, pk):
 
 # ── Slice 10: Technicians ───────────────────────────────────────
 
-@login_required
+@admin_required
 def technician_list(request):
-    techs = Technician.objects.filter(is_active=True).order_by('first_name', 'last_name')
+    techs = (
+        Technician.objects
+        .annotate(
+            open_work_order_count=Count(
+                'work_orders',
+                filter=Q(work_orders__status__in=[
+                    WorkOrder.Status.OPEN,
+                    WorkOrder.Status.IN_PROGRESS,
+                ]),
+            ),
+        )
+        .order_by('-is_active', 'first_name', 'last_name', 'username')
+    )
     return render(request, 'maintenance/technician_list.html', {
         'active_nav': 'technicians',
         'technicians': techs,
     })
 
 
-@login_required
+@admin_required
+def technician_create(request):
+    if request.method == 'POST':
+        form = TechnicianCreateForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            messages.success(request, f'User {user.username} created.')
+            return redirect('technician_list')
+    else:
+        form = TechnicianCreateForm(initial={
+            'is_active': True,
+            'role_technician': True,
+        })
+    return render(request, 'maintenance/technician_form.html', {
+        'active_nav': 'technicians',
+        'form': form,
+        'editing': False,
+    })
+
+
+@admin_required
+def technician_edit(request, pk):
+    tech = get_object_or_404(Technician, pk=pk)
+    if request.method == 'POST':
+        form = TechnicianUpdateForm(request.POST, instance=tech)
+        if form.is_valid():
+            updated = form.save(commit=False)
+            if updated.pk == request.user.pk:
+                if not updated.is_active:
+                    form.add_error('is_active', 'You cannot deactivate your own account.')
+                if not updated.role_admin:
+                    form.add_error('role_admin', 'You cannot remove your own admin role.')
+            if not form.errors:
+                updated.save()
+                messages.success(request, f'User {updated.username} updated.')
+                return redirect('technician_list')
+    else:
+        form = TechnicianUpdateForm(instance=tech)
+    return render(request, 'maintenance/technician_form.html', {
+        'active_nav': 'technicians',
+        'form': form,
+        'editing': True,
+        'technician': tech,
+    })
+
+
+@admin_required
 def technician_report(request):
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
@@ -1247,7 +1387,7 @@ def technician_report(request):
     })
 
 
-@login_required
+@admin_required
 def technician_report_csv(request):
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
@@ -1297,7 +1437,7 @@ def technician_report_csv(request):
 
 # ── Slice 10: Parts ─────────────────────────────────────────────
 
-@login_required
+@admin_required
 def part_list(request):
     parts = Part.objects.all()
     return render(request, 'maintenance/part_list.html', {
@@ -1306,7 +1446,7 @@ def part_list(request):
     })
 
 
-@login_required
+@admin_required
 def part_create(request):
     if request.method == 'POST':
         form = PartForm(request.POST)
@@ -1323,7 +1463,7 @@ def part_create(request):
     })
 
 
-@login_required
+@admin_required
 def part_edit(request, pk):
     part = get_object_or_404(Part, pk=pk)
     if request.method == 'POST':
@@ -1344,7 +1484,7 @@ def part_edit(request, pk):
 
 # ── Slice 10: CSV Import ────────────────────────────────────────
 
-@login_required
+@admin_required
 def piano_import_sample_csv(request):
     """Return a sample CSV file the user can fill in and re-upload."""
     response = HttpResponse(content_type='text/csv')
@@ -1368,7 +1508,7 @@ def piano_import_sample_csv(request):
     return response
 
 
-@login_required
+@admin_required
 def piano_import_csv(request):
     MAX_CSV_SIZE = 5 * 1024 * 1024  # 5 MB
     MAX_CSV_ROWS = 5000
@@ -1428,7 +1568,7 @@ def piano_import_csv(request):
 
 # ── Slice 10: QR Codes ──────────────────────────────────────────
 
-@login_required
+@admin_required
 def qr_codes(request):
     pianos = Piano.objects.filter(is_active=True).select_related('venue').order_by('venue__name', 'name')
     base_url = request.build_absolute_uri('/maintenance_request/')
@@ -1444,7 +1584,7 @@ def qr_codes(request):
     })
 
 
-@login_required
+@admin_required
 def qr_codes_csv(request):
     pianos = Piano.objects.filter(is_active=True).select_related('venue').order_by('venue__name', 'name')
     base_url = request.build_absolute_uri('/maintenance_request/')
@@ -1469,14 +1609,14 @@ def qr_codes_csv(request):
 
 # ── Slice 10: Reports ───────────────────────────────────────────
 
-@login_required
+@admin_required
 def reports(request):
     return render(request, 'maintenance/reports.html', {
         'active_nav': 'dashboard',
     })
 
 
-@login_required
+@admin_required
 def report_export_workorders(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="work_orders.csv"'
@@ -1501,7 +1641,7 @@ def report_export_workorders(request):
     return response
 
 
-@login_required
+@admin_required
 def report_export_pianos(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="pianos.csv"'
@@ -1522,15 +1662,16 @@ def report_export_pianos(request):
 
 @login_required
 def settings_page(request):
-    company = CompanySettings.load()
-    company_form = CompanySettingsForm(instance=company, prefix='company')
+    is_admin = request.user.role_admin
+    company = CompanySettings.load() if is_admin else None
+    company_form = CompanySettingsForm(instance=company, prefix='company') if is_admin else None
     profile_form = UserProfileForm(instance=request.user, prefix='profile')
     password_form = PasswordChangeForm(user=request.user, prefix='password')
 
     if request.method == 'POST':
         action = request.POST.get('action')
 
-        if action == 'company':
+        if action == 'company' and is_admin:
             company_form = CompanySettingsForm(
                 request.POST, instance=company, prefix='company',
             )

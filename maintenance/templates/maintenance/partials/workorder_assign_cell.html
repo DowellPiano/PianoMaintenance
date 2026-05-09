@@ -1,7 +1,8 @@
 <div class="assign-cell">
   {% if wo.status == "Complete" or wo.status == "Cancelled" %}
     <span>{{ wo.assigned_tech.get_full_name|default:"—" }}</span>
-  {% else %}
+  {% elif request.user.role_admin %}
+    {# Admin: full dropdown to assign any technician #}
     <form class="assign-form"
           hx-post="{% url 'workorder_assign' wo.pk %}"
           hx-target="#assign-cell"
@@ -16,5 +17,22 @@
         {% endfor %}
       </select>
     </form>
+  {% elif wo.assigned_tech is None and request.user.role_technician %}
+    {# Tech: unassigned WO — show "Take" button #}
+    <form class="assign-form"
+          hx-post="{% url 'workorder_assign' wo.pk %}"
+          hx-target="#assign-cell"
+          hx-swap="innerHTML"
+          style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="assign_action" value="assign_self">
+      <button type="submit" class="btn btn-xs btn-primary">Take</button>
+    </form>
+  {% elif wo.assigned_tech_id == request.user.pk %}
+    {# Tech: assigned to me #}
+    <span>{{ wo.assigned_tech.get_full_name }} (you)</span>
+  {% else %}
+    {# Tech: assigned to someone else — read only #}
+    <span>{{ wo.assigned_tech.get_full_name|default:"—" }}</span>
   {% endif %}
 </div>

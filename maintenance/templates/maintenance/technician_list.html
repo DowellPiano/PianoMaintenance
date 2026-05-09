@@ -6,10 +6,13 @@
 {% block content %}
 <div class="page-header">
   <div>
-    <h1>Technicians</h1>
-    <p class="page-subtitle">{{ technicians|length }} active technician{{ technicians|length|pluralize }}</p>
+    <h1>Users</h1>
+    <p class="page-subtitle">{{ technicians|length }} account{{ technicians|length|pluralize }}</p>
   </div>
-  <a href="{% url 'technician_report' %}" class="btn btn-primary">Work Report</a>
+  <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+    <a href="{% url 'technician_report' %}" class="btn btn-secondary">Work Report</a>
+    <a href="{% url 'technician_create' %}" class="btn btn-primary">Add User</a>
+  </div>
 </div>
 
 <div class="card">
@@ -20,7 +23,10 @@
           <th>Name</th>
           <th>Username</th>
           <th>Email</th>
+          <th>Roles</th>
+          <th>Status</th>
           <th>Open WOs</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -29,14 +35,28 @@
           <td class="fw-medium">{{ tech.get_full_name|default:tech.username }}</td>
           <td class="text-sm text-muted">{{ tech.username }}</td>
           <td class="text-sm">{{ tech.email|default:"—" }}</td>
-          <td class="text-sm">{{ tech.work_orders.count }}</td>
+          <td class="text-sm">
+            {% if tech.role_admin %}<span class="badge badge-high">Admin</span>{% endif %}
+            {% if tech.role_technician %}<span class="badge badge-upcoming">Technician</span>{% endif %}
+            {% if not tech.role_admin and not tech.role_technician %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-sm">
+            {% if tech.is_active %}
+              <span class="badge badge-complete">Active</span>
+            {% else %}
+              <span class="badge badge-normal">Pending</span>
+            {% endif %}
+          </td>
+          <td class="text-sm">{{ tech.open_work_order_count }}</td>
+          <td style="text-align:right;">
+            <a href="{% url 'technician_edit' tech.pk %}" class="btn btn-secondary btn-sm">Edit</a>
+          </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="4" style="text-align:center; padding:2rem;">
+          <td colspan="7" style="text-align:center; padding:2rem;">
             <div class="empty-state" style="padding:1rem;">
-              <div class="empty-icon">👤</div>
-              <p>No technicians found. Add users via Django Admin.</p>
+              <p>No users found.</p>
             </div>
           </td>
         </tr>

@@ -4,19 +4,24 @@
 {% block topbar_title %}Dashboard{% endblock %}
 
 {% block content %}
+{% if not is_admin %}
+<h2 style="margin-bottom:1rem;">My Work</h2>
+{% endif %}
+
 <div class="kpi-grid">
   <div class="kpi-card">
-    <div class="kpi-label">Overdue</div>
+    <div class="kpi-label">{% if is_admin %}Overdue{% else %}My Overdue{% endif %}</div>
     <div class="kpi-value danger">{{ overdue_count }}</div>
   </div>
   <div class="kpi-card">
-    <div class="kpi-label">Open Work Orders</div>
+    <div class="kpi-label">{% if is_admin %}Open Work Orders{% else %}My Open{% endif %}</div>
     <div class="kpi-value primary">{{ open_wo_count }}</div>
   </div>
   <div class="kpi-card">
-    <div class="kpi-label">In Progress</div>
+    <div class="kpi-label">{% if is_admin %}In Progress{% else %}My In Progress{% endif %}</div>
     <div class="kpi-value warning">{{ in_progress_count }}</div>
   </div>
+  {% if is_admin %}
   <div class="kpi-card">
     <div class="kpi-label">Pending Requests</div>
     <div class="kpi-value primary">{{ pending_request_count }}</div>
@@ -33,15 +38,16 @@
     <div class="kpi-label">Organizations</div>
     <div class="kpi-value">{{ org_count }}</div>
   </div>
+  {% endif %}
   <div class="kpi-card">
-    <div class="kpi-label">Completed This Month</div>
+    <div class="kpi-label">{% if is_admin %}Completed This Month{% else %}My Completed This Month{% endif %}</div>
     <div class="kpi-value success">{{ completed_this_month }}</div>
   </div>
 </div>
 
 <div class="card">
   <div class="card-header">
-    <h2>Recent Work Orders</h2>
+    <h2>{% if is_admin %}Recent Work Orders{% else %}My Recent Work Orders{% endif %}</h2>
     <a href="{% url 'workorder_list' %}" class="btn btn-sm btn-secondary">View All</a>
   </div>
   <div class="table-wrap">

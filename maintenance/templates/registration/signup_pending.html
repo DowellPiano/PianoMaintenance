@@ -1,0 +1,32 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Account Pending — Piano Maintainer</title>
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-card">
+      <h1>Piano Maintainer</h1>
+      <p class="subtitle">Account pending approval</p>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+
+      <p class="text-muted" style="line-height:1.5;">
+        Your account request has been sent. An admin needs to activate it before you can sign in.
+      </p>
+
+      <p style="text-align:center; margin-top:1rem; font-size:.88rem;">
+        Already approved? <a href="{% url 'login' %}">Sign in</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

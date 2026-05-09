@@ -18,11 +18,13 @@
       </p>
       {% if venue.address %}<p class="loc-hero-meta">{{ venue.address }}</p>{% endif %}
     </div>
+    {% if request.user.role_admin %}
     <div style="display:flex; gap:.5rem;">
       <a href="{% url 'venue_delete' venue.pk %}" class="btn btn-sm btn-danger">Delete</a>
       <a href="{% url 'venue_edit' venue.pk %}" class="btn btn-sm btn-secondary">Edit</a>
       <a href="{% url 'piano_create' %}?venue={{ venue.pk }}" class="btn btn-sm btn-primary">+ Add Piano</a>
     </div>
+    {% endif %}
   </div>
 </div>
 

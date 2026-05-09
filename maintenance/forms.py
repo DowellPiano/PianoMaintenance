@@ -15,6 +15,42 @@ class SignUpForm(UserCreationForm):
         model = Technician
         fields = ['username', 'first_name', 'last_name', 'email', 'password1', 'password2']
 
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.is_active = False
+        user.role_admin = False
+        user.role_technician = True
+        if commit:
+            user.save()
+        return user
+
+
+class TechnicianCreateForm(UserCreationForm):
+    first_name = forms.CharField(max_length=150)
+    last_name = forms.CharField(max_length=150)
+    email = forms.EmailField(required=False)
+
+    class Meta:
+        model = Technician
+        fields = [
+            'username', 'first_name', 'last_name', 'email',
+            'role_admin', 'role_technician', 'is_active',
+            'password1', 'password2',
+        ]
+
+
+class TechnicianUpdateForm(forms.ModelForm):
+    first_name = forms.CharField(max_length=150)
+    last_name = forms.CharField(max_length=150)
+    email = forms.EmailField(required=False)
+
+    class Meta:
+        model = Technician
+        fields = [
+            'username', 'first_name', 'last_name', 'email',
+            'role_admin', 'role_technician', 'is_active',
+        ]
+
 
 class OrganizationForm(forms.ModelForm):
     class Meta:

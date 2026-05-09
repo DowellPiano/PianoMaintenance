@@ -10,7 +10,7 @@
     <h1>Venues</h1>
     <p class="page-subtitle">{{ venues|length }} venue{{ venues|length|pluralize }}</p>
   </div>
-  <a href="{% url 'venue_create' %}" class="btn btn-primary">+ Add Venue</a>
+  {% if request.user.role_admin %}<a href="{% url 'venue_create' %}" class="btn btn-primary">+ Add Venue</a>{% endif %}
 </div>
 
 <div class="venue-grid">

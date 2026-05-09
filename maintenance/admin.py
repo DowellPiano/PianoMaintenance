@@ -92,11 +92,16 @@ class TechnicianAdmin(UserAdmin):
         "first_name",
         "last_name",
         "email",
+        "role_admin",
+        "role_technician",
         "is_active",
-        "is_staff",
     )
-    list_filter   = ("is_active", "is_staff", "groups")
+    list_filter   = ("role_admin", "role_technician", "is_active", "is_staff", "groups")
     search_fields = ("username", "first_name", "last_name", "email")
+    # Add role fields to the user edit form
+    fieldsets = UserAdmin.fieldsets + (
+        ("App Roles", {"fields": ("role_admin", "role_technician")}),
+    )
 
 
 # ---------------------------------------------------------------------------
