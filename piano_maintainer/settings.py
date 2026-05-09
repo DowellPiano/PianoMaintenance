@@ -5,6 +5,10 @@ Django settings for piano_maintainer project.
 from pathlib import Path
 from decouple import config, Csv
 import dj_database_url, os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -76,8 +80,8 @@ WSGI_APPLICATION = "piano_maintainer.wsgi.application"
 # DATABASE
 DATABASES = {
     "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL") or "sqlite:///:memory:",
-        conn_max_age=0,
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
     )
 }
 
