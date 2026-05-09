@@ -1,0 +1,179 @@
+diff -ruN PianoMaintenance-original/PianoMaintenance-main/.env.example PianoMaintenance-work/PianoMaintenance-main/.env.example
+--- PianoMaintenance-original/PianoMaintenance-main/.env.example	2026-05-09 01:41:18.000000000 +0000
++++ PianoMaintenance-work/PianoMaintenance-main/.env.example	2026-05-09 12:30:42.733854163 +0000
+@@ -3,16 +3,32 @@
+ 
+ SECRET_KEY=replace-this-with-a-real-secret-key
+ 
+-# Set to True only for local development — never in production
+-DEBUG=False
++# Set to True only for local development — never in production.
++DEBUG=True
+ 
+-# Comma-separated list of hostnames Django will serve
+-# Development:   ALLOWED_HOSTS=localhost,127.0.0.1
+-# Production:    ALLOWED_HOSTS=myapp.com,www.myapp.com
++# Comma-separated list of hostnames Django will serve.
++# Development: ALLOWED_HOSTS=localhost,127.0.0.1
++# Render example: ALLOWED_HOSTS=your-app-name.onrender.com
+ ALLOWED_HOSTS=localhost,127.0.0.1
+ 
+-# Comma-separated list of origins the browser is allowed to call from
+-# Must match exactly (scheme + host + port)
+-# Development:   CORS_ALLOWED_ORIGINS=http://localhost:5173
+-# Production:    CORS_ALLOWED_ORIGINS=https://myapp.com
+-CORS_ALLOWED_ORIGINS=http://localhost:5173
++# Comma-separated list of trusted origins for POST forms/CSRF.
++# Must include scheme and host, and port when applicable.
++# Development: CSRF_TRUSTED_ORIGINS=http://localhost:8000
++# Render example: CSRF_TRUSTED_ORIGINS=https://your-app-name.onrender.com
++CSRF_TRUSTED_ORIGINS=http://localhost:8000
++
++# Production Postgres connection string.
++# Leave unset for local SQLite development.
++# Render/Railway/Fly/Heroku usually provide this automatically.
++# DATABASE_URL=postgres://USER:PASSWORD@HOST:PORT/DBNAME
++
++# Most hosted Postgres providers require SSL. For local Postgres, set False.
++DB_SSL_REQUIRE=False
++
++# Production HTTPS security switches. Defaults are safe for DEBUG=False.
++SECURE_SSL_REDIRECT=False
++SESSION_COOKIE_SECURE=False
++CSRF_COOKIE_SECURE=False
++SECURE_HSTS_SECONDS=0
++SECURE_HSTS_INCLUDE_SUBDOMAINS=False
++SECURE_HSTS_PRELOAD=False
+diff -ruN PianoMaintenance-original/PianoMaintenance-main/README.md PianoMaintenance-work/PianoMaintenance-main/README.md
+--- PianoMaintenance-original/PianoMaintenance-main/README.md	2026-05-09 01:41:18.000000000 +0000
++++ PianoMaintenance-work/PianoMaintenance-main/README.md	2026-05-09 12:30:42.742113753 +0000
+@@ -216,3 +216,51 @@
+ - `Organization` uses `PROTECT` on its venue FK — you must remove all venues before deleting an organization.
+ - `ConditionReading.update_piano_current_state()` copies readings to denormalized fields on Piano for fast display.
+ - `Piano.advance_schedule(task_type, completed_date)` computes the next due date when a work order is completed.
++
++---
++
++## Postgres Deployment
++
++This project is configured to use Postgres when `DATABASE_URL` is set and SQLite locally when it is not.
++
++Required production environment variables:
++
++```bash
++SECRET_KEY=your-real-secret-key
++DEBUG=False
++ALLOWED_HOSTS=your-app-name.onrender.com,yourdomain.com
++CSRF_TRUSTED_ORIGINS=https://your-app-name.onrender.com,https://yourdomain.com
++DATABASE_URL=postgres://USER:PASSWORD@HOST:PORT/DBNAME
++DB_SSL_REQUIRE=True
++```
++
++Typical deploy commands:
++
++```bash
++pip install -r requirements.txt
++python manage.py collectstatic --noinput
++python manage.py migrate
++```
++
++Typical web start command:
++
++```bash
++gunicorn piano_maintainer.wsgi:application
++```
++
++### Moving existing SQLite data into Postgres
++
++From your local SQLite database:
++
++```bash
++python manage.py dumpdata --exclude auth.permission --exclude contenttypes > data.json
++```
++
++After setting `DATABASE_URL` to your Postgres database:
++
++```bash
++python manage.py migrate
++python manage.py loaddata data.json
++```
++
++Do not commit `db.sqlite3`, `.env`, or production secrets.
+diff -ruN PianoMaintenance-original/PianoMaintenance-main/piano_maintainer/settings.py PianoMaintenance-work/PianoMaintenance-main/piano_maintainer/settings.py
+--- PianoMaintenance-original/PianoMaintenance-main/piano_maintainer/settings.py	2026-05-09 01:41:18.000000000 +0000
++++ PianoMaintenance-work/PianoMaintenance-main/piano_maintainer/settings.py	2026-05-09 12:30:34.132224896 +0000
+@@ -3,11 +3,9 @@
+ """
+ 
+ from pathlib import Path
+-from decouple import config, Csv
+-import dj_database_url, os
+-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+-BASE_DIR = Path(__file__).resolve().parent.parent
+ 
++import dj_database_url
++from decouple import Csv, config
+ 
+ BASE_DIR = Path(__file__).resolve().parent.parent
+ 
+@@ -16,8 +14,12 @@
+ SECRET_KEY = config("SECRET_KEY")
+ DEBUG = config("DEBUG", default=False, cast=bool)
+ 
+-# Comma-separated in .env, e.g. ALLOWED_HOSTS=localhost,127.0.0.1,myapp.com
+-ALLOWED_HOSTS = [".onrender.com"]
++# Comma-separated in .env, e.g. ALLOWED_HOSTS=localhost,127.0.0.1,myapp.onrender.com
++ALLOWED_HOSTS = config(
++    "ALLOWED_HOSTS",
++    default="localhost,127.0.0.1",
++    cast=Csv(),
++)
+ 
+ CSRF_TRUSTED_ORIGINS = config(
+     "CSRF_TRUSTED_ORIGINS",
+@@ -52,7 +54,6 @@
+     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+ ]
+ 
+-
+ ROOT_URLCONF = "piano_maintainer.urls"
+ 
+ TEMPLATES = [
+@@ -74,11 +75,14 @@
+ 
+ 
+ # DATABASE
++# Production: set DATABASE_URL to your Postgres connection string.
++# Local development: falls back to SQLite when DATABASE_URL is not set.
+ DATABASES = {
+     "default": dj_database_url.config(
+-        default=os.environ.get("DATABASE_URL"),
+-        conn_max_age=0,
+-        ssl_require=True,
++        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
++        conn_max_age=600,
++        conn_health_checks=True,
++        ssl_require=config("DB_SSL_REQUIRE", default=not DEBUG, cast=bool),
+     )
+ }
+ 
+@@ -130,13 +134,10 @@
+ SECURE_CONTENT_TYPE_NOSNIFF = True
+ X_FRAME_OPTIONS = "DENY"
+ 
+-STATIC_URL = "static/"
+-STATIC_ROOT = BASE_DIR / "staticfiles"
+-
+ # Enable these when serving over HTTPS in production:
+-# SECURE_SSL_REDIRECT = True
+-# SESSION_COOKIE_SECURE = True
+-# CSRF_COOKIE_SECURE = True
+-# SECURE_HSTS_SECONDS = 31536000
+-# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+-# SECURE_HSTS_PRELOAD = True
++SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=not DEBUG, cast=bool)
++SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=not DEBUG, cast=bool)
++CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)
++SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=0 if DEBUG else 31536000, cast=int)
++SECURE_HSTS_INCLUDE_SUBDOMAINS = config("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=not DEBUG, cast=bool)
++SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=not DEBUG, cast=bool)
