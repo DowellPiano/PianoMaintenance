@@ -76,7 +76,7 @@ WSGI_APPLICATION = "piano_maintainer.wsgi.application"
 # DATABASE
 DATABASES = {
     "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL"),
+        default=str(os.environ.get("DATABASE_URL")),
         conn_max_age=0,
         ssl_require=True,
     )
