@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from .models import (
     Organization, Venue, Piano, WorkOrder, ConditionReading, ConditionLevel,
-    MaintenanceSchedule, ScheduleTemplate, Part, Technician,
+    MaintenanceSchedule, ScheduleTemplate, Part, Technician, CompanySettings,
 )
 
 
@@ -163,3 +163,16 @@ class PhotoUploadForm(forms.Form):
     renders a raw <input type="file" multiple> element.
     """
     caption = forms.CharField(required=False, max_length=300)
+
+
+class CompanySettingsForm(forms.ModelForm):
+    class Meta:
+        model = CompanySettings
+        fields = ['company_name', 'address', 'phone', 'email', 'default_labor_rate']
+
+
+class UserProfileForm(forms.ModelForm):
+    """Let technicians update their own name and email."""
+    class Meta:
+        model = Technician
+        fields = ['first_name', 'last_name', 'email']

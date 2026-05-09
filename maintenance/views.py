@@ -15,12 +15,15 @@ from .models import (
     Organization, Venue, Piano, WorkOrder, MaintenanceRequest,
     MaintenanceSchedule, ScheduleTemplate, ConditionReading,
     Technician, Part, PartUsed, MaintenanceLog, TaskType, Photo, Tag,
+    CompanySettings,
 )
 from django.contrib.auth import login as auth_login
+from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth import update_session_auth_hash
 from .forms import (
     OrganizationForm, VenueForm, PianoForm, WorkOrderForm, WorkOrderCompleteForm,
     WorkOrderLogWorkForm, ConditionReadingForm, ScheduleTemplateForm, PartForm,
-    SignUpForm,
+    SignUpForm, CompanySettingsForm, UserProfileForm,
 )
 
 
@@ -1513,3 +1516,51 @@ def report_export_pianos(request):
             p.year_acquired or '', p.notes,
         ])
     return response
+
+
+# ── Settings ──────────────────────────────────────────────────────
+
+@login_required
+def settings_page(request):
+    company = CompanySettings.load()
+    company_form = CompanySettingsForm(instance=company, prefix='company')
+    profile_form = UserProfileForm(instance=request.user, prefix='profile')
+    password_form = PasswordChangeForm(user=request.user, prefix='password')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'company':
+            company_form = CompanySettingsForm(
+                request.POST, instance=company, prefix='company',
+            )
+            if company_form.is_valid():
+                company_form.save()
+                messages.success(request, 'Company settings saved.')
+                return redirect('settings')
+
+        elif action == 'profile':
+            profile_form = UserProfileForm(
+                request.POST, instance=request.user, prefix='profile',
+            )
+            if profile_form.is_valid():
+                profile_form.save()
+                messages.success(request, 'Profile updated.')
+                return redirect('settings')
+
+        elif action == 'password':
+            password_form = PasswordChangeForm(
+                user=request.user, data=request.POST, prefix='password',
+            )
+            if password_form.is_valid():
+                user = password_form.save()
+                update_session_auth_hash(request, user)
+                messages.success(request, 'Password changed.')
+                return redirect('settings')
+
+    return render(request, 'maintenance/settings.html', {
+        'active_nav': 'settings',
+        'company_form': company_form,
+        'profile_form': profile_form,
+        'password_form': password_form,
+    })

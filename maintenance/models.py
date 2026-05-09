@@ -684,3 +684,34 @@ class Photo(models.Model):
         return f"Photo #{self.pk}"
 
 
+# ---------------------------------------------------------------------------
+# Company Settings (singleton)
+# ---------------------------------------------------------------------------
+class CompanySettings(models.Model):
+    company_name = models.CharField(max_length=200, blank=True)
+    address = models.TextField(blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
+    default_labor_rate = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        help_text="Default hourly labor rate for cost calculations.",
+    )
+
+    class Meta:
+        verbose_name = "Company Settings"
+        verbose_name_plural = "Company Settings"
+
+    def __str__(self):
+        return self.company_name or "Company Settings"
+
+    def save(self, *args, **kwargs):
+        # Enforce singleton: always use pk=1
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+

@@ -85,6 +85,9 @@ urlpatterns = [
     path('parts/new/', views.part_create, name='part_create'),
     path('parts/<int:pk>/edit/', views.part_edit, name='part_edit'),
 
+    # Settings
+    path('settings/', views.settings_page, name='settings'),
+
     # Reports
     path('reports/', views.reports, name='reports'),
     path('reports/export/work-orders/', views.report_export_workorders, name='report_export_workorders'),
