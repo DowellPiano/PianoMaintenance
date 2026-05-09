@@ -4,19 +4,24 @@
 {% block topbar_title %}Dashboard{% endblock %}
 
 {% block content %}
+{% if not is_admin %}
+<h2 style="margin-bottom:1rem;">My Work</h2>
+{% endif %}
+
 <div class="kpi-grid">
   <div class="kpi-card">
-    <div class="kpi-label">Overdue</div>
+    <div class="kpi-label">{% if is_admin %}Overdue{% else %}My Overdue{% endif %}</div>
     <div class="kpi-value danger">{{ overdue_count }}</div>
   </div>
   <div class="kpi-card">
-    <div class="kpi-label">Open Work Orders</div>
+    <div class="kpi-label">{% if is_admin %}Open Work Orders{% else %}My Open{% endif %}</div>
     <div class="kpi-value primary">{{ open_wo_count }}</div>
   </div>
   <div class="kpi-card">
-    <div class="kpi-label">In Progress</div>
+    <div class="kpi-label">{% if is_admin %}In Progress{% else %}My In Progress{% endif %}</div>
     <div class="kpi-value warning">{{ in_progress_count }}</div>
   </div>
+  {% if is_admin %}
   <div class="kpi-card">
     <div class="kpi-label">Pending Requests</div>
     <div class="kpi-value primary">{{ pending_request_count }}</div>
@@ -33,15 +38,16 @@
     <div class="kpi-label">Organizations</div>
     <div class="kpi-value">{{ org_count }}</div>
   </div>
+  {% endif %}
   <div class="kpi-card">
-    <div class="kpi-label">Completed This Month</div>
+    <div class="kpi-label">{% if is_admin %}Completed This Month{% else %}My Completed This Month{% endif %}</div>
     <div class="kpi-value success">{{ completed_this_month }}</div>
   </div>
 </div>
 
 <div class="card">
   <div class="card-header">
-    <h2>Recent Work Orders</h2>
+    <h2>{% if is_admin %}Recent Work Orders{% else %}My Work Orders{% endif %}</h2>
     <a href="{% url 'workorder_list' %}" class="btn btn-sm btn-secondary">View All</a>
   </div>
   <div class="table-wrap">
@@ -57,17 +63,17 @@
         </tr>
       </thead>
       <tbody>
-        {% for wo in recent_work_orders %}
-        <tr>
+        {% for wo in dashboard_work_orders %}
+        <tr class="wo-row-link" onclick="window.location='{% url 'workorder_detail' wo.pk %}'">
           <td class="text-muted">WO-{{ wo.pk }}</td>
-          <td>{% if wo.piano %}<a href="{% url 'piano_detail' wo.piano_id %}">{{ wo.piano.name }}</a>{% else %}<span class="text-dim">{{ wo.piano_name }}</span>{% endif %}</td>
+          <td>{% if wo.piano %}{{ wo.piano.name }}{% else %}<span class="text-dim">{{ wo.piano_name }}</span>{% endif %}</td>
           <td>{{ wo.order_type }}</td>
           <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
           <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
           <td class="text-muted text-sm">{{ wo.due_date|default:"—" }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:2rem;">No work orders yet.</td></tr>
+        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:2rem;">{% if is_admin %}No work orders yet.{% else %}No active work orders assigned to you.{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>

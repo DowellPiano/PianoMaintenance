@@ -3,16 +3,19 @@
     {% for tag in piano_tags %}
     <span class="tag-chip">
       {{ tag.name }}
+      {% if request.user.role_admin %}
       <button type="button" class="tag-remove" title="Remove tag"
               hx-post="{% url 'piano_remove_tag' piano.pk tag.pk %}"
               hx-target="#piano-tags"
               hx-swap="outerHTML">&times;</button>
+      {% endif %}
     </span>
     {% empty %}
     <span class="text-dim text-sm">No tags yet.</span>
     {% endfor %}
   </div>
 
+  {% if request.user.role_admin %}
   {% if available_tags %}
   <div style="margin-bottom:.75rem;">
     <span class="text-sm text-muted" style="margin-right:.35rem;">Add existing:</span>
@@ -36,4 +39,5 @@
            class="form-input" style="width:160px; height:30px; font-size:.82rem; padding:0 .5rem;">
     <button type="submit" class="btn btn-xs btn-secondary" style="height:30px;">Create</button>
   </form>
+  {% endif %}
 </div>

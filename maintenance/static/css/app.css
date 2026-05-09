@@ -114,6 +114,11 @@
   font-size: .6rem; padding: .1rem .3rem;
   border-radius: 3px; font-weight: 600;
 }
+.photo-delete-form {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+}
 
 /* ----------------------------------------------------------------
    Shared: condition dots
@@ -237,6 +242,9 @@
 .wo-filters .search-input { min-width: 220px; }
 .wo-row-link { cursor: pointer; }
 .wo-row-link:hover td { background: #f0f4ff !important; }
+.sort-link { color: inherit; display: inline-flex; gap: .25rem; align-items: center; }
+.sort-link.active { color: var(--clr-primary); }
+.sort-arrow { font-size: .75rem; line-height: 1; }
 .wo-id { font-weight: 600; color: var(--clr-primary); }
 .wo-piano { font-weight: 500; }
 .wo-piano-loc { color: var(--clr-text-dim); font-size: .78rem; }

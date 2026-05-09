@@ -10,10 +10,12 @@
     <h1>Pianos</h1>
     <p class="page-subtitle">{{ pianos|length }} piano{{ pianos|length|pluralize }} registered</p>
   </div>
+  {% if request.user.role_admin %}
   <div class="gap-row">
     <a href="{% url 'piano_import' %}" class="btn btn-secondary">Import CSV</a>
     <a href="{% url 'piano_create' %}" class="btn btn-primary">+ Add Piano</a>
   </div>
+  {% endif %}
 </div>
 
 <form method="get" class="filter-bar">

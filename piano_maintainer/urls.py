@@ -13,6 +13,7 @@ urlpatterns = [
     path('login/', auth_views.LoginView.as_view(), name='login'),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('signup/', views.signup, name='signup'),
+    path('signup/pending/', views.signup_pending, name='signup_pending'),
 
     # Template views
     path('', views.dashboard, name='dashboard'),
@@ -47,6 +48,7 @@ urlpatterns = [
     path('pianos/<int:piano_pk>/condition/new/', views.condition_reading_create, name='condition_reading_create'),
     path('pianos/<int:pk>/photos/upload/', views.piano_photo_upload, name='piano_photo_upload'),
     path('pianos/<int:pk>/photos/<int:photo_pk>/set-profile/', views.piano_set_profile_photo, name='piano_set_profile_photo'),
+    path('pianos/<int:pk>/photos/<int:photo_pk>/delete/', views.piano_photo_delete, name='piano_photo_delete'),
 
     # Work Orders
     path('work-orders/', views.workorder_list, name='workorder_list'),
@@ -77,6 +79,8 @@ urlpatterns = [
 
     # Technicians
     path('technicians/', views.technician_list, name='technician_list'),
+    path('technicians/new/', views.technician_create, name='technician_create'),
+    path('technicians/<int:pk>/edit/', views.technician_edit, name='technician_edit'),
     path('technicians/report/', views.technician_report, name='technician_report'),
     path('technicians/report/csv/', views.technician_report_csv, name='technician_report_csv'),
 

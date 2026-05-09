@@ -6,6 +6,7 @@
 {% block content %}
 <div style="max-width:720px;">
 
+  {% if request.user.role_admin %}
   <!-- Company Information -->
   <div class="card" style="margin-bottom:1.5rem;">
     <div class="card-header">
@@ -62,6 +63,7 @@
       </form>
     </div>
   </div>
+  {% endif %}
 
   <!-- User Profile -->
   <div class="card" style="margin-bottom:1.5rem;">

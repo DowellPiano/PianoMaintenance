@@ -1,0 +1,61 @@
+<div id="workorder-results" class="card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          {% for column in sort_columns %}
+            <th>
+              <a href="{{ column.url }}"
+                 class="sort-link {% if column.active %}active{% endif %}"
+                 hx-get="{{ column.url }}"
+                 hx-target="#workorder-results"
+                 hx-swap="outerHTML"
+                 hx-push-url="true">
+                {{ column.label }}
+                {% if column.active %}
+                  <span class="sort-arrow" aria-hidden="true">{% if sort_dir == "asc" %}&uarr;{% else %}&darr;{% endif %}</span>
+                {% endif %}
+              </a>
+            </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for wo in work_orders %}
+        <tr class="wo-row-link" onclick="window.location='{% url 'workorder_detail' wo.pk %}'">
+          <td class="wo-id">WO-{{ wo.pk }}</td>
+          <td>
+            <div class="wo-piano">{{ wo.piano_name }}</div>
+            <div class="wo-piano-loc">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
+          </td>
+          <td>{{ wo.order_type }}</td>
+          <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
+          <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
+          <td class="text-sm" onclick="event.stopPropagation();">
+            {% include "maintenance/partials/workorder_assign_cell.html" %}
+          </td>
+          <td class="text-sm">
+            {% if wo.due_date %}
+              {{ wo.due_date|date:"M d" }}
+              {% if wo.due_date < today and wo.status != "Complete" and wo.status != "Cancelled" %}
+                <span class="overdue-marker">Overdue</span>
+              {% endif %}
+            {% else %}
+              <span class="text-dim">—</span>
+            {% endif %}
+          </td>
+          <td class="text-sm text-muted">{{ wo.created_at|date:"M d, Y" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" style="text-align:center; padding:2rem;">
+            <div class="empty-state" style="padding:1rem;">
+              <p>No work orders found.</p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

@@ -290,6 +290,14 @@ class Technician(AbstractUser):
     explicitly to satisfy the spec and set the default clearly.
     """
     is_active = models.BooleanField(default=True)
+    role_admin = models.BooleanField(
+        default=False,
+        help_text="Can manage all settings, create/edit/delete records, and assign work.",
+    )
+    role_technician = models.BooleanField(
+        default=True,
+        help_text="Can be assigned work orders and log their own work.",
+    )
 
     class Meta:
         verbose_name = "Technician"
@@ -298,6 +306,21 @@ class Technician(AbstractUser):
     def __str__(self):
         full = self.get_full_name()
         return full if full else self.username
+
+    @property
+    def can_be_assigned(self):
+        """Only users with the technician role can be assigned work orders."""
+        return self.role_technician
+
+    @property
+    def role_display(self):
+        if self.role_admin and self.role_technician:
+            return "Admin + Technician"
+        elif self.role_admin:
+            return "Admin"
+        elif self.role_technician:
+            return "Technician"
+        return "No Role"
 
 
 

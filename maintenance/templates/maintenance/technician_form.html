@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}{% if editing %}Edit User{% else %}Add User{% endif %} — Piano Maintainer{% endblock %}
+{% block topbar_title %}{% if editing %}Edit User{% else %}Add User{% endif %}{% endblock %}
+
+{% block content %}
+<div style="max-width:720px;">
+  <div class="page-header">
+    <div>
+      <h1>{% if editing %}Edit User{% else %}Add User{% endif %}</h1>
+      <p class="page-subtitle">
+        {% if editing %}
+          Manage account status and app roles.
+        {% else %}
+          Create an active account for a team member.
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      {% if form.errors %}
+        <div class="alert alert-error" style="margin-bottom:1rem;">Please fix the errors below.</div>
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+
+        <div class="form-group">
+          <label class="form-label" for="id_username">Username *</label>
+          <input class="form-input" type="text" name="username" id="id_username" required
+                 value="{{ form.username.value|default:'' }}" maxlength="150">
+          {% if form.username.errors %}<span class="form-error">{{ form.username.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="id_first_name">First Name *</label>
+            <input class="form-input" type="text" name="first_name" id="id_first_name" required
+                   value="{{ form.first_name.value|default:'' }}" maxlength="150">
+            {% if form.first_name.errors %}<span class="form-error">{{ form.first_name.errors.0 }}</span>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="id_last_name">Last Name *</label>
+            <input class="form-input" type="text" name="last_name" id="id_last_name" required
+                   value="{{ form.last_name.value|default:'' }}" maxlength="150">
+            {% if form.last_name.errors %}<span class="form-error">{{ form.last_name.errors.0 }}</span>{% endif %}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="id_email">Email</label>
+          <input class="form-input" type="email" name="email" id="id_email"
+                 value="{{ form.email.value|default:'' }}">
+          {% if form.email.errors %}<span class="form-error">{{ form.email.errors.0 }}</span>{% endif %}
+        </div>
+
+        {% if not editing %}
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="id_password1">Temporary Password *</label>
+              <input class="form-input" type="password" name="password1" id="id_password1" required>
+              {% if form.password1.errors %}<span class="form-error">{{ form.password1.errors.0 }}</span>{% endif %}
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="id_password2">Confirm Password *</label>
+              <input class="form-input" type="password" name="password2" id="id_password2" required>
+              {% if form.password2.errors %}<span class="form-error">{{ form.password2.errors.0 }}</span>{% endif %}
+            </div>
+          </div>
+        {% endif %}
+
+        <div style="border:1px solid var(--clr-border); border-radius:8px; padding:1rem; margin-top:1rem;">
+          <h2 style="font-size:1rem; margin-bottom:1rem;">Access</h2>
+            <label style="display:flex; gap:.6rem; align-items:flex-start; margin-bottom:.8rem;">
+              <input type="checkbox" name="is_active" id="id_is_active" {% if form.is_active.value %}checked{% endif %}>
+              <span>
+                <span class="fw-medium">Active</span>
+              </span>
+            </label>
+            {% if form.is_active.errors %}<span class="form-error">{{ form.is_active.errors.0 }}</span>{% endif %}
+
+            <label style="display:flex; gap:.6rem; align-items:flex-start; margin-bottom:.8rem;">
+              <input type="checkbox" name="role_technician" id="id_role_technician" {% if form.role_technician.value %}checked{% endif %}>
+              <span>
+                <span class="fw-medium">Technician</span>
+              </span>
+            </label>
+            {% if form.role_technician.errors %}<span class="form-error">{{ form.role_technician.errors.0 }}</span>{% endif %}
+
+            <label style="display:flex; gap:.6rem; align-items:flex-start;">
+              <input type="checkbox" name="role_admin" id="id_role_admin" {% if form.role_admin.value %}checked{% endif %}>
+              <span>
+                <span class="fw-medium">Admin</span>
+              </span>
+            </label>
+            {% if form.role_admin.errors %}<span class="form-error">{{ form.role_admin.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:.5rem; margin-top:1rem;">
+          <a href="{% url 'technician_list' %}" class="btn btn-secondary">Cancel</a>
+          <button type="submit" class="btn btn-primary">{% if editing %}Save User{% else %}Create User{% endif %}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

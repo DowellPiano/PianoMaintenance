@@ -33,8 +33,10 @@
         </div>
       </div>
       <div class="wo-hero-actions">
-        <a href="{% url 'workorder_delete' wo.pk %}" class="btn btn-sm btn-danger">Delete</a>
-        {% if wo.status != "Complete" and wo.status != "Cancelled" %}
+        {% if request.user.role_admin %}
+          <a href="{% url 'workorder_delete' wo.pk %}" class="btn btn-sm btn-danger">Delete</a>
+        {% endif %}
+        {% if wo.status != "Complete" and wo.status != "Cancelled" and can_edit_wo %}
           <a href="{% url 'workorder_log_work' wo.pk %}" class="btn btn-sm btn-primary">
             Log Work
           </a>
