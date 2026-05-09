@@ -4,7 +4,7 @@ Django settings for piano_maintainer project.
 
 from pathlib import Path
 from decouple import config, Csv
-import dj_database_url
+import dj_database_url, os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
