@@ -6,3 +6,4 @@ qrcode>=7.4
 gunicorn
 whitenoise
 dj-database-url
+dotenv
