@@ -17,14 +17,17 @@ SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
 
 # Comma-separated in .env, e.g. ALLOWED_HOSTS=localhost,127.0.0.1,myapp.com
-ALLOWED_HOSTS = [".onrender.com", 'localhost']
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS",
+    default="localhost,127.0.0.1",
+    cast=Csv()
+)
 
 CSRF_TRUSTED_ORIGINS = config(
     "CSRF_TRUSTED_ORIGINS",
     default="http://localhost:8000",
-    cast=Csv(),
+    cast=Csv()
 )
-
 
 # APPLICATIONS
 INSTALLED_APPS = [
@@ -110,6 +113,7 @@ USE_TZ = True
 # STATIC FILES
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 
