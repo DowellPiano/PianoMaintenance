@@ -36,6 +36,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(remove_team_column, migrations.RunPython.noop),
-        migrations.RunPython(drop_tables_if_exist, migrations.RunPython.noop),
+        #migrations.RunPython(remove_team_column, migrations.RunPython.noop),
+        #migrations.RunPython(drop_tables_if_exist, migrations.RunPython.noop),
     ]

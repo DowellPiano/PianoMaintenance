@@ -12,10 +12,6 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-
 # SECURITY
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
@@ -80,8 +76,9 @@ WSGI_APPLICATION = "piano_maintainer.wsgi.application"
 # DATABASE
 DATABASES = {
     "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        default=config("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
         conn_max_age=600,
+        ssl_require=not DEBUG,
     )
 }
 

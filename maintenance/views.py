@@ -560,6 +560,7 @@ def venue_delete(request, pk):
 
 @login_required
 def workorder_list(request):
+    _generate_scheduled_work_orders()
     today = date.today()
     qs = WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech')
 
