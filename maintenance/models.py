@@ -691,7 +691,7 @@ class MaintenanceRequest(models.Model):
 class Photo(models.Model):
     piano      = models.ForeignKey(Piano,     null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
     work_order = models.ForeignKey(WorkOrder, null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
-    image      = models.ImageField(upload_to='photobucket/%y/%m/%d/', validators=[validate_image_file])
+    image      = models.ImageField(upload_to='photos/%y/%m/%d/', validators=[validate_image_file])
     caption    = models.CharField(max_length=300, blank=True)
     is_profile_photo = models.BooleanField(default=False)
     uploaded_at = models.DateTimeField(auto_now_add=True)
