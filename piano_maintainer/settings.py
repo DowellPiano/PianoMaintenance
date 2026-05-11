@@ -50,15 +50,19 @@ STORAGES = {
             "access_key": os.environ["SUPABASE_S3_ACCESS_KEY_ID"],
             "secret_key": os.environ["SUPABASE_S3_SECRET_ACCESS_KEY"],
             "bucket_name": os.environ["SUPABASE_S3_BUCKET"],
-            "region_name": os.environ["SUPABASE_REGION"],
-            "endpoint_url": f"https://{os.environ['SUPABASE_PROJECT_REF']}.storage.supabase.co/storage/v1/s3",
+            "region_name": os.environ.get("SUPABASE_REGION", "us-east-1"),
+            "endpoint_url": os.environ["SUPABASE_S3_ENDPOINT"],
             "addressing_style": "path",
             "file_overwrite": False,
             "default_acl": None,
             "querystring_auth": False,
         },
     },
-}
+
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 AUTH_USER_MODEL = "maintenance.Technician"
 
