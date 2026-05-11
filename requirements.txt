@@ -7,3 +7,5 @@ gunicorn
 whitenoise
 dj-database-url
 dotenv
+django-storages[s3]
+boto3

@@ -38,7 +38,25 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "maintenance",
+    "storages",
 ]
+
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": os.environ["SUPABASE_S3_ACCESS_KEY_ID"],
+            "secret_key": os.environ["SUPABASE_S3_SECRET_ACCESS_KEY"],
+            "bucket_name": os.environ["SUPABASE_S3_BUCKET"],
+            "region_name": os.environ["SUPABASE_REGION"],
+            "endpoint_url": f"https://{os.environ['SUPABASE_PROJECT_REF']}.storage.supabase.co/storage/v1/s3",
+            "addressing_style": "path",
+            "file_overwrite": False,
+            "default_acl": None,
+            "querystring_auth": False,
+        },
+    },
+}
 
 AUTH_USER_MODEL = "maintenance.Technician"
 
