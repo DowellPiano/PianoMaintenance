@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     "storages",
 ]
 
+SUPABASE_S3_BUCKET = os.getenv("SUPABASE_S3_BUCKET")
+
 STORAGES = {
     "default": {
         "BACKEND": "storages.backends.s3.S3Storage",
