@@ -55,7 +55,8 @@ STORAGES = {
             "addressing_style": "path",
             "file_overwrite": False,
             "default_acl": None,
-            "querystring_auth": False,
+            "querystring_auth": True,
+            "querystring_expire":3600,
         },
     },
 
