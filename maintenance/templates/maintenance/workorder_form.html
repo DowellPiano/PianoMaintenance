@@ -1,18 +1,19 @@
 {% extends "base.html" %}
 
-{% block title %}New Work Order — Piano Maintainer{% endblock %}
-{% block topbar_title %}New Work Order{% endblock %}
+{% block title %}{{ form_title }} — Piano Maintainer{% endblock %}
+{% block topbar_title %}{{ form_title }}{% endblock %}
 
 {% block content %}
 <div style="margin-bottom:1rem;">
-  <a href="{% url 'workorder_list' %}" class="text-muted text-sm">← Back to Work Orders</a>
+  <a href="{{ return_url }}" class="text-muted text-sm">← Back</a>
 </div>
 
 <div class="card" style="max-width:640px;">
-  <div class="card-header"><h2>Create Work Order</h2></div>
+  <div class="card-header"><h2>{{ form_title }}</h2></div>
   <div class="card-body">
     <form method="post">
       {% csrf_token %}
+      <input type="hidden" name="return_url" value="{{ return_url }}">
 
       <div class="form-group">
         <label class="form-label" for="id_piano">Piano *</label>
@@ -81,8 +82,8 @@
       </div>
 
       <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem;">
-        <a href="{% url 'workorder_list' %}" class="btn btn-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary">Create Work Order</button>
+        <a href="{{ return_url }}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
       </div>
     </form>
   </div>

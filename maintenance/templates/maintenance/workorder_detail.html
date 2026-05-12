@@ -6,7 +6,7 @@
 
 {% block content %}
 <div style="margin-bottom:1rem;">
-  <a href="{% url 'workorder_list' %}" class="text-muted text-sm">← Back to Work Orders</a>
+  <a href="{{ return_url }}" class="text-muted text-sm">← Back</a>
 </div>
 
 <div class="card">
@@ -33,14 +33,24 @@
         </div>
       </div>
       <div class="wo-hero-actions">
+        {% if can_edit_wo %}
+          <a href="{% url 'workorder_edit' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-sm btn-secondary">Edit</a>
+        {% endif %}
+        {% if wo.status == "Complete" and can_edit_wo %}
+          <form method="post" action="{% url 'workorder_reopen' wo.pk %}" style="display:inline;" onsubmit="return confirm('Reopen WO-{{ wo.pk }} and clear its completed date?')">
+            {% csrf_token %}
+            <input type="hidden" name="return_url" value="{{ return_url }}">
+            <button type="submit" class="btn btn-sm btn-primary">Reopen</button>
+          </form>
+        {% endif %}
         {% if request.user.role_admin %}
           <a href="{% url 'workorder_delete' wo.pk %}" class="btn btn-sm btn-danger">Delete</a>
         {% endif %}
         {% if wo.status != "Complete" and wo.status != "Cancelled" and can_edit_wo %}
-          <a href="{% url 'workorder_log_work' wo.pk %}" class="btn btn-sm btn-primary">
+          <a href="{% url 'workorder_log_work' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-sm btn-primary">
             Log Work
           </a>
-          <a href="{% url 'workorder_complete' wo.pk %}" class="btn btn-sm btn-success">
+          <a href="{% url 'workorder_complete' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-sm btn-success">
             Mark Complete
           </a>
         {% endif %}
@@ -57,7 +67,7 @@
         <tbody>
           <tr><td>Piano</td><td>{% if wo.piano %}<a href="{% url 'piano_detail' wo.piano.pk %}">{{ wo.piano.name }}</a>{% else %}<span class="text-dim">{{ wo.piano_name }}</span>{% endif %}</td></tr>
           <tr><td>Venue</td><td>{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% else %}—{% endif %}</td></tr>
-          <tr><td>Type</td><td>{{ wo.order_type }}</td></tr>
+          <tr><td>Order Type</td><td>{{ wo.task_type|default:wo.order_type }}</td></tr>
           <tr><td>Priority</td><td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td></tr>
           <tr><td>Status</td><td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td></tr>
           <tr>

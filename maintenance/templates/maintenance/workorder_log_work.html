@@ -6,7 +6,7 @@
 
 {% block content %}
 <div style="margin-bottom:1rem;">
-  <a href="{% url 'workorder_detail' wo.pk %}" class="text-muted text-sm">&larr; Back to WO-{{ wo.pk }}</a>
+  <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ return_url|urlencode }}" class="text-muted text-sm">&larr; Back to WO-{{ wo.pk }}</a>
 </div>
 
 <div class="card" style="max-width:800px;">
@@ -22,6 +22,7 @@
 
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
+      <input type="hidden" name="return_url" value="{{ return_url }}">
 
       <div class="form-row">
         <div class="form-group">
@@ -65,7 +66,7 @@
       </div>
 
       <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:1.25rem;">
-        <a href="{% url 'workorder_detail' wo.pk %}" class="btn btn-secondary">Cancel</a>
+        <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-secondary">Cancel</a>
         <button type="submit" class="btn btn-primary">Log Work</button>
       </div>
     </form>

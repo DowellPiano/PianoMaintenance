@@ -54,8 +54,10 @@ urlpatterns = [
     path('work-orders/', views.workorder_list, name='workorder_list'),
     path('work-orders/new/', views.workorder_create, name='workorder_create'),
     path('work-orders/<int:pk>/', views.workorder_detail, name='workorder_detail'),
+    path('work-orders/<int:pk>/edit/', views.workorder_edit, name='workorder_edit'),
     path('work-orders/<int:pk>/assign/', views.workorder_assign, name='workorder_assign'),
     path('work-orders/<int:pk>/delete/', views.workorder_delete, name='workorder_delete'),
+    path('work-orders/<int:pk>/reopen/', views.workorder_reopen, name='workorder_reopen'),
     path('work-orders/<int:pk>/complete/', views.workorder_complete, name='workorder_complete'),
     path('work-orders/<int:pk>/log-work/', views.workorder_log_work, name='workorder_log_work'),
 

@@ -22,13 +22,13 @@
       </thead>
       <tbody>
         {% for wo in work_orders %}
-        <tr class="wo-row-link" onclick="window.location='{% url 'workorder_detail' wo.pk %}'">
+        <tr class="wo-row-link" onclick="window.location='{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}'">
           <td class="wo-id">WO-{{ wo.pk }}</td>
           <td>
             <div class="wo-piano">{{ wo.piano_name }}</div>
             <div class="wo-piano-loc">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
           </td>
-          <td>{{ wo.order_type }}</td>
+          <td>{{ wo.task_type|default:wo.order_type }}</td>
           <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
           <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
           <td class="text-sm" onclick="event.stopPropagation();">

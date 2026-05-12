@@ -23,7 +23,7 @@
     </div>
     <div class="kanban-col-body">
       {% for wo in overdue %}
-      <a href="{% url 'workorder_detail' wo.pk %}" class="kanban-card">
+      <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}" class="kanban-card">
         <div class="kc-top">
           <span class="kc-id">WO-{{ wo.pk }}</span>
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
@@ -44,7 +44,7 @@
     </div>
     <div class="kanban-col-body">
       {% for wo in due_soon %}
-      <a href="{% url 'workorder_detail' wo.pk %}" class="kanban-card">
+      <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}" class="kanban-card">
         <div class="kc-top">
           <span class="kc-id">WO-{{ wo.pk }}</span>
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
@@ -65,7 +65,7 @@
     </div>
     <div class="kanban-col-body">
       {% for wo in upcoming %}
-      <a href="{% url 'workorder_detail' wo.pk %}" class="kanban-card">
+      <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}" class="kanban-card">
         <div class="kc-top">
           <span class="kc-id">WO-{{ wo.pk }}</span>
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
@@ -86,7 +86,7 @@
     </div>
     <div class="kanban-col-body">
       {% for wo in no_date %}
-      <a href="{% url 'workorder_detail' wo.pk %}" class="kanban-card">
+      <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}" class="kanban-card">
         <div class="kc-top">
           <span class="kc-id">WO-{{ wo.pk }}</span>
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>

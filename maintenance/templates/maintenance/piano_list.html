@@ -61,7 +61,7 @@
     </div>
     <div class="piano-card-body">
       <div class="piano-card-top">
-        <a href="{% url 'piano_detail' piano.pk %}" class="piano-card-name">{{ piano.name }}</a>
+        <a href="{% url 'piano_detail' piano.pk %}?return_url={{ request.get_full_path|urlencode }}" class="piano-card-name">{{ piano.name }}</a>
         <span class="badge badge-{{ piano.piano_type|lower }}">{{ piano.piano_type }}</span>
       </div>
       <p class="piano-card-meta">{{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %}{% if piano.year_built %} · {{ piano.year_built }}{% endif %}</p>
