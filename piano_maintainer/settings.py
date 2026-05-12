@@ -2,6 +2,7 @@
 Django settings for piano_maintainer project.
 """
 
+from importlib.util import find_spec
 from pathlib import Path
 from decouple import config, Csv
 import dj_database_url, os
@@ -38,13 +39,34 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "maintenance",
-    "storages",
 ]
 
 SUPABASE_S3_BUCKET = os.getenv("SUPABASE_S3_BUCKET")
+SUPABASE_S3_ENABLED = all(
+    os.getenv(key)
+    for key in (
+        "SUPABASE_S3_ACCESS_KEY_ID",
+        "SUPABASE_S3_SECRET_ACCESS_KEY",
+        "SUPABASE_S3_BUCKET",
+        "SUPABASE_S3_ENDPOINT",
+    )
+) and find_spec("storages") is not None
+
+if SUPABASE_S3_ENABLED:
+    INSTALLED_APPS.append("storages")
 
 STORAGES = {
-    "default": {
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage.CompressedStaticFilesStorage"
+            if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
+
+if SUPABASE_S3_ENABLED:
+    STORAGES["default"] = {
         "BACKEND": "storages.backends.s3.S3Storage",
         "OPTIONS": {
             "access_key": os.environ["SUPABASE_S3_ACCESS_KEY_ID"],
@@ -56,13 +78,12 @@ STORAGES = {
             "file_overwrite": False,
             "default_acl": None,
             "querystring_auth": True,
-            "querystring_expire":3600,
+            "querystring_expire": 3600,
         },
-    },
-
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-        },
+    }
+else:
+    STORAGES["default"] = {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
     }
 
 AUTH_USER_MODEL = "maintenance.Technician"
@@ -139,7 +160,11 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+STATICFILES_STORAGE = (
+    "whitenoise.storage.CompressedStaticFilesStorage"
+    if DEBUG
+    else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+)
 
 
 # MEDIA FILES

@@ -1,12 +1,16 @@
 import os
 import tempfile
+from datetime import date, timedelta
+from io import StringIO
 
+from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test import override_settings
 from django.urls import reverse
 
-from .models import Photo, Piano, Technician, WorkOrder
+from .models import MaintenanceSchedule, Photo, Piano, Technician, WorkOrder
+from .services import generate_scheduled_work_orders
 
 
 class SignupTests(TestCase):
@@ -139,6 +143,229 @@ class PhotoDeletionTests(TestCase):
 
         next_photo.refresh_from_db()
         self.assertTrue(next_photo.is_profile_photo)
+
+
+class WorkOrderStateTests(TestCase):
+    def setUp(self):
+        self.tech = Technician.objects.create_user(
+            username='state-tech',
+            password='StrongPass123',
+            first_name='State',
+            last_name='Tech',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.piano = Piano.objects.create(
+            name='State Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+        self.client.force_login(self.tech)
+
+    def test_workorder_list_uses_task_type_as_order_type(self):
+        WorkOrder.objects.create(
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(reverse('workorder_list'))
+
+        self.assertContains(response, 'Order Type')
+        self.assertContains(response, 'Tuning')
+
+    def test_schedule_link_preserves_return_url_on_detail_back_link(self):
+        wo = WorkOrder.objects.create(
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Voicing',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(
+            reverse('workorder_detail', args=[wo.pk]),
+            {'return_url': reverse('schedule')},
+        )
+
+        self.assertContains(response, f'href="{reverse("schedule")}"')
+
+    def test_piano_workorder_tab_links_to_workorder_detail(self):
+        wo = WorkOrder.objects.create(
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Regulation',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(reverse('piano_tab', args=[self.piano.pk, 'work-orders']))
+
+        self.assertContains(response, f'/work-orders/{wo.pk}/?return_url=')
+        self.assertContains(response, f'WO-{wo.pk}')
+
+    def test_unassigned_workorder_is_assigned_to_completing_user(self):
+        wo = WorkOrder.objects.create(
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.post(reverse('workorder_complete', args=[wo.pk]), {
+            'hours_worked': '1.25',
+            'work_performed': 'Completed requested work.',
+            'notes': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        wo.refresh_from_db()
+        self.assertEqual(wo.assigned_tech, self.tech)
+        self.assertEqual(wo.status, WorkOrder.Status.COMPLETE)
+
+    def test_completed_workorder_detail_has_edit_and_reopen_actions(self):
+        wo = WorkOrder.objects.create(
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            completed_date='2026-05-12',
+        )
+
+        response = self.client.get(reverse('workorder_detail', args=[wo.pk]))
+
+        self.assertContains(response, reverse('workorder_edit', args=[wo.pk]))
+        self.assertContains(response, reverse('workorder_reopen', args=[wo.pk]))
+        self.assertContains(response, 'Reopen')
+
+    def test_reopen_completed_workorder_clears_completed_date(self):
+        wo = WorkOrder.objects.create(
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            completed_date='2026-05-12',
+        )
+
+        response = self.client.post(reverse('workorder_reopen', args=[wo.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        wo.refresh_from_db()
+        self.assertEqual(wo.status, WorkOrder.Status.IN_PROGRESS)
+        self.assertIsNone(wo.completed_date)
+
+    def test_edit_completed_workorder_updates_details(self):
+        wo = WorkOrder.objects.create(
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            completed_date='2026-05-12',
+            description='Original',
+        )
+
+        response = self.client.post(reverse('workorder_edit', args=[wo.pk]), {
+            'piano': self.piano.pk,
+            'order_type': WorkOrder.OrderType.PREVENTIVE,
+            'task_type': 'Voicing',
+            'priority': WorkOrder.Priority.HIGH,
+            'assigned_tech': self.tech.pk,
+            'description': 'Updated after review',
+            'due_date': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        wo.refresh_from_db()
+        self.assertEqual(wo.task_type, 'Voicing')
+        self.assertEqual(wo.priority, WorkOrder.Priority.HIGH)
+        self.assertEqual(wo.description, 'Updated after review')
+
+
+class ScheduledWorkOrderGenerationTests(TestCase):
+    def setUp(self):
+        self.today = date(2026, 5, 12)
+        self.piano = Piano.objects.create(
+            name='Generator Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+            next_tuning_due=self.today - timedelta(days=1),
+            next_regulation_due=self.today + timedelta(days=30),
+            next_voicing_due=None,
+            next_cleaning_due=None,
+        )
+
+    def test_service_creates_built_in_due_work_order(self):
+        result = generate_scheduled_work_orders(today=self.today)
+
+        self.assertGreaterEqual(result.created, 1)
+        self.assertTrue(WorkOrder.objects.filter(
+            piano=self.piano,
+            task_type='Tuning',
+            due_date=self.today - timedelta(days=1),
+            status=WorkOrder.Status.OPEN,
+        ).exists())
+
+    def test_service_does_not_duplicate_open_work_order(self):
+        WorkOrder.objects.create(
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            due_date=self.today,
+        )
+
+        generate_scheduled_work_orders(today=self.today)
+
+        self.assertEqual(WorkOrder.objects.filter(
+            piano=self.piano,
+            task_type='Tuning',
+            status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
+        ).count(), 1)
+
+    def test_service_creates_custom_schedule_work_order(self):
+        schedule = MaintenanceSchedule.objects.create(
+            piano=self.piano,
+            task_name='Annual inspection',
+            task_type='Inspection',
+            interval_days=365,
+            warning_days_before=14,
+            last_service_date=self.today - timedelta(days=360),
+        )
+
+        generate_scheduled_work_orders(today=self.today)
+
+        self.assertTrue(WorkOrder.objects.filter(
+            piano=self.piano,
+            schedule=schedule,
+            task_type='Inspection',
+            due_date=self.today + timedelta(days=5),
+        ).exists())
+
+    def test_dry_run_does_not_create_work_orders(self):
+        result = generate_scheduled_work_orders(today=self.today, dry_run=True)
+
+        self.assertGreaterEqual(result.created, 1)
+        self.assertFalse(WorkOrder.objects.filter(piano=self.piano).exists())
+
+    def test_management_command_uses_generation_service(self):
+        out = StringIO()
+
+        call_command('generate_work_orders', '--dry-run', stdout=out)
+
+        self.assertIn('DRY RUN', out.getvalue())
+        self.assertIn('Done. Created:', out.getvalue())
 
 
 class TechnicianManagementTests(TestCase):

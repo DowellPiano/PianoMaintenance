@@ -3,14 +3,16 @@ import io
 from datetime import date, timedelta
 from decimal import Decimal
 from functools import wraps
+from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.db.models import Q, Count, Sum, Max, DecimalField
 from django.db.models.functions import Coalesce
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib import messages
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from .models import (
     Organization, Venue, Piano, WorkOrder, MaintenanceRequest,
@@ -26,6 +28,39 @@ from .forms import (
     SignUpForm, CompanySettingsForm, UserProfileForm, TechnicianCreateForm,
     TechnicianUpdateForm,
 )
+
+
+def _safe_return_url(request, fallback):
+    """Return a same-site URL to preserve list/schedule state between pages."""
+    return_url = request.GET.get('return_url') or request.POST.get('return_url')
+    if return_url and url_has_allowed_host_and_scheme(
+        return_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return return_url
+    return fallback
+
+
+def _workorder_detail_url(wo, return_url=None):
+    url = f'/work-orders/{wo.pk}/'
+    if return_url:
+        url = f'{url}?{urlencode({"return_url": return_url})}'
+    return url
+
+
+def _piano_detail_url(piano, return_url=None):
+    url = f'/pianos/{piano.pk}/'
+    if return_url:
+        url = f'{url}?{urlencode({"return_url": return_url})}'
+    return url
+
+
+def _can_update_workorder(user, wo):
+    return user.role_admin or (
+        user.role_technician
+        and (wo.assigned_tech_id == user.pk or wo.assigned_tech_id is None)
+    )
 
 
 # ── Role-based access ────────────────────────────────────────────
@@ -284,6 +319,8 @@ def piano_detail(request, pk):
     ctx['photos'] = piano.photos.all()
     ctx['piano_tags'] = piano.tags.all()
     ctx['available_tags'] = Tag.objects.filter(pianos__is_active=True).exclude(pk__in=piano.tags.all()).distinct()
+    ctx['return_url'] = _safe_return_url(request, '/pianos/')
+    ctx['workorder_return_url'] = _piano_detail_url(piano)
     return render(request, 'maintenance/piano_detail.html', ctx)
 
 
@@ -291,6 +328,7 @@ def piano_detail(request, pk):
 def piano_tab(request, pk, tab):
     piano = get_object_or_404(Piano.objects.select_related('venue'), pk=pk)
     ctx = _piano_context(piano)
+    ctx['workorder_return_url'] = _piano_detail_url(piano)
     templates = {
         'overview': 'maintenance/partials/piano_tab_overview.html',
         'work-orders': 'maintenance/partials/piano_tab_workorders.html',
@@ -560,7 +598,6 @@ def venue_delete(request, pk):
 
 @login_required
 def workorder_list(request):
-    _generate_scheduled_work_orders()
     today = date.today()
     qs = WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech')
 
@@ -568,6 +605,7 @@ def workorder_list(request):
     status_filter = request.GET.get('status', '')
     priority_filter = request.GET.get('priority', '')
     type_filter = request.GET.get('type', '')
+    task_type_filter = request.GET.get('task_type', type_filter)
     org_filter = request.GET.get('org', '')
     venue_filter = request.GET.get('venue', '')
     sort_key = request.GET.get('sort', 'created')
@@ -576,7 +614,7 @@ def workorder_list(request):
     sort_options = {
         'id': ('pk',),
         'piano': ('piano__name', 'piano_display', 'pk'),
-        'type': ('order_type', 'pk'),
+        'type': ('task_type', 'order_type', 'pk'),
         'status': ('status', 'pk'),
         'priority': ('priority', 'pk'),
         'assigned': (
@@ -603,8 +641,8 @@ def workorder_list(request):
         qs = qs.filter(status=status_filter)
     if priority_filter:
         qs = qs.filter(priority=priority_filter)
-    if type_filter:
-        qs = qs.filter(order_type=type_filter)
+    if task_type_filter:
+        qs = qs.filter(task_type=task_type_filter)
     if org_filter:
         qs = qs.filter(piano__venue__organization_id=org_filter)
     if venue_filter:
@@ -619,7 +657,7 @@ def workorder_list(request):
     for key, label in [
         ('id', 'ID'),
         ('piano', 'Piano'),
-        ('type', 'Type'),
+        ('type', 'Order Type'),
         ('status', 'Status'),
         ('priority', 'Priority'),
         ('assigned', 'Assigned To'),
@@ -645,14 +683,14 @@ def workorder_list(request):
         'search_query': search_query,
         'status_filter': status_filter,
         'priority_filter': priority_filter,
-        'type_filter': type_filter,
+        'type_filter': task_type_filter,
         'org_filter': org_filter,
         'venue_filter': venue_filter,
         'organizations': Organization.objects.all(),
         'venues': Venue.objects.all(),
         'status_choices': WorkOrder.Status.choices,
         'priority_choices': WorkOrder.Priority.choices,
-        'type_choices': WorkOrder.OrderType.choices,
+        'type_choices': TaskType.choices,
         'today': today,
     }
 
@@ -674,7 +712,8 @@ def workorder_detail(request, pk):
     ).order_by('first_name', 'last_name')
 
     is_assigned_to_me = wo.assigned_tech_id == user.pk
-    can_edit_wo = user.role_admin or (user.role_technician and is_assigned_to_me)
+    can_edit_wo = _can_update_workorder(user, wo)
+    return_url = _safe_return_url(request, '/work-orders/')
 
     return render(request, 'maintenance/workorder_detail.html', {
         'active_nav': 'workorders',
@@ -684,6 +723,7 @@ def workorder_detail(request, pk):
         'today': date.today(),
         'can_edit_wo': can_edit_wo,
         'is_assigned_to_me': is_assigned_to_me,
+        'return_url': return_url,
     })
 
 
@@ -705,6 +745,47 @@ def workorder_create(request):
     return render(request, 'maintenance/workorder_form.html', {
         'active_nav': 'workorders',
         'form': form,
+        'wo': None,
+        'return_url': '/work-orders/',
+        'form_title': 'Create Work Order',
+        'submit_label': 'Create Work Order',
+        'pianos': Piano.objects.filter(is_active=True).select_related('venue'),
+        'venues': Venue.objects.all(),
+        'technicians': Technician.objects.filter(is_active=True, role_technician=True),
+        'type_choices': WorkOrder.OrderType.choices,
+        'task_type_choices': TaskType.choices,
+        'status_choices': WorkOrder.Status.choices,
+        'priority_choices': WorkOrder.Priority.choices,
+    })
+
+
+@login_required
+def workorder_edit(request, pk):
+    wo = get_object_or_404(
+        WorkOrder.objects.select_related('piano', 'assigned_tech'),
+        pk=pk,
+    )
+    if not _can_update_workorder(request.user, wo):
+        messages.error(request, 'You can only edit work orders assigned to you.')
+        return HttpResponseRedirect(_workorder_detail_url(wo, _safe_return_url(request, '/work-orders/')))
+
+    return_url = _safe_return_url(request, _workorder_detail_url(wo))
+    if request.method == 'POST':
+        form = WorkOrderForm(request.POST, instance=wo)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Work Order WO-{wo.pk} updated.')
+            return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
+    else:
+        form = WorkOrderForm(instance=wo)
+
+    return render(request, 'maintenance/workorder_form.html', {
+        'active_nav': 'workorders',
+        'form': form,
+        'wo': wo,
+        'return_url': return_url,
+        'form_title': f'Edit WO-{wo.pk}',
+        'submit_label': 'Save Changes',
         'pianos': Piano.objects.filter(is_active=True).select_related('venue'),
         'venues': Venue.objects.all(),
         'technicians': Technician.objects.filter(is_active=True, role_technician=True),
@@ -757,9 +838,10 @@ def workorder_complete(request, pk):
         pk=pk,
     )
     user = request.user
-    if not user.role_admin and wo.assigned_tech_id != user.pk:
+    return_url = _safe_return_url(request, f'/work-orders/{wo.pk}/')
+    if wo.assigned_tech_id and not user.role_admin and wo.assigned_tech_id != user.pk:
         messages.error(request, 'You can only complete work orders assigned to you.')
-        return redirect('workorder_detail', pk=wo.pk)
+        return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 
     parts = Part.objects.all().order_by('name')
 
@@ -767,6 +849,9 @@ def workorder_complete(request, pk):
         form = WorkOrderCompleteForm(request.POST)
         if form.is_valid():
             today_date = date.today()
+            if wo.assigned_tech_id is None:
+                wo.assigned_tech = user
+
             # Create the maintenance log
             tech = wo.assigned_tech or request.user
             log = MaintenanceLog.objects.create(
@@ -843,7 +928,7 @@ def workorder_complete(request, pk):
                 reading.update_piano_current_state()
 
             messages.success(request, f'Work Order WO-{wo.pk} completed.')
-            return redirect('workorder_detail', pk=wo.pk)
+            return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
     else:
         # Pre-fill condition fields from last reading (same logic as standalone)
         initial = {}
@@ -870,6 +955,7 @@ def workorder_complete(request, pk):
         'form': form,
         'parts': parts,
         'condition_fields_with_values': condition_fields_with_values,
+        'return_url': return_url,
     })
 
 
@@ -895,6 +981,27 @@ def workorder_delete(request, pk):
 
 
 @login_required
+def workorder_reopen(request, pk):
+    wo = get_object_or_404(WorkOrder, pk=pk)
+    return_url = _safe_return_url(request, _workorder_detail_url(wo))
+
+    if request.method != 'POST':
+        return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
+    if not _can_update_workorder(request.user, wo):
+        messages.error(request, 'You can only reopen work orders assigned to you.')
+        return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
+    if wo.status != WorkOrder.Status.COMPLETE:
+        messages.info(request, f'WO-{wo.pk} is already open.')
+        return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
+
+    wo.status = WorkOrder.Status.IN_PROGRESS if wo.assigned_tech_id else WorkOrder.Status.OPEN
+    wo.completed_date = None
+    wo.save(update_fields=['status', 'completed_date'])
+    messages.success(request, f'WO-{wo.pk} reopened.')
+    return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
+
+
+@login_required
 def workorder_log_work(request, pk):
     """Log work against a work order without completing it."""
     wo = get_object_or_404(
@@ -902,15 +1009,19 @@ def workorder_log_work(request, pk):
         pk=pk,
     )
     user = request.user
-    if not user.role_admin and wo.assigned_tech_id != user.pk:
+    return_url = _safe_return_url(request, f'/work-orders/{wo.pk}/')
+    if wo.assigned_tech_id and not user.role_admin and wo.assigned_tech_id != user.pk:
         messages.error(request, 'You can only log work on work orders assigned to you.')
-        return redirect('workorder_detail', pk=wo.pk)
+        return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 
     parts = Part.objects.all().order_by('name')
 
     if request.method == 'POST':
         form = WorkOrderLogWorkForm(request.POST)
         if form.is_valid():
+            if wo.assigned_tech_id is None:
+                wo.assigned_tech = user
+
             tech = wo.assigned_tech or request.user
             log = MaintenanceLog.objects.create(
                 work_order=wo,
@@ -949,10 +1060,12 @@ def workorder_log_work(request, pk):
             # Move to In Progress if still Open
             if wo.status == WorkOrder.Status.OPEN:
                 wo.status = WorkOrder.Status.IN_PROGRESS
-                wo.save(update_fields=['status'])
+                wo.save(update_fields=['assigned_tech', 'status'])
+            elif wo.assigned_tech_id == user.pk:
+                wo.save(update_fields=['assigned_tech'])
 
             messages.success(request, f'Work logged for WO-{wo.pk}.')
-            return redirect('workorder_detail', pk=wo.pk)
+            return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
     else:
         form = WorkOrderLogWorkForm()
 
@@ -961,6 +1074,7 @@ def workorder_log_work(request, pk):
         'wo': wo,
         'form': form,
         'parts': parts,
+        'return_url': return_url,
     })
 
 
@@ -1034,98 +1148,12 @@ def piano_photo_delete(request, pk, photo_pk):
     return redirect('piano_detail', pk=piano.pk)
 
 
-# ── Schedule Auto-Generation ────────────────────────────────────
-
-def _generate_scheduled_work_orders():
-    """
-    Check all active pianos' built-in schedules and custom schedules.
-    Create work orders for any that are due and don't already have an open WO.
-
-    Bootstrap: if a piano has an interval configured but no next-due date,
-    seed the due date to today so it becomes immediately due.
-
-    Returns count of created WOs.
-    """
-    today = date.today()
-    created = 0
-
-    # Built-in schedules (tuning, regulation, voicing, cleaning)
-    built_in_types = [
-        ('Tuning', 'next_tuning_due', 'tuning_interval_value'),
-        ('Regulation', 'next_regulation_due', 'regulation_interval_value'),
-        ('Voicing', 'next_voicing_due', 'voicing_interval_value'),
-        ('Cleaning', 'next_cleaning_due', 'cleaning_interval_value'),
-    ]
-    for piano in Piano.objects.filter(is_active=True):
-        needs_save = []
-        for task_type, due_field, interval_field in built_in_types:
-            due_date = getattr(piano, due_field)
-            interval_val = getattr(piano, interval_field)
-
-            # Bootstrap: if interval is set but no due date, seed to today
-            if due_date is None and interval_val:
-                setattr(piano, due_field, today)
-                needs_save.append(due_field)
-                due_date = today
-
-            if due_date and due_date <= today:
-                # Check no open WO of this type exists
-                exists = WorkOrder.objects.filter(
-                    piano=piano,
-                    task_type=task_type,
-                    status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
-                ).exists()
-                if not exists:
-                    WorkOrder.objects.create(
-                        piano=piano,
-                        order_type=WorkOrder.OrderType.PREVENTIVE,
-                        task_type=task_type,
-                        status=WorkOrder.Status.OPEN,
-                        priority=WorkOrder.Priority.NORMAL,
-                        description=f'Scheduled {task_type.lower()}',
-                        due_date=due_date,
-                    )
-                    created += 1
-
-        if needs_save:
-            piano.save(update_fields=needs_save)
-
-    # Custom schedules
-    for sched in MaintenanceSchedule.objects.filter(is_active=True).select_related('piano'):
-        nd = sched.next_due
-        if nd and nd <= today:
-            exists = WorkOrder.objects.filter(
-                piano=sched.piano,
-                schedule=sched,
-                status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
-            ).exists()
-            if not exists:
-                WorkOrder.objects.create(
-                    piano=sched.piano,
-                    order_type=WorkOrder.OrderType.PREVENTIVE,
-                    task_type=sched.task_type,
-                    status=WorkOrder.Status.OPEN,
-                    priority=WorkOrder.Priority.NORMAL,
-                    description=f'Scheduled: {sched.task_name}',
-                    due_date=nd,
-                    schedule=sched,
-                )
-                created += 1
-
-    return created
-
-
 # ── Slice 6: Schedule ────────────────────────────────────────────
 
 @login_required
 def schedule(request):
     today = date.today()
     soon = today + timedelta(days=30)
-
-    # Auto-generate any due work orders
-    generated = _generate_scheduled_work_orders()
-    if generated:
-        messages.info(request, f'{generated} scheduled work order(s) auto-created.')
 
     active_statuses = [WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS]
     active_wos = (

@@ -81,11 +81,17 @@ python3 manage.py migrate            # applies any new database migrations
 
 ### Automated work order generation
 
-The `generate_work_orders` management command creates work orders for overdue or upcoming maintenance schedules:
+The `generate_work_orders` management command creates work orders for overdue or upcoming maintenance schedules. It is intentionally separate from page views, so browsing Work Orders or Schedule does not create records as a side effect:
 
 ```bash
 python3 manage.py generate_work_orders           # run for real
 python3 manage.py generate_work_orders --dry-run  # preview without saving
+```
+
+Run it hourly from cron:
+
+```cron
+0 * * * * cd /Users/tom/Desktop/Limble\ Clone/PianoMaintenance && /usr/bin/env python3 manage.py generate_work_orders >> /tmp/piano_generate_work_orders.log 2>&1
 ```
 
 ---

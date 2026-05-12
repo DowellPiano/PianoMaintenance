@@ -31,8 +31,8 @@
         <option value="{{ val }}" {% if priority_filter == val %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
-    <select name="type" class="form-select" onchange="this.form.submit()">
-      <option value="">All Types</option>
+    <select name="task_type" class="form-select" onchange="this.form.submit()">
+      <option value="">All Order Types</option>
       {% for val, label in type_choices %}
         <option value="{{ val }}" {% if type_filter == val %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
