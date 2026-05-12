@@ -291,10 +291,10 @@
   background: rgba(255,255,255,.25); padding: .1rem .45rem;
   border-radius: 999px; font-size: .75rem;
 }
-.col-overdue .kanban-col-header { background: #fee2e2; color: #991b1b; }
-.col-due-soon .kanban-col-header { background: #fef3c7; color: #92400e; }
-.col-upcoming .kanban-col-header { background: #dbeafe; color: #1e40af; }
-.col-no-date .kanban-col-header { background: #f3f4f6; color: #6b7280; }
+.col-tuning .kanban-col-header { background: #dbeafe; color: #1e40af; }
+.col-regulation .kanban-col-header { background: #ede9fe; color: #6d28d9; }
+.col-voicing .kanban-col-header { background: #fef3c7; color: #92400e; }
+.col-cleaning .kanban-col-header { background: #d1fae5; color: #065f46; }
 .kanban-col-body {
   background: var(--clr-surface); border: 1px solid var(--clr-border);
   border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm);
@@ -314,6 +314,21 @@
 .kc-meta { font-size: .78rem; color: var(--clr-text-sec); }
 .kc-due { font-size: .78rem; margin-top: .25rem; }
 .schedule-actions { display: flex; gap: .5rem; margin-bottom: 1.25rem; }
+.schedule-filterbar {
+  display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1rem;
+}
+.schedule-filter {
+  display: inline-flex; align-items: center; height: 2rem;
+  padding: 0 .75rem; border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm); background: #fff;
+  color: var(--clr-text-sec); font-size: .85rem; font-weight: 600;
+  text-decoration: none;
+}
+.schedule-filter:hover { background: #f9fafb; text-decoration: none; }
+.schedule-filter.active {
+  background: var(--clr-primary); border-color: var(--clr-primary);
+  color: #fff;
+}
 
 /* ----------------------------------------------------------------
    Request list

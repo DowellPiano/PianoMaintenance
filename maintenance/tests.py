@@ -368,6 +368,64 @@ class ScheduledWorkOrderGenerationTests(TestCase):
         self.assertIn('Done. Created:', out.getvalue())
 
 
+class ScheduleViewTests(TestCase):
+    def setUp(self):
+        self.tech = Technician.objects.create_user(
+            username='scheduletech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.piano = Piano.objects.create(
+            name='Schedule Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+        self.client.force_login(self.tech)
+
+    def _work_order(self, task_type, due_date=None):
+        return WorkOrder.objects.create(
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type=task_type,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            due_date=due_date,
+        )
+
+    def test_schedule_groups_active_work_by_maintenance_category(self):
+        tuning = self._work_order('Tuning')
+        regulation = self._work_order('Regulation')
+        self._work_order('Inspection')
+
+        response = self.client.get(reverse('schedule'))
+
+        labels = [column['label'] for column in response.context['schedule_columns']]
+        self.assertEqual(labels, [
+            'Pianos Needing Tuning',
+            'Pianos Needing Regulation',
+            'Pianos Needing Voicing',
+            'Pianos Needing Cleaning',
+        ])
+        self.assertContains(response, f'WO-{tuning.pk}')
+        self.assertContains(response, f'WO-{regulation.pk}')
+        self.assertNotContains(response, 'Inspection')
+
+    def test_schedule_due_filter_applies_before_category_grouping(self):
+        today = date.today()
+        overdue_tuning = self._work_order('Tuning', today - timedelta(days=1))
+        next_30_tuning = self._work_order('Tuning', today + timedelta(days=10))
+        self._work_order('Tuning', today + timedelta(days=45))
+        self._work_order('Tuning', None)
+
+        response = self.client.get(reverse('schedule'), {'due': 'next-30'})
+
+        self.assertContains(response, 'Next 30 Days')
+        self.assertNotContains(response, f'WO-{overdue_tuning.pk}')
+        self.assertContains(response, f'WO-{next_30_tuning.pk}')
+        self.assertEqual(response.context['due_filter'], 'next-30')
+
+
 class TechnicianManagementTests(TestCase):
     def setUp(self):
         self.admin = Technician.objects.create_user(

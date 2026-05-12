@@ -1154,6 +1154,7 @@ def piano_photo_delete(request, pk, photo_pk):
 def schedule(request):
     today = date.today()
     soon = today + timedelta(days=30)
+    due_filter = request.GET.get('due', '')
 
     active_statuses = [WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS]
     active_wos = (
@@ -1161,18 +1162,51 @@ def schedule(request):
         .filter(status__in=active_statuses)
         .select_related('piano', 'piano__venue', 'assigned_tech')
     )
+    if due_filter == 'overdue':
+        active_wos = active_wos.filter(due_date__lt=today)
+    elif due_filter == 'next-30':
+        active_wos = active_wos.filter(due_date__gte=today, due_date__lte=soon)
+    elif due_filter == 'upcoming':
+        active_wos = active_wos.filter(due_date__gt=soon)
+    elif due_filter == 'no-date':
+        active_wos = active_wos.filter(due_date__isnull=True)
+    else:
+        due_filter = ''
 
-    overdue = active_wos.filter(due_date__lt=today).order_by('due_date')
-    due_soon = active_wos.filter(due_date__gte=today, due_date__lte=soon).order_by('due_date')
-    upcoming = active_wos.filter(due_date__gt=soon).order_by('due_date')
-    no_date = active_wos.filter(due_date__isnull=True).order_by('-created_at')
+    schedule_columns = [
+        {
+            'label': 'Pianos Needing Tuning',
+            'css_class': 'col-tuning',
+            'work_orders': active_wos.filter(task_type=TaskType.TUNING).order_by('due_date', '-created_at'),
+        },
+        {
+            'label': 'Pianos Needing Regulation',
+            'css_class': 'col-regulation',
+            'work_orders': active_wos.filter(task_type=TaskType.REGULATION).order_by('due_date', '-created_at'),
+        },
+        {
+            'label': 'Pianos Needing Voicing',
+            'css_class': 'col-voicing',
+            'work_orders': active_wos.filter(task_type=TaskType.VOICING).order_by('due_date', '-created_at'),
+        },
+        {
+            'label': 'Pianos Needing Cleaning',
+            'css_class': 'col-cleaning',
+            'work_orders': active_wos.filter(task_type=TaskType.CLEANING).order_by('due_date', '-created_at'),
+        },
+    ]
 
     return render(request, 'maintenance/schedule.html', {
         'active_nav': 'schedule',
-        'overdue': overdue,
-        'due_soon': due_soon,
-        'upcoming': upcoming,
-        'no_date': no_date,
+        'schedule_columns': schedule_columns,
+        'due_filter': due_filter,
+        'due_filter_choices': [
+            ('', 'All'),
+            ('overdue', 'Overdue'),
+            ('next-30', 'Next 30 Days'),
+            ('upcoming', 'Upcoming'),
+            ('no-date', 'No Due Date'),
+        ],
         'today': today,
     })
 
