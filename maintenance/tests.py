@@ -410,6 +410,8 @@ class ScheduleViewTests(TestCase):
         self.assertContains(response, f'WO-{tuning.pk}')
         self.assertContains(response, f'WO-{regulation.pk}')
         self.assertNotContains(response, 'Inspection')
+        self.assertContains(response, 'class="schedule-mobile-tab active"')
+        self.assertContains(response, 'data-schedule-tab="col-tuning"')
 
     def test_schedule_due_filter_applies_before_category_grouping(self):
         today = date.today()

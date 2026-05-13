@@ -1176,21 +1176,25 @@ def schedule(request):
     schedule_columns = [
         {
             'label': 'Pianos Needing Tuning',
+            'short_label': 'Tuning',
             'css_class': 'col-tuning',
             'work_orders': active_wos.filter(task_type=TaskType.TUNING).order_by('due_date', '-created_at'),
         },
         {
             'label': 'Pianos Needing Regulation',
+            'short_label': 'Regulation',
             'css_class': 'col-regulation',
             'work_orders': active_wos.filter(task_type=TaskType.REGULATION).order_by('due_date', '-created_at'),
         },
         {
             'label': 'Pianos Needing Voicing',
+            'short_label': 'Voicing',
             'css_class': 'col-voicing',
             'work_orders': active_wos.filter(task_type=TaskType.VOICING).order_by('due_date', '-created_at'),
         },
         {
             'label': 'Pianos Needing Cleaning',
+            'short_label': 'Cleaning',
             'css_class': 'col-cleaning',
             'work_orders': active_wos.filter(task_type=TaskType.CLEANING).order_by('due_date', '-created_at'),
         },

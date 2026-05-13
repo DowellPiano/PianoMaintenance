@@ -25,9 +25,20 @@
   {% endfor %}
 </div>
 
+<div class="schedule-mobile-tabs" role="tablist" aria-label="Maintenance categories">
+  {% for column in schedule_columns %}
+    <button type="button"
+            class="schedule-mobile-tab {% if forloop.first %}active{% endif %}"
+            data-schedule-tab="{{ column.css_class }}"
+            aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">
+      {{ column.short_label }} <span>{{ column.work_orders|length }}</span>
+    </button>
+  {% endfor %}
+</div>
+
 <div class="kanban">
   {% for column in schedule_columns %}
-  <div class="kanban-col {{ column.css_class }}">
+  <div class="kanban-col {{ column.css_class }} {% if forloop.first %}mobile-active{% endif %}" data-schedule-column="{{ column.css_class }}">
     <div class="kanban-col-header">
       {{ column.label }} <span class="count">{{ column.work_orders|length }}</span>
     </div>
@@ -53,4 +64,22 @@
   </div>
   {% endfor %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.schedule-mobile-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset.scheduleTab;
+    document.querySelectorAll('.schedule-mobile-tab').forEach((item) => {
+      const isActive = item === tab;
+      item.classList.toggle('active', isActive);
+      item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-schedule-column]').forEach((column) => {
+      column.classList.toggle('mobile-active', column.dataset.scheduleColumn === target);
+    });
+  });
+});
+</script>
 {% endblock %}
