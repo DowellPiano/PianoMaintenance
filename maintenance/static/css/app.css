@@ -331,9 +331,6 @@
 }
 .schedule-mobile-tabs { display: none; }
 @media (max-width: 1180px) {
-  .kanban { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 720px) {
   .schedule-mobile-tabs {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: .4rem; margin-bottom: .75rem;
@@ -355,6 +352,9 @@
   .kanban-col { display: none; }
   .kanban-col.mobile-active { display: block; }
   .schedule-actions { width: 100%; flex-wrap: wrap; }
+}
+@media (max-width: 520px) {
+  .schedule-mobile-tabs { grid-template-columns: 1fr; }
 }
 
 /* ----------------------------------------------------------------
