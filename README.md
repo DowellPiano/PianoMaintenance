@@ -222,3 +222,22 @@ A full REST API coexists with the template UI under `/api/`, powered by Django R
 - `Organization` uses `PROTECT` on its venue FK — you must remove all venues before deleting an organization.
 - `ConditionReading.update_piano_current_state()` copies readings to denormalized fields on Piano for fast display.
 - `Piano.advance_schedule(task_type, completed_date)` computes the next due date when a work order is completed.
+
+---
+
+## Supabase Public API Hardening
+
+Supabase can expose tables in the `public` schema through its REST API if the
+`anon` or `authenticated` database roles have grants. This Django app does not
+use Supabase's client-side database API; it talks to Postgres from the server.
+
+Migration `maintenance.0013_lock_down_supabase_public_api` enables row-level
+security on public tables and revokes default table, sequence, and function
+access from Supabase API roles. Run it in production after deploying:
+
+```bash
+python manage.py migrate maintenance 0013
+```
+
+If you later add a deliberate Supabase REST/client feature, create narrow RLS
+policies for only the specific tables and actions that feature needs.
