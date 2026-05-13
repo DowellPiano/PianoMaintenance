@@ -368,6 +368,79 @@ class ScheduledWorkOrderGenerationTests(TestCase):
         self.assertIn('Done. Created:', out.getvalue())
 
 
+class ScheduleViewTests(TestCase):
+    def setUp(self):
+        self.tech = Technician.objects.create_user(
+            username='scheduletech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.piano = Piano.objects.create(
+            name='Schedule Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+        self.client.force_login(self.tech)
+
+    def _work_order(self, task_type, due_date=None):
+        return WorkOrder.objects.create(
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type=task_type,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            due_date=due_date,
+        )
+
+    def test_schedule_groups_active_work_by_maintenance_category(self):
+        tuning = self._work_order('Tuning')
+        regulation = self._work_order('Regulation')
+        self._work_order('Inspection')
+
+        response = self.client.get(reverse('schedule'))
+
+        labels = [column['label'] for column in response.context['schedule_columns']]
+        self.assertEqual(labels, [
+            'Pianos Needing Tuning',
+            'Pianos Needing Regulation',
+            'Pianos Needing Voicing',
+            'Pianos Needing Cleaning',
+        ])
+        self.assertContains(response, f'WO-{tuning.pk}')
+        self.assertContains(response, f'WO-{regulation.pk}')
+        self.assertNotContains(response, 'Inspection')
+        self.assertContains(response, 'class="schedule-mobile-tab active"')
+        self.assertContains(response, 'data-schedule-tab="col-tuning"')
+
+    def test_schedule_due_filter_applies_before_category_grouping(self):
+        today = date.today()
+        overdue_tuning = self._work_order('Tuning', today - timedelta(days=1))
+        next_30_tuning = self._work_order('Tuning', today + timedelta(days=10))
+        self._work_order('Tuning', today + timedelta(days=45))
+        self._work_order('Tuning', None)
+
+        response = self.client.get(reverse('schedule'), {'due': 'next-30'})
+
+        self.assertContains(response, 'Next 30 Days')
+        self.assertNotContains(response, f'WO-{overdue_tuning.pk}')
+        self.assertContains(response, f'WO-{next_30_tuning.pk}')
+        self.assertEqual(response.context['due_filter'], 'next-30')
+
+    def test_schedule_due_filter_hx_request_returns_partial(self):
+        self._work_order('Tuning', date.today() + timedelta(days=10))
+
+        response = self.client.get(
+            reverse('schedule'),
+            {'due': 'next-30'},
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertContains(response, 'id="schedule-results"')
+        self.assertContains(response, 'hx-get="/schedule/?due=overdue"')
+        self.assertNotContains(response, '<h1>Schedule</h1>')
+
+
 class TechnicianManagementTests(TestCase):
     def setUp(self):
         self.admin = Technician.objects.create_user(
@@ -550,6 +623,13 @@ class WorkOrderListSortingTests(TestCase):
             priority=WorkOrder.Priority.NORMAL,
             description='Second work order',
         )
+        self.completed_wo = WorkOrder.objects.create(
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Completed work order',
+            completed_date=date.today(),
+        )
 
     def test_work_order_list_sorts_by_clicked_column_and_direction(self):
         response = self.client.get(reverse('workorder_list'), {
@@ -559,7 +639,7 @@ class WorkOrderListSortingTests(TestCase):
 
         self.assertQuerySetEqual(
             response.context['work_orders'],
-            [self.first_wo, self.second_wo],
+            [self.first_wo, self.second_wo, self.completed_wo],
         )
 
         response = self.client.get(reverse('workorder_list'), {
@@ -569,7 +649,7 @@ class WorkOrderListSortingTests(TestCase):
 
         self.assertQuerySetEqual(
             response.context['work_orders'],
-            [self.second_wo, self.first_wo],
+            [self.completed_wo, self.second_wo, self.first_wo],
         )
 
     def test_htmx_sort_returns_work_order_table_partial(self):
@@ -582,3 +662,25 @@ class WorkOrderListSortingTests(TestCase):
         self.assertContains(response, 'id="workorder-results"')
         self.assertContains(response, 'hx-get="?sort=id&amp;dir=desc"')
         self.assertNotContains(response, '<h1>Work Orders</h1>')
+
+    def test_completed_date_filter_limits_results(self):
+        response = self.client.get(reverse('workorder_list'), {
+            'completed_from': date.today().isoformat(),
+            'completed_to': date.today().isoformat(),
+        })
+
+        self.assertContains(response, f'WO-{self.completed_wo.pk}')
+        self.assertNotContains(response, f'WO-{self.first_wo.pk}')
+        self.assertEqual(response.context['completed_from'], date.today().isoformat())
+
+    def test_export_csv_uses_current_filters(self):
+        response = self.client.get(reverse('workorder_export_csv'), {
+            'completed_from': date.today().isoformat(),
+            'completed_to': date.today().isoformat(),
+        })
+
+        content = response.content.decode()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertIn(f'WO-{self.completed_wo.pk}', content)
+        self.assertNotIn(f'WO-{self.first_wo.pk}', content)

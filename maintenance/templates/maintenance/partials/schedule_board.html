@@ -1,0 +1,54 @@
+<div id="schedule-results">
+  <div class="schedule-filterbar">
+    {% for value, label in due_filter_choices %}
+      <a href="{% url 'schedule' %}{% if value %}?due={{ value }}{% endif %}"
+         class="schedule-filter {% if due_filter == value %}active{% endif %}"
+         hx-get="{% url 'schedule' %}{% if value %}?due={{ value }}{% endif %}"
+         hx-target="#schedule-results"
+         hx-swap="outerHTML"
+         hx-push-url="true">
+        {{ label }}
+      </a>
+    {% endfor %}
+  </div>
+
+  <div class="schedule-mobile-tabs" role="tablist" aria-label="Maintenance categories">
+    {% for column in schedule_columns %}
+      <button type="button"
+              class="schedule-mobile-tab {% if forloop.first %}active{% endif %}"
+              data-schedule-tab="{{ column.css_class }}"
+              aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">
+        {{ column.short_label }} <span>{{ column.work_orders|length }}</span>
+      </button>
+    {% endfor %}
+  </div>
+
+  <div class="kanban">
+    {% for column in schedule_columns %}
+    <div class="kanban-col {{ column.css_class }} {% if forloop.first %}mobile-active{% endif %}" data-schedule-column="{{ column.css_class }}">
+      <div class="kanban-col-header">
+        {{ column.label }} <span class="count">{{ column.work_orders|length }}</span>
+      </div>
+      <div class="kanban-col-body">
+        {% for wo in column.work_orders %}
+        <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}" class="kanban-card">
+          <div class="kc-top">
+            <span class="kc-id">WO-{{ wo.pk }}</span>
+            <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
+          </div>
+          <div class="kc-piano">{{ wo.piano_name }}</div>
+          <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
+          {% if wo.due_date %}
+            <div class="kc-due {% if wo.due_date < today %}text-danger{% endif %}">Due {{ wo.due_date|date:"M d" }}</div>
+          {% else %}
+            <div class="kc-due text-dim">No due date</div>
+          {% endif %}
+        </a>
+        {% empty %}
+        <p class="text-dim text-sm" style="text-align:center; padding:1rem;">None</p>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>

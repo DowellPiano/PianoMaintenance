@@ -8,7 +8,7 @@
 <div class="page-header">
   <div>
     <h1>Schedule</h1>
-    <p class="page-subtitle">Visual overview of upcoming maintenance</p>
+    <p class="page-subtitle">Active work grouped by maintenance category</p>
   </div>
   <div class="schedule-actions">
     <a href="{% url 'template_list' %}" class="btn btn-sm btn-secondary">Manage Templates</a>
@@ -16,88 +16,26 @@
   </div>
 </div>
 
-<div class="kanban">
-  <div class="kanban-col col-overdue">
-    <div class="kanban-col-header">
-      Overdue <span class="count">{{ overdue|length }}</span>
-    </div>
-    <div class="kanban-col-body">
-      {% for wo in overdue %}
-      <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}" class="kanban-card">
-        <div class="kc-top">
-          <span class="kc-id">WO-{{ wo.pk }}</span>
-          <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
-        </div>
-        <div class="kc-piano">{{ wo.piano_name }}</div>
-        <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
-        <div class="kc-due text-danger">Due {{ wo.due_date|date:"M d" }}</div>
-      </a>
-      {% empty %}
-      <p class="text-dim text-sm" style="text-align:center; padding:1rem;">None</p>
-      {% endfor %}
-    </div>
-  </div>
+{% include "maintenance/partials/schedule_board.html" %}
+{% endblock %}
 
-  <div class="kanban-col col-due-soon">
-    <div class="kanban-col-header">
-      Due Within 30 Days <span class="count">{{ due_soon|length }}</span>
-    </div>
-    <div class="kanban-col-body">
-      {% for wo in due_soon %}
-      <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}" class="kanban-card">
-        <div class="kc-top">
-          <span class="kc-id">WO-{{ wo.pk }}</span>
-          <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
-        </div>
-        <div class="kc-piano">{{ wo.piano_name }}</div>
-        <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
-        <div class="kc-due">Due {{ wo.due_date|date:"M d" }}</div>
-      </a>
-      {% empty %}
-      <p class="text-dim text-sm" style="text-align:center; padding:1rem;">None</p>
-      {% endfor %}
-    </div>
-  </div>
+{% block extra_js %}
+<script>
+document.addEventListener('click', (event) => {
+  const tab = event.target.closest('.schedule-mobile-tab');
+  if (!tab) {
+    return;
+  }
 
-  <div class="kanban-col col-upcoming">
-    <div class="kanban-col-header">
-      Upcoming <span class="count">{{ upcoming|length }}</span>
-    </div>
-    <div class="kanban-col-body">
-      {% for wo in upcoming %}
-      <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}" class="kanban-card">
-        <div class="kc-top">
-          <span class="kc-id">WO-{{ wo.pk }}</span>
-          <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
-        </div>
-        <div class="kc-piano">{{ wo.piano_name }}</div>
-        <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
-        <div class="kc-due">Due {{ wo.due_date|date:"M d" }}</div>
-      </a>
-      {% empty %}
-      <p class="text-dim text-sm" style="text-align:center; padding:1rem;">None</p>
-      {% endfor %}
-    </div>
-  </div>
-
-  <div class="kanban-col col-no-date">
-    <div class="kanban-col-header">
-      No Due Date <span class="count">{{ no_date|length }}</span>
-    </div>
-    <div class="kanban-col-body">
-      {% for wo in no_date %}
-      <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}" class="kanban-card">
-        <div class="kc-top">
-          <span class="kc-id">WO-{{ wo.pk }}</span>
-          <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
-        </div>
-        <div class="kc-piano">{{ wo.piano_name }}</div>
-        <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
-      </a>
-      {% empty %}
-      <p class="text-dim text-sm" style="text-align:center; padding:1rem;">None</p>
-      {% endfor %}
-    </div>
-  </div>
-</div>
+  const target = tab.dataset.scheduleTab;
+  document.querySelectorAll('.schedule-mobile-tab').forEach((item) => {
+    const isActive = item === tab;
+    item.classList.toggle('active', isActive);
+    item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-schedule-column]').forEach((column) => {
+    column.classList.toggle('mobile-active', column.dataset.scheduleColumn === target);
+  });
+});
+</script>
 {% endblock %}

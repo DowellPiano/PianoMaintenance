@@ -52,6 +52,7 @@ urlpatterns = [
 
     # Work Orders
     path('work-orders/', views.workorder_list, name='workorder_list'),
+    path('work-orders/export/csv/', views.workorder_export_csv, name='workorder_export_csv'),
     path('work-orders/new/', views.workorder_create, name='workorder_create'),
     path('work-orders/<int:pk>/', views.workorder_detail, name='workorder_detail'),
     path('work-orders/<int:pk>/edit/', views.workorder_edit, name='workorder_edit'),
