@@ -279,9 +279,8 @@
 /* ----------------------------------------------------------------
    Schedule (kanban)
    ---------------------------------------------------------------- */
-.kanban { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-.kanban-col { min-width: 0; display: none; }
-.kanban-col.mobile-active { display: block; }
+.kanban { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+.kanban-col { min-width: 0; }
 .kanban-col-header {
   font-size: .82rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: .04em; padding: .5rem .75rem;
@@ -330,29 +329,29 @@
   background: var(--clr-primary); border-color: var(--clr-primary);
   color: #fff;
 }
-.schedule-mobile-tabs {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: .4rem; margin-bottom: .75rem;
-}
-.schedule-mobile-tab {
-  min-width: 0; height: 2.25rem; padding: 0 .5rem;
-  border: 1px solid var(--clr-border); border-radius: var(--radius-sm);
-  background: #fff; color: var(--clr-text-sec);
-  font: inherit; font-size: .82rem; font-weight: 700;
-  cursor: pointer;
-}
-.schedule-mobile-tab span { color: var(--clr-text-sec); font-weight: 600; }
-.schedule-mobile-tab.active {
-  background: var(--clr-primary); border-color: var(--clr-primary);
-  color: #fff;
-}
-.schedule-mobile-tab.active span { color: rgba(255,255,255,.82); }
-.schedule-actions { width: 100%; flex-wrap: wrap; }
-@media (min-width: 1181px) {
-  .schedule-mobile-tabs { display: none; }
-  .kanban { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .kanban-col { display: block; }
-  .schedule-actions { width: auto; }
+.schedule-mobile-tabs { display: none; }
+@media (max-width: 1180px) {
+  .schedule-mobile-tabs {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .4rem; margin-bottom: .75rem;
+  }
+  .schedule-mobile-tab {
+    min-width: 0; height: 2.25rem; padding: 0 .5rem;
+    border: 1px solid var(--clr-border); border-radius: var(--radius-sm);
+    background: #fff; color: var(--clr-text-sec);
+    font: inherit; font-size: .82rem; font-weight: 700;
+    cursor: pointer;
+  }
+  .schedule-mobile-tab span { color: var(--clr-text-sec); font-weight: 600; }
+  .schedule-mobile-tab.active {
+    background: var(--clr-primary); border-color: var(--clr-primary);
+    color: #fff;
+  }
+  .schedule-mobile-tab.active span { color: rgba(255,255,255,.82); }
+  .kanban { grid-template-columns: 1fr; }
+  .kanban-col { display: none; }
+  .kanban-col.mobile-active { display: block; }
+  .schedule-actions { width: 100%; flex-wrap: wrap; }
 }
 @media (max-width: 520px) {
   .schedule-mobile-tabs { grid-template-columns: 1fr; }
