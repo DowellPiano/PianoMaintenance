@@ -10,7 +10,10 @@
     <h1>Work Orders</h1>
     <p class="page-subtitle">{{ work_orders|length }} work order{{ work_orders|length|pluralize }}</p>
   </div>
-  {% if request.user.role_admin %}<a href="{% url 'workorder_create' %}" class="btn btn-primary">+ New Work Order</a>{% endif %}
+  <div class="gap-row">
+    <a href="{% url 'workorder_export_csv' %}{% if export_query %}?{{ export_query }}{% endif %}" class="btn btn-secondary">Download CSV</a>
+    {% if request.user.role_admin %}<a href="{% url 'workorder_create' %}" class="btn btn-primary">+ New Work Order</a>{% endif %}
+  </div>
 </div>
 
 <div class="wo-filters">
@@ -49,8 +52,10 @@
         <option value="{{ v.pk }}" {% if venue_filter == v.pk|stringformat:"d" %}selected{% endif %}>{{ v.name }}</option>
       {% endfor %}
     </select>
+    <input type="date" name="completed_from" value="{{ completed_from }}" class="form-input" title="Completed from">
+    <input type="date" name="completed_to" value="{{ completed_to }}" class="form-input" title="Completed to">
     <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
-    {% if search_query or status_filter or priority_filter or type_filter or org_filter or venue_filter %}
+    {% if search_query or status_filter or priority_filter or type_filter or org_filter or venue_filter or completed_from or completed_to %}
       <a href="{% url 'workorder_list' %}" class="btn btn-xs btn-secondary">Clear</a>
     {% endif %}
   </form>

@@ -427,6 +427,19 @@ class ScheduleViewTests(TestCase):
         self.assertContains(response, f'WO-{next_30_tuning.pk}')
         self.assertEqual(response.context['due_filter'], 'next-30')
 
+    def test_schedule_due_filter_hx_request_returns_partial(self):
+        self._work_order('Tuning', date.today() + timedelta(days=10))
+
+        response = self.client.get(
+            reverse('schedule'),
+            {'due': 'next-30'},
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertContains(response, 'id="schedule-results"')
+        self.assertContains(response, 'hx-get="/schedule/?due=overdue"')
+        self.assertNotContains(response, '<h1>Schedule</h1>')
+
 
 class TechnicianManagementTests(TestCase):
     def setUp(self):
@@ -610,6 +623,13 @@ class WorkOrderListSortingTests(TestCase):
             priority=WorkOrder.Priority.NORMAL,
             description='Second work order',
         )
+        self.completed_wo = WorkOrder.objects.create(
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Completed work order',
+            completed_date=date.today(),
+        )
 
     def test_work_order_list_sorts_by_clicked_column_and_direction(self):
         response = self.client.get(reverse('workorder_list'), {
@@ -619,7 +639,7 @@ class WorkOrderListSortingTests(TestCase):
 
         self.assertQuerySetEqual(
             response.context['work_orders'],
-            [self.first_wo, self.second_wo],
+            [self.first_wo, self.second_wo, self.completed_wo],
         )
 
         response = self.client.get(reverse('workorder_list'), {
@@ -629,7 +649,7 @@ class WorkOrderListSortingTests(TestCase):
 
         self.assertQuerySetEqual(
             response.context['work_orders'],
-            [self.second_wo, self.first_wo],
+            [self.completed_wo, self.second_wo, self.first_wo],
         )
 
     def test_htmx_sort_returns_work_order_table_partial(self):
@@ -642,3 +662,25 @@ class WorkOrderListSortingTests(TestCase):
         self.assertContains(response, 'id="workorder-results"')
         self.assertContains(response, 'hx-get="?sort=id&amp;dir=desc"')
         self.assertNotContains(response, '<h1>Work Orders</h1>')
+
+    def test_completed_date_filter_limits_results(self):
+        response = self.client.get(reverse('workorder_list'), {
+            'completed_from': date.today().isoformat(),
+            'completed_to': date.today().isoformat(),
+        })
+
+        self.assertContains(response, f'WO-{self.completed_wo.pk}')
+        self.assertNotContains(response, f'WO-{self.first_wo.pk}')
+        self.assertEqual(response.context['completed_from'], date.today().isoformat())
+
+    def test_export_csv_uses_current_filters(self):
+        response = self.client.get(reverse('workorder_export_csv'), {
+            'completed_from': date.today().isoformat(),
+            'completed_to': date.today().isoformat(),
+        })
+
+        content = response.content.decode()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertIn(f'WO-{self.completed_wo.pk}', content)
+        self.assertNotIn(f'WO-{self.first_wo.pk}', content)

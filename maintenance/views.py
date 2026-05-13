@@ -63,6 +63,83 @@ def _can_update_workorder(user, wo):
     )
 
 
+def _filtered_workorders(request):
+    qs = WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech')
+
+    search_query = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', '')
+    priority_filter = request.GET.get('priority', '')
+    type_filter = request.GET.get('type', '')
+    task_type_filter = request.GET.get('task_type', type_filter)
+    org_filter = request.GET.get('org', '')
+    venue_filter = request.GET.get('venue', '')
+    completed_from = request.GET.get('completed_from', '')
+    completed_to = request.GET.get('completed_to', '')
+    sort_key = request.GET.get('sort', 'created')
+    sort_dir = request.GET.get('dir', 'desc')
+
+    sort_options = {
+        'id': ('pk',),
+        'piano': ('piano__name', 'piano_display', 'pk'),
+        'type': ('task_type', 'order_type', 'pk'),
+        'status': ('status', 'pk'),
+        'priority': ('priority', 'pk'),
+        'assigned': (
+            'assigned_tech__last_name',
+            'assigned_tech__first_name',
+            'assigned_tech__username',
+            'pk',
+        ),
+        'due': ('due_date', 'pk'),
+        'created': ('created_at', 'pk'),
+        'completed': ('completed_date', 'pk'),
+    }
+    if sort_key not in sort_options:
+        sort_key = 'created'
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'desc'
+
+    if search_query:
+        qs = qs.filter(
+            Q(description__icontains=search_query) |
+            Q(piano__name__icontains=search_query) |
+            Q(piano__venue__name__icontains=search_query)
+        )
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    if priority_filter:
+        qs = qs.filter(priority=priority_filter)
+    if task_type_filter:
+        qs = qs.filter(task_type=task_type_filter)
+    if org_filter:
+        qs = qs.filter(piano__venue__organization_id=org_filter)
+    if venue_filter:
+        qs = qs.filter(piano__venue_id=venue_filter)
+    if completed_from:
+        qs = qs.filter(completed_date__gte=completed_from)
+    if completed_to:
+        qs = qs.filter(completed_date__lte=completed_to)
+
+    order_fields = sort_options[sort_key]
+    if sort_dir == 'desc':
+        order_fields = tuple(f'-{field}' for field in order_fields)
+    qs = qs.order_by(*order_fields)
+
+    return qs, {
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'priority_filter': priority_filter,
+        'type_filter': task_type_filter,
+        'org_filter': org_filter,
+        'venue_filter': venue_filter,
+        'completed_from': completed_from,
+        'completed_to': completed_to,
+        'sort_key': sort_key,
+        'sort_dir': sort_dir,
+        'sort_options': sort_options,
+    }
+
+
 # ── Role-based access ────────────────────────────────────────────
 
 def admin_required(view_func):
@@ -599,59 +676,7 @@ def venue_delete(request, pk):
 @login_required
 def workorder_list(request):
     today = date.today()
-    qs = WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech')
-
-    search_query = request.GET.get('q', '').strip()
-    status_filter = request.GET.get('status', '')
-    priority_filter = request.GET.get('priority', '')
-    type_filter = request.GET.get('type', '')
-    task_type_filter = request.GET.get('task_type', type_filter)
-    org_filter = request.GET.get('org', '')
-    venue_filter = request.GET.get('venue', '')
-    sort_key = request.GET.get('sort', 'created')
-    sort_dir = request.GET.get('dir', 'desc')
-
-    sort_options = {
-        'id': ('pk',),
-        'piano': ('piano__name', 'piano_display', 'pk'),
-        'type': ('task_type', 'order_type', 'pk'),
-        'status': ('status', 'pk'),
-        'priority': ('priority', 'pk'),
-        'assigned': (
-            'assigned_tech__last_name',
-            'assigned_tech__first_name',
-            'assigned_tech__username',
-            'pk',
-        ),
-        'due': ('due_date', 'pk'),
-        'created': ('created_at', 'pk'),
-    }
-    if sort_key not in sort_options:
-        sort_key = 'created'
-    if sort_dir not in ('asc', 'desc'):
-        sort_dir = 'desc'
-
-    if search_query:
-        qs = qs.filter(
-            Q(description__icontains=search_query) |
-            Q(piano__name__icontains=search_query) |
-            Q(piano__venue__name__icontains=search_query)
-        )
-    if status_filter:
-        qs = qs.filter(status=status_filter)
-    if priority_filter:
-        qs = qs.filter(priority=priority_filter)
-    if task_type_filter:
-        qs = qs.filter(task_type=task_type_filter)
-    if org_filter:
-        qs = qs.filter(piano__venue__organization_id=org_filter)
-    if venue_filter:
-        qs = qs.filter(piano__venue_id=venue_filter)
-
-    order_fields = sort_options[sort_key]
-    if sort_dir == 'desc':
-        order_fields = tuple(f'-{field}' for field in order_fields)
-    qs = qs.order_by(*order_fields)
+    qs, filters = _filtered_workorders(request)
 
     sort_columns = []
     for key, label in [
@@ -662,36 +687,40 @@ def workorder_list(request):
         ('priority', 'Priority'),
         ('assigned', 'Assigned To'),
         ('due', 'Due'),
+        ('completed', 'Completed'),
         ('created', 'Created'),
     ]:
         params = request.GET.copy()
         params['sort'] = key
-        params['dir'] = 'desc' if sort_key == key and sort_dir == 'asc' else 'asc'
+        params['dir'] = 'desc' if filters['sort_key'] == key and filters['sort_dir'] == 'asc' else 'asc'
         sort_columns.append({
             'key': key,
             'label': label,
             'url': f'?{params.urlencode()}',
-            'active': sort_key == key,
+            'active': filters['sort_key'] == key,
         })
 
     context = {
         'active_nav': 'workorders',
         'work_orders': qs,
-        'sort_key': sort_key,
-        'sort_dir': sort_dir,
+        'sort_key': filters['sort_key'],
+        'sort_dir': filters['sort_dir'],
         'sort_columns': sort_columns,
-        'search_query': search_query,
-        'status_filter': status_filter,
-        'priority_filter': priority_filter,
-        'type_filter': task_type_filter,
-        'org_filter': org_filter,
-        'venue_filter': venue_filter,
+        'search_query': filters['search_query'],
+        'status_filter': filters['status_filter'],
+        'priority_filter': filters['priority_filter'],
+        'type_filter': filters['type_filter'],
+        'org_filter': filters['org_filter'],
+        'venue_filter': filters['venue_filter'],
+        'completed_from': filters['completed_from'],
+        'completed_to': filters['completed_to'],
         'organizations': Organization.objects.all(),
         'venues': Venue.objects.all(),
         'status_choices': WorkOrder.Status.choices,
         'priority_choices': WorkOrder.Priority.choices,
         'type_choices': TaskType.choices,
         'today': today,
+        'export_query': request.GET.urlencode(),
     }
 
     if request.headers.get('HX-Request') == 'true':
@@ -1078,6 +1107,34 @@ def workorder_log_work(request, pk):
     })
 
 
+@login_required
+def workorder_export_csv(request):
+    qs, _ = _filtered_workorders(request)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="work_orders.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        'ID', 'Piano', 'Venue', 'Order Type', 'Status', 'Priority',
+        'Assigned To', 'Due Date', 'Completed', 'Created', 'Description',
+    ])
+    for wo in qs:
+        writer.writerow([
+            f'WO-{wo.pk}',
+            wo.piano.name if wo.piano else wo.piano_name,
+            wo.piano.venue.name if wo.piano and wo.piano.venue else '',
+            wo.task_type or wo.order_type,
+            wo.status,
+            wo.priority,
+            wo.assigned_tech.get_full_name() if wo.assigned_tech else '',
+            wo.due_date or '',
+            wo.completed_date or '',
+            wo.created_at.strftime('%Y-%m-%d'),
+            wo.description,
+        ])
+    return response
+
+
 # ── Photo Upload ─────────────────────────────────────────────────
 
 ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
@@ -1199,18 +1256,26 @@ def schedule(request):
             'work_orders': active_wos.filter(task_type=TaskType.CLEANING).order_by('due_date', '-created_at'),
         },
     ]
+    due_filter_choices = [
+        ('', 'All'),
+        ('overdue', 'Overdue'),
+        ('next-30', 'Next 30 Days'),
+        ('upcoming', 'Upcoming'),
+        ('no-date', 'No Due Date'),
+    ]
+    if request.headers.get('HX-Request') == 'true':
+        return render(request, 'maintenance/partials/schedule_board.html', {
+            'schedule_columns': schedule_columns,
+            'due_filter': due_filter,
+            'due_filter_choices': due_filter_choices,
+            'today': today,
+        })
 
     return render(request, 'maintenance/schedule.html', {
         'active_nav': 'schedule',
         'schedule_columns': schedule_columns,
         'due_filter': due_filter,
-        'due_filter_choices': [
-            ('', 'All'),
-            ('overdue', 'Overdue'),
-            ('next-30', 'Next 30 Days'),
-            ('upcoming', 'Upcoming'),
-            ('no-date', 'No Due Date'),
-        ],
+        'due_filter_choices': due_filter_choices,
         'today': today,
     })
 
