@@ -5,7 +5,7 @@ Django settings for piano_maintainer project.
 from importlib.util import find_spec
 from pathlib import Path
 from decouple import config, Csv
-import dj_database_url, os
+import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,7 +14,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY
-SECRET_KEY = config("SECRET_KEY")
+SECRET_KEY = config("SECRET_KEY", default="sqlite-local-insecure-development-key")
 DEBUG = config("DEBUG", default=False, cast=bool)
 
 # Comma-separated in .env, e.g. ALLOWED_HOSTS=localhost,127.0.0.1,myapp.com
@@ -123,12 +123,12 @@ WSGI_APPLICATION = "piano_maintainer.wsgi.application"
 
 
 # DATABASE
+# This branch is intentionally local-only and always uses SQLite.
 DATABASES = {
-    "default": dj_database_url.config(
-        default=config("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
-        conn_max_age=600,
-        ssl_require=not DEBUG,
-    )
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
 }
 
 
