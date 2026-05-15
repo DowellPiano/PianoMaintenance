@@ -113,11 +113,12 @@ python manage.py migrate && python manage.py reset_demo_data --yes && gunicorn p
 To remove sign-in friction for a disposable demo deployment, set:
 
 ```text
+DEMO_DATA_RESET_ON_DEPLOY=True
 DEMO_AUTO_LOGIN=True
 DEMO_AUTO_LOGIN_USERNAME=demo-admin
 ```
 
-With demo auto-login enabled, visitors are signed into the seeded admin account automatically. Leave it disabled for any real production workspace.
+With demo auto-login enabled, visitors are signed into the seeded admin account automatically. `DEMO_AUTO_LOGIN` defaults to the `DEMO_DATA_RESET_ON_DEPLOY` value, so setting both explicitly is clearest on Render. Leave it disabled for any real production workspace.
 
 ### Automated work order generation
 

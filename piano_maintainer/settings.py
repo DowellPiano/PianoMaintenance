@@ -92,7 +92,12 @@ else:
     }
 
 AUTH_USER_MODEL = "maintenance.Technician"
-DEMO_AUTO_LOGIN = config("DEMO_AUTO_LOGIN", default=False, cast=bool)
+DEMO_DATA_RESET_ON_DEPLOY = config("DEMO_DATA_RESET_ON_DEPLOY", default=False, cast=bool)
+DEMO_AUTO_LOGIN = config(
+    "DEMO_AUTO_LOGIN",
+    default=DEMO_DATA_RESET_ON_DEPLOY,
+    cast=bool,
+)
 DEMO_AUTO_LOGIN_USERNAME = config("DEMO_AUTO_LOGIN_USERNAME", default="demo-admin")
 
 

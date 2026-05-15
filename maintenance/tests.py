@@ -94,6 +94,17 @@ class DemoAutoLoginTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(int(self.client.session['_auth_user_id']), self.demo_user.pk)
 
+    @override_settings(
+        DEMO_DATA_RESET_ON_DEPLOY=True,
+        DEMO_AUTO_LOGIN=True,
+        DEMO_AUTO_LOGIN_USERNAME='demo-admin',
+    )
+    def test_demo_reset_deployment_can_auto_login(self):
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(int(self.client.session['_auth_user_id']), self.demo_user.pk)
+
     @override_settings(DEMO_AUTO_LOGIN=True, DEMO_AUTO_LOGIN_USERNAME='demo-admin')
     def test_demo_auto_login_redirects_login_page_to_dashboard(self):
         response = self.client.get(reverse('login'))
