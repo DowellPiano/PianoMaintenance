@@ -87,6 +87,8 @@ else:
     }
 
 AUTH_USER_MODEL = "maintenance.Technician"
+DEMO_AUTO_LOGIN = config("DEMO_AUTO_LOGIN", default=False, cast=bool)
+DEMO_AUTO_LOGIN_USERNAME = config("DEMO_AUTO_LOGIN_USERNAME", default="demo-admin")
 
 
 # MIDDLEWARE
@@ -97,6 +99,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "maintenance.middleware.DemoAutoLoginMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

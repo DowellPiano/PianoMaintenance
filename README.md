@@ -98,6 +98,15 @@ password: DemoPass123
 
 For a public demo environment, run the command as part of your deploy/release/startup script after migrations. Users can change the demo records while the app is running; running the command again resets everything back to the seeded state.
 
+To remove sign-in friction for a disposable demo deployment, set:
+
+```text
+DEMO_AUTO_LOGIN=True
+DEMO_AUTO_LOGIN_USERNAME=demo-admin
+```
+
+With demo auto-login enabled, visitors are signed into the seeded admin account automatically. Leave it disabled for any real production workspace.
+
 ### Automated work order generation
 
 The `generate_work_orders` management command creates work orders for overdue or upcoming maintenance schedules. It is intentionally separate from page views, so browsing Work Orders or Schedule does not create records as a side effect:

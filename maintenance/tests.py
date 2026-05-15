@@ -71,6 +71,46 @@ class QRCodeRoutingTests(TestCase):
         self.assertRedirects(response, reverse('piano_detail', args=[self.piano.pk]))
 
 
+class DemoAutoLoginTests(TestCase):
+    def setUp(self):
+        self.demo_user = Technician.objects.create_user(
+            username='demo-admin',
+            password='StrongPass123',
+            first_name='Demo',
+            last_name='Admin',
+            role_admin=True,
+            role_technician=True,
+        )
+        self.piano = Piano.objects.create(
+            name='Public Request Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+
+    @override_settings(DEMO_AUTO_LOGIN=True, DEMO_AUTO_LOGIN_USERNAME='demo-admin')
+    def test_demo_auto_login_allows_dashboard_without_manual_sign_in(self):
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(int(self.client.session['_auth_user_id']), self.demo_user.pk)
+
+    @override_settings(DEMO_AUTO_LOGIN=True, DEMO_AUTO_LOGIN_USERNAME='demo-admin')
+    def test_demo_auto_login_redirects_login_page_to_dashboard(self):
+        response = self.client.get(reverse('login'))
+
+        self.assertRedirects(response, reverse('dashboard'))
+
+    @override_settings(DEMO_AUTO_LOGIN=True, DEMO_AUTO_LOGIN_USERNAME='demo-admin')
+    def test_demo_auto_login_leaves_public_qr_request_page_anonymous(self):
+        response = self.client.get(
+            reverse('maintenance-request-form', args=[self.piano.qr_code_token])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('_auth_user_id', self.client.session)
+        self.assertContains(response, 'Public Request Piano')
+
+
 class PhotoDeletionTests(TestCase):
     def setUp(self):
         self.media_root = tempfile.TemporaryDirectory()
