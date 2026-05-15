@@ -104,6 +104,8 @@ Render build command:
 pip install -r requirements.txt && python manage.py collectstatic --noinput
 ```
 
+The `collectstatic` step is required for CSS and HTMX assets in `DEBUG=False` deployments.
+
 Render start command:
 
 ```bash
