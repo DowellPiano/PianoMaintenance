@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}WO-{{ wo.pk }} — Piano Maintainer{% endblock %}
+{% block title %}WO-{{ wo.pk }} — Overtone{% endblock %}
 {% block topbar_title %}WO-{{ wo.pk }}{% endblock %}
 
 
@@ -43,7 +43,7 @@
             <button type="submit" class="btn btn-sm btn-primary">Reopen</button>
           </form>
         {% endif %}
-        {% if request.user.role_admin %}
+        {% if company_access.can_admin %}
           <a href="{% url 'workorder_delete' wo.pk %}" class="btn btn-sm btn-danger">Delete</a>
         {% endif %}
         {% if wo.status != "Complete" and wo.status != "Cancelled" and can_edit_wo %}
@@ -98,6 +98,10 @@
       {% endif %}
     </div>
   </div>
+</div>
+
+<div style="margin-top:1.5rem;">
+  {% include "maintenance/partials/activity_card.html" %}
 </div>
 
 <div class="card" style="margin-top:1.5rem;">

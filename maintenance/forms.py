@@ -3,7 +3,9 @@ from django.contrib.auth.forms import UserCreationForm
 from .models import (
     Organization, Venue, Piano, WorkOrder, ConditionReading, ConditionLevel,
     MaintenanceSchedule, ScheduleTemplate, Part, Technician, CompanySettings,
+    CompanyInvitation, CompanyMembership,
 )
+from .tenancy import company_users
 
 
 class SignUpForm(UserCreationForm):
@@ -19,7 +21,7 @@ class SignUpForm(UserCreationForm):
         user = super().save(commit=False)
         user.is_active = False
         user.role_admin = False
-        user.role_technician = True
+        user.role_technician = False
         if commit:
             user.save()
         return user
@@ -29,12 +31,13 @@ class TechnicianCreateForm(UserCreationForm):
     first_name = forms.CharField(max_length=150)
     last_name = forms.CharField(max_length=150)
     email = forms.EmailField(required=False)
+    role_admin = forms.BooleanField(required=False)
+    role_technician = forms.BooleanField(required=False, initial=True)
 
     class Meta:
         model = Technician
         fields = [
-            'username', 'first_name', 'last_name', 'email',
-            'role_admin', 'role_technician', 'is_active',
+            'username', 'first_name', 'last_name', 'email', 'is_active',
             'password1', 'password2',
         ]
 
@@ -43,16 +46,21 @@ class TechnicianUpdateForm(forms.ModelForm):
     first_name = forms.CharField(max_length=150)
     last_name = forms.CharField(max_length=150)
     email = forms.EmailField(required=False)
+    role_admin = forms.BooleanField(required=False)
+    role_technician = forms.BooleanField(required=False)
 
     class Meta:
         model = Technician
         fields = [
-            'username', 'first_name', 'last_name', 'email',
-            'role_admin', 'role_technician', 'is_active',
+            'username', 'first_name', 'last_name', 'email', 'is_active',
         ]
 
 
 class OrganizationForm(forms.ModelForm):
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+
     class Meta:
         model = Organization
         fields = [
@@ -63,6 +71,12 @@ class OrganizationForm(forms.ModelForm):
 
 
 class VenueForm(forms.ModelForm):
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+        if company:
+            self.fields['organization'].queryset = Organization.objects.filter(company=company)
+
     class Meta:
         model = Venue
         fields = [
@@ -73,6 +87,12 @@ class VenueForm(forms.ModelForm):
 
 
 class PianoForm(forms.ModelForm):
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+        if company:
+            self.fields['venue'].queryset = Venue.objects.filter(company=company)
+
     class Meta:
         model = Piano
         fields = [
@@ -89,6 +109,13 @@ class PianoForm(forms.ModelForm):
 
 
 class WorkOrderForm(forms.ModelForm):
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+        if company:
+            self.fields['piano'].queryset = Piano.objects.filter(company=company, is_active=True).select_related('venue')
+            self.fields['assigned_tech'].queryset = company_users(company, technicians_only=True)
+
     class Meta:
         model = WorkOrder
         fields = [
@@ -164,6 +191,11 @@ class ScheduleTemplateForm(forms.ModelForm):
 
 
 class MaintenanceScheduleForm(forms.ModelForm):
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if company:
+            self.fields['piano'].queryset = Piano.objects.filter(company=company, is_active=True)
+
     class Meta:
         model = MaintenanceSchedule
         fields = ['piano', 'task_name', 'task_type', 'interval_days',
@@ -212,3 +244,22 @@ class UserProfileForm(forms.ModelForm):
     class Meta:
         model = Technician
         fields = ['first_name', 'last_name', 'email']
+
+
+class CompanyInvitationForm(forms.ModelForm):
+    class Meta:
+        model = CompanyInvitation
+        fields = [
+            'email', 'first_name', 'last_name',
+            'role_admin', 'role_technician',
+        ]
+
+
+class CompanySwitcherForm(forms.Form):
+    company_id = forms.IntegerField(min_value=1)
+
+
+class MembershipRoleForm(forms.ModelForm):
+    class Meta:
+        model = CompanyMembership
+        fields = ['role_admin', 'role_technician', 'is_active']

@@ -52,6 +52,7 @@ maintenance/
   forms.py                     Django forms
   management/commands/
     generate_work_orders.py    CLI command: auto-create overdue work orders
+    bootstrap_company.py       CLI command: create a company + initial admin
   templates/
     base.html                  Shared layout with sidebar nav
     maintenance/
@@ -78,6 +79,27 @@ python3 manage.py runserver          # http://localhost:8000
 pip3 install -r requirements.txt     # picks up any new Python packages
 python3 manage.py migrate            # applies any new database migrations
 ```
+
+### Fresh SaaS bootstrap
+
+For a brand-new SaaS environment, create the first company and company admin with:
+
+```bash
+python3 manage.py bootstrap_company \
+  --company-name "Acme Piano Service" \
+  --admin-username admin \
+  --admin-password "change-me-now" \
+  --admin-email admin@example.com \
+  --first-name Acme \
+  --last-name Admin
+```
+
+This creates:
+- the `Company`
+- a `CompanySettings` row
+- an initial active admin + technician membership for the chosen user
+
+On the `SaaS` branch, this is the intended first-account path. Public self-service signup is disabled; additional users should join by company invitation after the initial admin is bootstrapped.
 
 ### Automated work order generation
 
@@ -218,6 +240,68 @@ A full REST API coexists with the template UI under `/api/`, powered by Django R
 - `generate_work_orders` uses `warning_days_before` to create work orders before the actual deadline.
 - `MaintenanceRequest` submissions require only the piano's `qr_code_token` — no login. On submission, a Work Order is created automatically.
 - `Piano.is_active` powers soft delete — deactivated pianos are hidden from lists but data is preserved.
+
+### SaaS tenancy rollout
+
+The `SaaS` branch is now the clean multi-company product track. It should be treated as a fresh-database deployment target rather than a compatibility layer for the older private-use environment. The current implemented foundation includes:
+
+- `Company`, `CompanyMembership`, `CompanyInvitation`, and `AuditLog`
+- active-company request/session context and a company switcher
+- required company ownership fields on the core operational models
+- local password reset views/templates
+- invitation acceptance flow for adding users to a company
+- company-scoped query enforcement across the main UI flows
+- no default-company autofill or silent tenant fallback in the runtime model layer
+- authenticated photo delivery for company media, with local file streaming in dev and short-lived signed URLs in object storage
+- tenant-admin setup progress, invitation resend/revoke history, and company-scoped member activation controls in the settings and users flows
+
+Use local SQLite while validating these changes:
+
+```bash
+env SECRET_KEY='dev-secret-key' DEBUG=True DATABASE_URL='sqlite:////tmp/piano_saas.sqlite3' python3 manage.py migrate
+env SECRET_KEY='dev-secret-key' DEBUG=True DATABASE_URL='sqlite:////tmp/piano_saas_test.sqlite3' python3 manage.py test maintenance
+```
+
+This branch should be verified locally before any production Postgres deployment is considered.
+For private media, optional production tuning:
+
+```bash
+PRIVATE_MEDIA_URL_TTL=900
+```
+
+Operational commands for the SaaS branch:
+
+```bash
+# Generate work orders for every company
+python3 manage.py generate_work_orders
+
+# Target one tenant while testing automation behavior
+python3 manage.py generate_work_orders --company-slug=default-company
+python3 manage.py generate_work_orders --company-id=1
+
+# Expire stale invitations before they clutter the admin UX
+python3 manage.py expire_invitations
+
+# See whether the current environment still looks like local dev or is shaped for SaaS production
+python3 manage.py saas_readiness_report
+```
+
+Recommended production env vars for the SaaS branch:
+
+```bash
+SECRET_KEY=...
+DEBUG=False
+ALLOWED_HOSTS=app.example.com
+CSRF_TRUSTED_ORIGINS=https://app.example.com
+DATABASE_URL=postgresql://...
+DEFAULT_FROM_EMAIL=noreply@example.com
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+PRIVATE_MEDIA_URL_TTL=900
+SUPABASE_S3_ACCESS_KEY_ID=...
+SUPABASE_S3_SECRET_ACCESS_KEY=...
+SUPABASE_S3_BUCKET=...
+SUPABASE_S3_ENDPOINT=...
+```
 - `Piano.tags` is a M2M to `Tag` — use tags for any custom grouping (building wing, priority tier, client name, etc.).
 - `Organization` uses `PROTECT` on its venue FK — you must remove all venues before deleting an organization.
 - `ConditionReading.update_piano_current_state()` copies readings to denormalized fields on Piano for fast display.

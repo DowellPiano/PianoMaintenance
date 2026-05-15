@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Organizations — Piano Maintainer{% endblock %}
+{% block title %}Organizations — Overtone{% endblock %}
 {% block topbar_title %}Organizations{% endblock %}
 
 
@@ -10,7 +10,7 @@
     <h1>Organizations</h1>
     <p class="page-subtitle">{{ organizations|length }} organization{{ organizations|length|pluralize }}</p>
   </div>
-  {% if request.user.role_admin %}<a href="{% url 'organization_create' %}" class="btn btn-primary">+ Add Organization</a>{% endif %}
+  {% if company_access.can_admin %}<a href="{% url 'organization_create' %}" class="btn btn-primary">+ Add Organization</a>{% endif %}
 </div>
 
 <div class="org-grid">

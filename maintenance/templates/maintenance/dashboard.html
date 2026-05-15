@@ -1,11 +1,45 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard — Piano Maintainer{% endblock %}
+{% block title %}Dashboard — Overtone{% endblock %}
 {% block topbar_title %}Dashboard{% endblock %}
 
 {% block content %}
 {% if not is_admin %}
 <h2 style="margin-bottom:1rem;">My Work</h2>
+{% endif %}
+
+{% if is_admin and setup_progress and not setup_progress.is_complete %}
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-header">
+    <h2>Workspace Setup</h2>
+    <span class="text-muted text-sm">{{ setup_progress.completed_count }}/{{ setup_progress.total_count }} complete</span>
+  </div>
+  <div class="card-body">
+    <p class="text-muted" style="margin-top:0;">
+      Finish the core setup steps for {{ active_company.name }} so the workspace is ready for day-to-day use.
+    </p>
+    <div style="margin-bottom:1rem;">
+      <div style="height:10px; background:#e5e7eb; border-radius:999px; overflow:hidden;">
+        <div style="height:100%; width:{{ setup_progress.percent_complete }}%; background:#2563eb;"></div>
+      </div>
+    </div>
+    <div style="display:grid; gap:.75rem;">
+      {% for task in setup_progress.tasks %}
+      <div style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; padding:.85rem 0; border-top:{% if not forloop.first %}1px solid #e5e7eb{% else %}0{% endif %};">
+        <div>
+          <div class="fw-medium">
+            {% if task.is_complete %}Done{% else %}To do{% endif %} · {{ task.title }}
+          </div>
+          <div class="text-muted text-sm">{{ task.detail }}</div>
+        </div>
+        {% if not task.is_complete %}
+        <a href="{{ task.cta_url }}" class="btn btn-sm btn-secondary">{{ task.cta_label }}</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
 {% endif %}
 
 <div class="kpi-grid">

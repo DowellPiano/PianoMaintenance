@@ -1,12 +1,56 @@
 {% extends "base.html" %}
 
-{% block title %}Settings — Piano Maintainer{% endblock %}
+{% block title %}Settings — Overtone{% endblock %}
 {% block topbar_title %}Settings{% endblock %}
 
 {% block content %}
 <div style="max-width:720px;">
 
-  {% if request.user.role_admin %}
+  {% if company_access.can_admin and setup_progress and not setup_progress.is_complete %}
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header">
+      <h2>Setup Progress</h2>
+      <span class="text-muted text-sm">{{ setup_progress.percent_complete }}%</span>
+    </div>
+    <div class="card-body">
+      <div class="form-row" style="margin-bottom:1rem;">
+        <div class="kpi-card" style="flex:1;">
+          <div class="kpi-label">Members</div>
+          <div class="kpi-value">{{ setup_progress.active_member_count }}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;">
+          <div class="kpi-label">Organizations</div>
+          <div class="kpi-value">{{ setup_progress.organization_count }}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;">
+          <div class="kpi-label">Venues</div>
+          <div class="kpi-value">{{ setup_progress.venue_count }}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;">
+          <div class="kpi-label">Pianos</div>
+          <div class="kpi-value">{{ setup_progress.piano_count }}</div>
+        </div>
+      </div>
+      <ul style="list-style:none; padding:0; margin:0; display:grid; gap:.75rem;">
+        {% for task in setup_progress.tasks %}
+        <li style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
+          <div>
+            <div class="fw-medium">
+              {% if task.is_complete %}Done{% else %}To do{% endif %} · {{ task.title }}
+            </div>
+            <div class="text-muted text-sm">{{ task.detail }}</div>
+          </div>
+          {% if not task.is_complete %}
+          <a href="{{ task.cta_url }}" class="btn btn-sm btn-secondary">{{ task.cta_label }}</a>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if company_access.can_admin %}
   <!-- Company Information -->
   <div class="card" style="margin-bottom:1.5rem;">
     <div class="card-header">
@@ -147,6 +191,119 @@
       </form>
     </div>
   </div>
+
+  {% if company_access.can_admin %}
+  <div class="card" style="margin-top:1.5rem;">
+    <div class="card-header">
+      <h2>Invite Team Member</h2>
+    </div>
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="invite">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="id_invite-first_name">First Name</label>
+            <input class="form-input" type="text" name="invite-first_name" id="id_invite-first_name" value="{{ invitation_form.first_name.value|default:'' }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="id_invite-last_name">Last Name</label>
+            <input class="form-input" type="text" name="invite-last_name" id="id_invite-last_name" value="{{ invitation_form.last_name.value|default:'' }}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_invite-email">Email</label>
+          <input class="form-input" type="email" name="invite-email" id="id_invite-email" value="{{ invitation_form.email.value|default:'' }}">
+          {% if invitation_form.email.errors %}<span class="form-error">{{ invitation_form.email.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-row">
+          <label style="display:flex; gap:.6rem; align-items:flex-start; margin-bottom:.8rem;">
+            <input type="checkbox" name="invite-role_technician" id="id_invite-role_technician" {% if invitation_form.role_technician.value %}checked{% endif %}>
+            <span><span class="fw-medium">Technician</span></span>
+          </label>
+          <label style="display:flex; gap:.6rem; align-items:flex-start; margin-bottom:.8rem;">
+            <input type="checkbox" name="invite-role_admin" id="id_invite-role_admin" {% if invitation_form.role_admin.value %}checked{% endif %}>
+            <span><span class="fw-medium">Admin</span></span>
+          </label>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+          <button type="submit" class="btn btn-primary">Send Invitation</button>
+        </div>
+      </form>
+
+      {% if pending_invitations %}
+      <div style="margin-top:1.5rem;">
+        <h3 style="font-size:1rem; margin-bottom:.75rem;">Pending Invitations</h3>
+        <ul style="list-style:none; padding:0; margin:0; display:grid; gap:.85rem;">
+          {% for invitation in pending_invitations %}
+          <li style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; padding:.85rem 0; border-top:{% if not forloop.first %}1px solid #e5e7eb{% else %}0{% endif %};">
+            <div>
+              <div class="fw-medium">{{ invitation.email }}</div>
+              <div class="text-muted text-sm">
+                Expires {{ invitation.expires_at|date:"Y-m-d H:i" }}
+                {% if invitation.role_admin and invitation.role_technician %}
+                  · Admin + Technician
+                {% elif invitation.role_admin %}
+                  · Admin
+                {% elif invitation.role_technician %}
+                  · Technician
+                {% endif %}
+              </div>
+            </div>
+            <div style="display:flex; gap:.5rem; flex-wrap:wrap; justify-content:flex-end;">
+              <form method="post" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="invite_resend">
+                <input type="hidden" name="invitation_id" value="{{ invitation.pk }}">
+                <button type="submit" class="btn btn-sm btn-secondary">Resend</button>
+              </form>
+              <form method="post" style="margin:0;" onsubmit="return confirm('Revoke this invitation?');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="invite_revoke">
+                <input type="hidden" name="invitation_id" value="{{ invitation.pk }}">
+                <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
+              </form>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if recent_invitations %}
+      <div style="margin-top:1.5rem;">
+        <h3 style="font-size:1rem; margin-bottom:.75rem;">Invitation History</h3>
+        <ul style="list-style:none; padding:0; margin:0; display:grid; gap:.85rem;">
+          {% for invitation in recent_invitations %}
+          <li style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; padding:.85rem 0; border-top:{% if not forloop.first %}1px solid #e5e7eb{% else %}0{% endif %};">
+            <div>
+              <div class="fw-medium">{{ invitation.email }}</div>
+              <div class="text-muted text-sm">
+                {{ invitation.get_status_display }}
+                {% if invitation.accepted_at %}
+                  · {{ invitation.accepted_at|date:"Y-m-d H:i" }}
+                {% else %}
+                  · {{ invitation.created_at|date:"Y-m-d H:i" }}
+                {% endif %}
+              </div>
+            </div>
+            <div>
+              {% if invitation.status == "accepted" %}
+                <span class="badge badge-complete">Accepted</span>
+              {% elif invitation.status == "revoked" %}
+                <span class="badge badge-normal">Revoked</span>
+              {% elif invitation.status == "expired" %}
+                <span class="badge badge-overdue">Expired</span>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 
 </div>
 {% endblock %}

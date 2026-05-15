@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ organization.name }} — Piano Maintainer{% endblock %}
+{% block title %}{{ organization.name }} — Overtone{% endblock %}
 {% block topbar_title %}{{ organization.name }}{% endblock %}
 
 
@@ -18,7 +18,7 @@
       {% if organization.contact_name %}<p class="org-hero-meta">Contact: {{ organization.contact_name }}{% if organization.contact_email %} · {{ organization.contact_email }}{% endif %}{% if organization.contact_phone %} · {{ organization.contact_phone }}{% endif %}</p>{% endif %}
       {% if organization.notes %}<p class="org-hero-meta" style="margin-top:.5rem;">{{ organization.notes|truncatechars:200 }}</p>{% endif %}
     </div>
-    {% if request.user.role_admin %}
+    {% if company_access.can_admin %}
     <div style="display:flex; gap:.5rem;">
       <a href="{% url 'organization_edit' organization.pk %}" class="btn btn-sm btn-secondary">Edit</a>
       <a href="{% url 'venue_create' %}?organization={{ organization.pk }}" class="btn btn-sm btn-primary">+ Add Venue</a>
@@ -45,5 +45,9 @@
       {% endfor %}
     </div>
   </div>
+</div>
+
+<div style="margin-top:1.5rem;">
+  {% include "maintenance/partials/activity_card.html" %}
 </div>
 {% endblock %}

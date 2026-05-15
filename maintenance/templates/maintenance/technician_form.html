@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{% if editing %}Edit User{% else %}Add User{% endif %} — Piano Maintainer{% endblock %}
+{% block title %}{% if editing %}Edit User{% else %}Add User{% endif %} — Overtone{% endblock %}
 {% block topbar_title %}{% if editing %}Edit User{% else %}Add User{% endif %}{% endblock %}
 
 {% block content %}
@@ -10,7 +10,7 @@
       <h1>{% if editing %}Edit User{% else %}Add User{% endif %}</h1>
       <p class="page-subtitle">
         {% if editing %}
-          Manage account status and app roles.
+          Manage company access and app roles.
         {% else %}
           Create an active account for a team member.
         {% endif %}
@@ -76,7 +76,8 @@
             <label style="display:flex; gap:.6rem; align-items:flex-start; margin-bottom:.8rem;">
               <input type="checkbox" name="is_active" id="id_is_active" {% if form.is_active.value %}checked{% endif %}>
               <span>
-                <span class="fw-medium">Active</span>
+                <span class="fw-medium">Active in This Company</span>
+                <span class="text-muted text-sm" style="display:block;">Turn this off to remove this user from the current company's working roster without affecting their memberships in other companies.</span>
               </span>
             </label>
             {% if form.is_active.errors %}<span class="form-error">{{ form.is_active.errors.0 }}</span>{% endif %}

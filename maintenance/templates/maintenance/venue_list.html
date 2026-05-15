@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Venues — Piano Maintainer{% endblock %}
+{% block title %}Venues — Overtone{% endblock %}
 {% block topbar_title %}Venues{% endblock %}
 
 
@@ -10,7 +10,7 @@
     <h1>Venues</h1>
     <p class="page-subtitle">{{ venues|length }} venue{{ venues|length|pluralize }}</p>
   </div>
-  {% if request.user.role_admin %}<a href="{% url 'venue_create' %}" class="btn btn-primary">+ Add Venue</a>{% endif %}
+  {% if company_access.can_admin %}<a href="{% url 'venue_create' %}" class="btn btn-primary">+ Add Venue</a>{% endif %}
 </div>
 
 <div class="venue-grid">

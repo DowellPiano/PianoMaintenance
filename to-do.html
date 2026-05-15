@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Piano Maintainer SaaS To-Do</title>
+  <style>
+    :root {
+      --bg: #f5f7f4;
+      --surface: #ffffff;
+      --ink: #1e2a22;
+      --muted: #5d6b61;
+      --line: #d6ddd7;
+      --accent: #1f6b4f;
+      --accent-soft: #e3f1ea;
+      --warn: #8a5a10;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background: linear-gradient(180deg, #eef3ef 0%, var(--bg) 100%);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+
+    .hero {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 20px;
+      box-shadow: 0 12px 28px rgba(30, 42, 34, 0.06);
+    }
+
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 12px;
+      line-height: 1.15;
+    }
+
+    h1 { font-size: 38px; }
+    h2 {
+      font-size: 24px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 18px;
+    }
+    h3 { font-size: 18px; }
+
+    p { margin: 0 0 14px; color: var(--muted); }
+
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fcfdfc;
+    }
+
+    ul, ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    li { margin-bottom: 10px; }
+    strong { color: var(--ink); }
+
+    .note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--warn);
+      background: #fff8ea;
+      color: #6f5524;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.95em;
+      background: #f2f4f2;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    @media (max-width: 760px) {
+      .page { padding: 20px 14px 40px; }
+      h1 { font-size: 30px; }
+      .grid { grid-template-columns: 1fr; }
+      .hero, .section { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">SaaS Roadmap</div>
+      <h1>Piano Maintainer To-Do</h1>
+      <p>This document outlines the work needed to turn the current Django app into a production-ready multi-company SaaS platform.</p>
+      <p>The app is already in a solid early product shape: one Django project, one main domain app, template-driven UI, custom technician auth, CSV/reporting, and background-style scheduling via a management command. The next phase is mostly about tenancy, security, account lifecycle, and operational hardening.</p>
+    </section>
+
+    <section class="section">
+      <h2>Current Structure Snapshot</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Project Layout</h3>
+          <ul>
+            <li><code>piano_maintainer/</code>: Django settings, URL routing, ASGI/WSGI.</li>
+            <li><code>maintenance/</code>: main business app containing models, views, forms, admin, tests, services, and management commands.</li>
+            <li><code>maintenance/templates/</code>: server-rendered UI, including partials and registration pages.</li>
+            <li><code>maintenance/static/</code>: app CSS and bundled HTMX.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>What This Means</h3>
+          <ul>
+            <li>The app is currently effectively single-tenant in its domain model.</li>
+            <li>Auth exists, but true organization/company isolation is not fully modeled yet.</li>
+            <li>The current codebase is small enough that tenancy can still be added cleanly before the system becomes much harder to untangle.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Status Snapshot</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Completed</h3>
+          <ul>
+            <li>Company and membership foundation is in place.</li>
+            <li>Core tenant-owned models now require <code>company</code> relationships.</li>
+            <li>Active-company session context and company switching are implemented.</li>
+            <li>Password reset, invitation acceptance, and membership-based authorization are working.</li>
+            <li>Private photo delivery is enforced through authenticated company-scoped access.</li>
+            <li>Audit activity is stored centrally in <code>AuditLog</code> and surfaced inline on record detail pages as recent activity.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>In Progress</h3>
+          <ul>
+            <li>Fresh deployment and tenant-admin UX hardening is underway.</li>
+            <li>Bootstrap/setup flows now exist, invitation history is visible, and company-scoped member activation controls are working, but the broader tenant-admin lifecycle still needs more polish.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Still Ahead</h3>
+          <ul>
+            <li>Production validation for Postgres bootstrap, live email delivery, storage access, and deployment/runbook procedures.</li>
+            <li>Richer tenant-admin lifecycle UX, including fuller invitation history and member state handling.</li>
+            <li>Final SaaS readiness review for reports, exports, background jobs, media security, and production cutover posture.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Highest-Priority SaaS Work</h2>
+      <ol>
+        <li><strong>Done:</strong> Introduced a real <code>Company</code> model with company-owned settings, admins, technicians, and data boundaries.</li>
+        <li><strong>Done:</strong> Added tenant ownership to core domain data with required <code>company</code> relationships.</li>
+        <li><strong>Done:</strong> Replaced single-company assumptions in the main queries, views, exports, background generation, and dashboard flows.</li>
+        <li><strong>Done:</strong> Supported users belonging to multiple companies through membership rather than duplicate accounts.</li>
+        <li><strong>Done:</strong> Added password reset and account recovery flows for real user access.</li>
+      </ol>
+    </section>
+
+    <section class="section">
+      <h2>Requested Items, Expanded</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>1. Company Model</h3>
+          <ul>
+            <li>Done: <code>Company</code> exists as the tenant root for the business performing the work.</li>
+            <li>Done: company settings are company-scoped instead of singleton-style.</li>
+            <li>Done: company roles are modeled through membership admin/technician flags.</li>
+            <li>In progress: company admins can invite and manage members, with more tenant-admin polish still ahead.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>2. CompanyID on Data</h3>
+          <ul>
+            <li>Done: <code>company</code> foreign keys are on the main tenant-owned records, including organizations, venues, pianos, work orders, schedules, parts, requests, photos, and related logs.</li>
+            <li>Done for the <code>SaaS</code> branch direction: the schema has been tightened for a fresh multi-tenant database rather than legacy compatibility.</li>
+            <li>Done in the main app flows: tenant scoping is enforced in forms, queryset filtering, exports, and background work-order generation.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>3. Password Reset</h3>
+          <ul>
+            <li>Done: Django password reset flow is enabled.</li>
+            <li>Done: token-based reset pages and success/failure handling are in place.</li>
+            <li>Still ahead: finalize live production email configuration and operational verification.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>4. Multi-Company Membership</h3>
+          <ul>
+            <li>Done: <code>CompanyMembership</code> exists between users and companies.</li>
+            <li>Done: role and active state live on the membership while active-company selection lives in session context.</li>
+            <li>Done: a company switcher exists in the UI, with clearer active-company display in the app chrome.</li>
+            <li>Done: requests are scoped by the active company context.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Other Features Needed for a Real Multi-Company Product</h2>
+      <ol>
+        <li><strong>Invitation flow.</strong> Mostly done: company admins can invite members by email, pending invitations can be resent or revoked, expired invitations can be cleaned up operationally, and recent invitation history is visible in settings.</li>
+        <li><strong>Audit logging.</strong> Done for v1 in embedded form: key create, update, workflow, and admin events are logged centrally in <code>AuditLog</code>, and recent activity is shown inline on piano, organization, venue, and work order detail pages rather than in a separate audit console.</li>
+        <li><strong>Soft-delete and recovery policy.</strong> Decide what can be restored and what must remain immutable after completion.</li>
+        <li><strong>Email infrastructure.</strong> In progress: password reset and invitation flows exist, but production email delivery still needs live operational verification.</li>
+        <li><strong>Authorization layer cleanup.</strong> Done in the primary app flows: membership-based permissions now drive active-company authorization.</li>
+        <li><strong>Tenant-safe background jobs.</strong> Done for scheduled work-order generation, which now runs outside page views and respects tenant-owned records.</li>
+        <li><strong>Tenant-safe exports.</strong> Done for the current CSV/report exports in the main UI.</li>
+        <li><strong>File and media access control.</strong> Done for photos: delivery is authenticated, company-scoped, and uses signed URLs in object storage.</li>
+        <li><strong>Onboarding flow.</strong> Partly done: there is now a first-run setup checklist, a bootstrap command for new environments, and clearer tenant-admin setup visibility.</li>
+        <li><strong>Search and filter hardening.</strong> Every lookup path must be company-scoped, including autocomplete and background actions.</li>
+        <li><strong>Admin experience for tenant support.</strong> Decide whether there is a platform super-admin role outside company admins.</li>
+        <li><strong>Environment separation.</strong> In progress: deployment env vars, bootstrap steps, and tenant-targeted operational commands are documented, with more production hardening still ahead.</li>
+        <li><strong>Error monitoring and backups.</strong> Needed before multiple businesses depend on the app.</li>
+        <li><strong>Security review.</strong> Validate password policy, session handling, CSRF settings, upload rules, and authorization checks.</li>
+        <li><strong>Historical data strategy.</strong> The legacy private-use database can remain separate, but the SaaS branch still needs a clean seed/import story for demo and onboarding data.</li>
+      </ol>
+    </section>
+
+    <section class="section">
+      <h2>SaaS Branch Standards</h2>
+      <p>The <code>SaaS</code> branch should now be treated as a clean multi-tenant product track with its own fresh database. The legacy private-use database does not need to constrain schema or authorization design on this branch.</p>
+      <ol>
+        <li><strong>Make the schema fully SaaS-native.</strong> All tenant-owned records should use required <code>company</code> relationships, membership-based permissions should become the primary authorization model, and company settings should remain company-scoped rather than singleton-style.</li>
+        <li><strong>Remove transitional legacy helpers.</strong> Default-company autofill, compatibility fallbacks, and any logic kept only to protect the older single-tenant database should be removed before deployment.</li>
+        <li><strong>Treat media as private from day one.</strong> New uploads should be private by default, company-authorized through Django, and delivered with short-lived signed URLs.</li>
+        <li><strong>Target a fresh Postgres deployment.</strong> This branch should be prepared for a new production database with clean migrations, seed/demo data where helpful, and no requirement to support in-place upgrade from the private legacy database.</li>
+      </ol>
+    </section>
+
+    <section class="section">
+      <h2>Recommended Implementation Order</h2>
+      <ol>
+        <li>Done: model <code>Company</code> and <code>CompanyMembership</code>.</li>
+        <li>Done: add active-company context on login/session and a company switcher.</li>
+        <li>Done: add company scoping to core models and write data migrations for the SaaS branch direction.</li>
+        <li>Done: refactor queries, forms, views, exports, and services to enforce tenancy in the main app flows.</li>
+        <li>Done: add invitation flow and password reset.</li>
+        <li>Done: add audit logging and media access control.</li>
+        <li>In progress: harden background jobs, cron, and operational setup, including tenant-targeted commands and invitation-expiration cleanup.</li>
+        <li>In progress: polish onboarding and tenant admin UX, including company-scoped member lifecycle controls and invite history.</li>
+      </ol>
+      <div class="note">
+        Payments are intentionally excluded from this roadmap, per your direction. The right next milestone is trustworthy multi-company tenancy, not billing.
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Next Steps</h2>
+      <ol>
+        <li><strong>Production readiness validation.</strong> Verify empty Postgres bootstrap, production email backend behavior, object storage access, and deployment/runbook documentation end to end.</li>
+        <li><strong>Tenant admin lifecycle polish.</strong> Add member reactivation shortcuts, clearer membership-state messaging, and stronger self-serve admin workflows around role changes and account cleanup.</li>
+        <li><strong>Platform operations policy.</strong> Define support/admin behavior outside tenant admins, decide what non-tenant staff can see and do, and document backups, monitoring, and incident ownership.</li>
+        <li><strong>Final SaaS readiness pass.</strong> Re-check exports, reports, background jobs, media security, and production cutover readiness so there are no remaining cross-company leaks or launch blockers.</li>
+      </ol>
+      <div class="note">
+        Audit is intentionally kept as embedded recent activity on the records people already use, backed by centralized <code>AuditLog</code> storage, rather than as a separate audit page.
+      </div>
+    </section>
+  </main>
+</body>
+</html>

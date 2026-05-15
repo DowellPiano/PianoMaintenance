@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Pianos — Piano Maintainer{% endblock %}
+{% block title %}Pianos — Overtone{% endblock %}
 {% block topbar_title %}Pianos{% endblock %}
 
 
@@ -10,7 +10,7 @@
     <h1>Pianos</h1>
     <p class="page-subtitle">{{ pianos|length }} piano{{ pianos|length|pluralize }} registered</p>
   </div>
-  {% if request.user.role_admin %}
+  {% if company_access.can_admin %}
   <div class="gap-row">
     <a href="{% url 'piano_import' %}" class="btn btn-secondary">Import CSV</a>
     <a href="{% url 'piano_create' %}" class="btn btn-primary">+ Add Piano</a>
@@ -54,7 +54,7 @@
   <div class="piano-card">
     <div class="piano-card-photo">
       {% if piano.profile_photo %}
-        <img src="{{ piano.profile_photo.image.url }}" alt="{{ piano.name }}">
+        <img src="{% url 'photo_file' piano.profile_photo.pk %}" alt="{{ piano.name }}">
       {% else %}
         🎹
       {% endif %}

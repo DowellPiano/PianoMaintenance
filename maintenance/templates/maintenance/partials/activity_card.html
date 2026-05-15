@@ -1,0 +1,20 @@
+<div class="card">
+  <div class="card-header"><h2>Recent Activity</h2></div>
+  <div class="card-body">
+    {% if activity_events %}
+      <ul style="list-style:none; padding:0; margin:0; display:grid; gap:.85rem;">
+        {% for event in activity_events %}
+        <li style="display:grid; gap:.2rem;">
+          <div class="fw-medium">{{ event.label }} by {{ event.actor_name }}</div>
+          <div class="text-muted text-sm">{{ event.created_at|date:"M d, Y g:i A" }}</div>
+          {% if event.message %}
+          <div class="text-muted text-sm">{{ event.message }}</div>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-dim">No tracked activity yet.</p>
+    {% endif %}
+  </div>
+</div>

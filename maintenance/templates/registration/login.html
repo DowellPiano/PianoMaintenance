@@ -4,13 +4,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign In — Piano Maintainer</title>
+  <title>Sign In — Overtone</title>
+  <link rel="icon" type="image/png" href="{% static 'img/overtone-icon.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'img/overtone-icon.png' %}">
   <link rel="stylesheet" href="{% static 'css/base.css' %}">
 </head>
 <body>
   <div class="login-page">
     <div class="login-card">
-      <h1>Piano Maintainer</h1>
+      <div class="auth-brand">
+        <img src="{% static 'img/overtone-wordmark.png' %}" alt="Overtone" class="auth-brand-logo">
+      </div>
       <p class="subtitle">Sign in to your account</p>
 
       {% if form.errors %}
@@ -31,8 +35,12 @@
         {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       </form>
 
+      <p style="text-align:center; margin-top:.85rem; font-size:.88rem;">
+        <a href="{% url 'password_reset' %}">Forgot your password?</a>
+      </p>
+
       <p style="text-align:center; margin-top:1rem; font-size:.88rem;">
-        Need access? <a href="{% url 'signup' %}">Request an account</a>
+        Need access? Contact your company admin or Overtone support.
       </p>
     </div>
   </div>
