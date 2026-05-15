@@ -181,6 +181,11 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
+WHITENOISE_USE_FINDERS = config(
+    "WHITENOISE_USE_FINDERS",
+    default=DEMO_DATA_RESET_ON_DEPLOY,
+    cast=bool,
+)
 
 
 # MEDIA FILES
