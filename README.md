@@ -98,6 +98,18 @@ password: DemoPass123
 
 For a public demo environment, run the command as part of your deploy/release/startup script after migrations. Users can change the demo records while the app is running; running the command again resets everything back to the seeded state.
 
+Render build command:
+
+```bash
+pip install -r requirements.txt && python manage.py collectstatic --noinput
+```
+
+Render start command:
+
+```bash
+python manage.py migrate && python manage.py reset_demo_data --yes && gunicorn piano_maintainer.wsgi:application
+```
+
 To remove sign-in friction for a disposable demo deployment, set:
 
 ```text
