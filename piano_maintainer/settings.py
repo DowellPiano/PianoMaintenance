@@ -123,11 +123,18 @@ WSGI_APPLICATION = "piano_maintainer.wsgi.application"
 
 
 # DATABASE
+DATABASE_URL = config("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
+DATABASE_SSL_REQUIRE = config(
+    "DB_SSL_REQUIRE",
+    default=not DEBUG and not DATABASE_URL.startswith("sqlite"),
+    cast=bool,
+)
+
 DATABASES = {
     "default": dj_database_url.config(
-        default=config("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
+        default=DATABASE_URL,
         conn_max_age=600,
-        ssl_require=not DEBUG,
+        ssl_require=DATABASE_SSL_REQUIRE,
     )
 }
 
