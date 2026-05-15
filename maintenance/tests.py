@@ -13,6 +13,47 @@ from .models import MaintenanceSchedule, Photo, Piano, Technician, WorkOrder
 from .services import generate_scheduled_work_orders
 
 
+class PianoListSearchTests(TestCase):
+    def setUp(self):
+        self.tech = Technician.objects.create_user(
+            username='pianosearchtech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.client.force_login(self.tech)
+        self.room_piano = Piano.objects.create(
+            name='Studio Upright',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+            section='East Wing',
+            room='Practice Room 405',
+        )
+        self.other_piano = Piano.objects.create(
+            name='Concert Grand',
+            make='Steinway',
+            piano_type=Piano.PianoType.GRAND,
+            section='Main Hall',
+            room='Stage',
+        )
+
+    def test_search_matches_piano_room(self):
+        response = self.client.get(reverse('piano_list'), {'q': '405'})
+
+        self.assertQuerySetEqual(
+            response.context['pianos'],
+            [self.room_piano],
+        )
+
+    def test_search_matches_piano_section(self):
+        response = self.client.get(reverse('piano_list'), {'q': 'east wing'})
+
+        self.assertQuerySetEqual(
+            response.context['pianos'],
+            [self.room_piano],
+        )
+
+
 class SignupTests(TestCase):
     def test_public_signup_creates_inactive_technician_only_account(self):
         response = self.client.post(reverse('signup'), {

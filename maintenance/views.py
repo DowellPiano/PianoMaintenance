@@ -329,6 +329,10 @@ def piano_list(request):
             Q(name__icontains=search_query) |
             Q(make__icontains=search_query) |
             Q(serial_number__icontains=search_query) |
+            Q(section__icontains=search_query) |
+            Q(room__icontains=search_query) |
+            Q(room_description__icontains=search_query) |
+            Q(room_access_notes__icontains=search_query) |
             Q(tags__name__icontains=search_query)
         ).distinct()
     if org_filter:
