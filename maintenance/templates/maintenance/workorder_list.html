@@ -12,7 +12,7 @@
   </div>
   <div class="gap-row">
     <a href="{% url 'workorder_export_csv' %}{% if export_query %}?{{ export_query }}{% endif %}" class="btn btn-secondary">Download CSV</a>
-    {% if request.user.role_admin %}<a href="{% url 'workorder_create' %}" class="btn btn-primary">+ New Work Order</a>{% endif %}
+    {% if request.user.role_admin and not tech_mode %}<a href="{% url 'workorder_create' %}" class="btn btn-primary">+ New Work Order</a>{% endif %}
   </div>
 </div>
 

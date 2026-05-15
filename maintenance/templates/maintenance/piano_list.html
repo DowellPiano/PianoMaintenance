@@ -10,8 +10,9 @@
     <h1>Pianos</h1>
     <p class="page-subtitle">{{ pianos|length }} piano{{ pianos|length|pluralize }} registered</p>
   </div>
-  {% if request.user.role_admin %}
+  {% if request.user.role_admin and not request.session.tech_mode %}
   <div class="gap-row">
+    <a href="{% url 'piano_bulk_edit' %}?{{ request.GET.urlencode }}" class="btn btn-secondary">Bulk Edit</a>
     <a href="{% url 'piano_import' %}" class="btn btn-secondary">Import CSV</a>
     <a href="{% url 'piano_create' %}" class="btn btn-primary">+ Add Piano</a>
   </div>
@@ -42,6 +43,7 @@
   {% if tags %}
   <select name="tag" class="form-select" style="width:160px;" onchange="this.form.submit()">
     <option value="">All Tags</option>
+    <option value="none" {% if tag_filter == "none" %}selected{% endif %}>No Tags</option>
     {% for t in tags %}
       <option value="{{ t.id }}" {% if t.id|stringformat:"d" == tag_filter %}selected{% endif %}>{{ t.name }}</option>
     {% endfor %}

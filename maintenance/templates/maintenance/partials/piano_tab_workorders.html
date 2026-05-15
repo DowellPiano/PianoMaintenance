@@ -1,6 +1,9 @@
 <div class="card">
   <div class="card-header">
-    <h2>Work Orders</h2>
+    <div class="gap-row">
+      <h2>Open Work Orders</h2>
+      <span class="badge badge-open">{{ open_work_orders|length }} open</span>
+    </div>
     <a href="{% url 'workorder_create' %}?piano={{ piano.pk }}" class="btn btn-xs btn-primary">+ New</a>
   </div>
   <div class="table-wrap">
@@ -18,7 +21,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for wo in work_orders %}
+        {% for wo in open_work_orders %}
         <tr>
           <td><a href="{% url 'workorder_detail' wo.pk %}?return_url={{ workorder_return_url|urlencode }}">WO-{{ wo.pk }}</a></td>
           <td>{{ wo.task_type|default:wo.order_type }}</td>
@@ -30,7 +33,46 @@
           <td class="text-sm text-muted">{{ wo.created_at|date:"M d, Y" }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="text-muted" style="text-align:center; padding:2rem;">No work orders for this piano.</td></tr>
+        <tr><td colspan="8" class="text-muted" style="text-align:center; padding:2rem;">No open work orders for this piano.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1.5rem;">
+  <div class="card-header">
+    <div class="gap-row">
+      <h2>Work History</h2>
+      <span class="badge badge-complete">{{ work_history|length }} complete</span>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Service Type</th>
+          <th>Priority</th>
+          <th>Description</th>
+          <th>Assigned To</th>
+          <th>Completed</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for wo in work_history %}
+        <tr>
+          <td><a href="{% url 'workorder_detail' wo.pk %}?return_url={{ workorder_return_url|urlencode }}">WO-{{ wo.pk }}</a></td>
+          <td>{{ wo.task_type|default:wo.order_type }}</td>
+          <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
+          <td style="max-width:280px;">{{ wo.description|truncatechars:90 }}</td>
+          <td class="text-sm">{{ wo.assigned_tech.get_full_name|default:"—" }}</td>
+          <td class="text-sm text-muted">{{ wo.completed_date|date:"M d, Y"|default:"—" }}</td>
+          <td class="text-sm text-muted">{{ wo.created_at|date:"M d, Y" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:2rem;">No completed work history for this piano.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -3,6 +3,7 @@ from django.contrib.auth.forms import UserCreationForm
 from .models import (
     Organization, Venue, Piano, WorkOrder, ConditionReading, ConditionLevel,
     MaintenanceSchedule, ScheduleTemplate, Part, Technician, CompanySettings,
+    IntervalUnit,
 )
 
 
@@ -86,6 +87,83 @@ class PianoForm(forms.ModelForm):
             'cleaning_interval_value', 'cleaning_interval_unit',
             'notes',
         ]
+
+
+class BulkPianoIntervalForm(forms.Form):
+    piano_ids = forms.MultipleChoiceField(widget=forms.CheckboxSelectMultiple)
+
+    update_tuning = forms.BooleanField(required=False)
+    tuning_interval_value = forms.IntegerField(min_value=1, required=False)
+    tuning_interval_unit = forms.ChoiceField(
+        choices=IntervalUnit.choices,
+        required=False,
+    )
+
+    update_regulation = forms.BooleanField(required=False)
+    regulation_interval_value = forms.IntegerField(min_value=1, required=False)
+    regulation_interval_unit = forms.ChoiceField(
+        choices=IntervalUnit.choices,
+        required=False,
+    )
+
+    update_voicing = forms.BooleanField(required=False)
+    voicing_interval_value = forms.IntegerField(min_value=1, required=False)
+    voicing_interval_unit = forms.ChoiceField(
+        choices=IntervalUnit.choices,
+        required=False,
+    )
+
+    update_cleaning = forms.BooleanField(required=False)
+    cleaning_interval_value = forms.IntegerField(min_value=1, required=False)
+    cleaning_interval_unit = forms.ChoiceField(
+        choices=IntervalUnit.choices,
+        required=False,
+    )
+
+    interval_tasks = (
+        'tuning',
+        'regulation',
+        'voicing',
+        'cleaning',
+    )
+
+    def __init__(self, *args, pianos=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        pianos = list(pianos or [])
+        self.fields['piano_ids'].choices = [
+            (piano.pk, piano.name) for piano in pianos
+        ]
+
+    def clean(self):
+        cleaned = super().clean()
+        selected_tasks = [
+            task for task in self.interval_tasks
+            if cleaned.get(f'update_{task}')
+        ]
+        if not cleaned.get('piano_ids'):
+            raise forms.ValidationError('Select at least one piano to update.')
+        if not selected_tasks:
+            raise forms.ValidationError('Choose at least one interval to update.')
+        for task in selected_tasks:
+            if not cleaned.get(f'{task}_interval_value'):
+                self.add_error(
+                    f'{task}_interval_value',
+                    'Enter an interval value.',
+                )
+            if not cleaned.get(f'{task}_interval_unit'):
+                self.add_error(
+                    f'{task}_interval_unit',
+                    'Choose an interval unit.',
+                )
+        return cleaned
+
+    def interval_updates(self):
+        updates = {}
+        for task in self.interval_tasks:
+            if self.cleaned_data.get(f'update_{task}'):
+                updates[f'{task}_interval_value'] = self.cleaned_data[f'{task}_interval_value']
+                updates[f'{task}_interval_unit'] = self.cleaned_data[f'{task}_interval_unit']
+        return updates
 
 
 class WorkOrderForm(forms.ModelForm):

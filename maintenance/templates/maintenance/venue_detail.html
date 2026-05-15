@@ -18,7 +18,7 @@
       </p>
       {% if venue.address %}<p class="loc-hero-meta">{{ venue.address }}</p>{% endif %}
     </div>
-    {% if request.user.role_admin %}
+    {% if request.user.role_admin and not request.session.tech_mode %}
     <div style="display:flex; gap:.5rem;">
       <a href="{% url 'venue_delete' venue.pk %}" class="btn btn-sm btn-danger">Delete</a>
       <a href="{% url 'venue_edit' venue.pk %}" class="btn btn-sm btn-secondary">Edit</a>

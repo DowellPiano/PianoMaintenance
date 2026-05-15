@@ -10,7 +10,7 @@
     <h1>Organizations</h1>
     <p class="page-subtitle">{{ organizations|length }} organization{{ organizations|length|pluralize }}</p>
   </div>
-  {% if request.user.role_admin %}<a href="{% url 'organization_create' %}" class="btn btn-primary">+ Add Organization</a>{% endif %}
+  {% if request.user.role_admin and not request.session.tech_mode %}<a href="{% url 'organization_create' %}" class="btn btn-primary">+ Add Organization</a>{% endif %}
 </div>
 
 <div class="org-grid">

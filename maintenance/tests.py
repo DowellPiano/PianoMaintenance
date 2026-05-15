@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.test import override_settings
 from django.urls import reverse
 
-from .models import MaintenanceSchedule, Photo, Piano, Technician, WorkOrder
+from .models import MaintenanceSchedule, Organization, Photo, Piano, Tag, Technician, Venue, WorkOrder
 from .services import generate_scheduled_work_orders
 
 
@@ -45,6 +45,18 @@ class PianoListSearchTests(TestCase):
             [self.room_piano],
         )
 
+    def test_tag_filter_can_show_untagged_pianos(self):
+        tagged = Tag.objects.create(name='tagged')
+        self.room_piano.tags.add(tagged)
+
+        response = self.client.get(reverse('piano_list'), {'tag': 'none'})
+
+        self.assertQuerySetEqual(
+            response.context['pianos'],
+            [self.other_piano],
+        )
+        self.assertContains(response, 'No Tags')
+
     def test_search_matches_piano_section(self):
         response = self.client.get(reverse('piano_list'), {'q': 'east wing'})
 
@@ -52,6 +64,145 @@ class PianoListSearchTests(TestCase):
             response.context['pianos'],
             [self.room_piano],
         )
+
+
+class PianoDetailWorkOrderTests(TestCase):
+    def setUp(self):
+        self.tech = Technician.objects.create_user(
+            username='pianoworktech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.client.force_login(self.tech)
+        self.piano = Piano.objects.create(
+            name='Work Split Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+
+    def test_work_order_tab_splits_open_work_and_history(self):
+        open_wo = WorkOrder.objects.create(
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+        complete_wo = WorkOrder.objects.create(
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            completed_date=date.today(),
+        )
+
+        response = self.client.get(reverse('piano_tab', args=[self.piano.pk, 'work-orders']))
+
+        self.assertContains(response, 'Open Work Orders')
+        self.assertContains(response, 'Work History')
+        self.assertQuerySetEqual(response.context['open_work_orders'], [open_wo])
+        self.assertQuerySetEqual(response.context['work_history'], [complete_wo])
+
+
+class PianoBulkEditTests(TestCase):
+    def setUp(self):
+        self.admin = Technician.objects.create_user(
+            username='bulkadmin',
+            password='StrongPass123',
+            role_admin=True,
+            role_technician=True,
+        )
+        self.client.force_login(self.admin)
+        self.basement = Tag.objects.create(name='basement')
+        self.basement_piano = Piano.objects.create(
+            name='Basement Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+        self.other_piano = Piano.objects.create(
+            name='Lobby Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+        self.basement_piano.tags.add(self.basement)
+
+    def test_bulk_edit_updates_selected_filtered_pianos(self):
+        response = self.client.post(
+            f'{reverse("piano_bulk_edit")}?tag={self.basement.pk}',
+            {
+                'piano_ids': [str(self.basement_piano.pk)],
+                'update_tuning': 'on',
+                'tuning_interval_value': '9',
+                'tuning_interval_unit': 'months',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.basement_piano.refresh_from_db()
+        self.other_piano.refresh_from_db()
+        self.assertEqual(self.basement_piano.tuning_interval_value, 9)
+        self.assertEqual(self.basement_piano.tuning_interval_unit, 'months')
+        self.assertEqual(self.other_piano.tuning_interval_value, 6)
+
+
+class WorkOrderServiceStatusTests(TestCase):
+    def setUp(self):
+        self.tech = Technician.objects.create_user(
+            username='servicestatustech',
+            password='StrongPass123',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.client.force_login(self.tech)
+        self.piano = Piano.objects.create(
+            name='Service Status Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+            tuning_interval_value=180,
+            tuning_interval_unit='days',
+        )
+
+    def test_workorder_detail_shows_last_service_timing(self):
+        last_service_date = date.today() - timedelta(days=100)
+        WorkOrder.objects.create(
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            completed_date=last_service_date,
+        )
+        wo = WorkOrder.objects.create(
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(reverse('workorder_detail', args=[wo.pk]))
+
+        self.assertContains(response, 'Last Tuning')
+        self.assertEqual(response.context['service_status']['last_service_date'], last_service_date)
+        self.assertEqual(response.context['service_status']['display_days'], 80)
+        self.assertEqual(response.context['service_status']['timing_label'], 'early')
+        self.assertContains(response, '80 days early')
+
+    def test_workorder_detail_shows_service_status_without_prior_work(self):
+        wo = WorkOrder.objects.create(
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(reverse('workorder_detail', args=[wo.pk]))
+
+        self.assertContains(response, 'Last Tuning')
+        self.assertContains(response, 'No completed tuning on record')
 
 
 class SignupTests(TestCase):
@@ -235,6 +386,23 @@ class WorkOrderStateTests(TestCase):
 
         self.assertContains(response, f'href="{reverse("schedule")}"')
 
+    def test_schedule_cards_link_back_to_schedule(self):
+        wo = WorkOrder.objects.create(
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Voicing',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(reverse('schedule'))
+
+        self.assertContains(
+            response,
+            f'/work-orders/{wo.pk}/?return_url=/schedule/',
+        )
+
     def test_piano_workorder_tab_links_to_workorder_detail(self):
         wo = WorkOrder.objects.create(
             piano=self.piano,
@@ -285,6 +453,35 @@ class WorkOrderStateTests(TestCase):
         self.assertContains(response, reverse('workorder_edit', args=[wo.pk]))
         self.assertContains(response, reverse('workorder_reopen', args=[wo.pk]))
         self.assertContains(response, 'Reopen')
+
+    def test_delete_preserves_schedule_return_url(self):
+        self.tech.role_admin = True
+        self.tech.save(update_fields=['role_admin'])
+        wo = WorkOrder.objects.create(
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Cleaning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        detail_response = self.client.get(
+            reverse('workorder_detail', args=[wo.pk]),
+            {'return_url': reverse('schedule')},
+        )
+        self.assertContains(
+            detail_response,
+            f'{reverse("workorder_delete", args=[wo.pk])}?return_url=/schedule/',
+        )
+
+        delete_response = self.client.post(
+            reverse('workorder_delete', args=[wo.pk]),
+            {'return_url': reverse('schedule')},
+        )
+
+        self.assertRedirects(delete_response, reverse('schedule'))
+        self.assertFalse(WorkOrder.objects.filter(pk=wo.pk).exists())
 
     def test_reopen_completed_workorder_clears_completed_date(self):
         wo = WorkOrder.objects.create(
@@ -454,6 +651,59 @@ class ScheduleViewTests(TestCase):
         self.assertContains(response, 'class="schedule-mobile-tab active"')
         self.assertContains(response, 'data-schedule-tab="col-tuning"')
 
+    def test_schedule_filters_by_organization_and_venue(self):
+        org_a = Organization.objects.create(name='Org A')
+        org_b = Organization.objects.create(name='Org B')
+        venue_a = Venue.objects.create(name='Venue A', organization=org_a)
+        venue_b = Venue.objects.create(name='Venue B', organization=org_b)
+        self.piano.venue = venue_a
+        self.piano.save(update_fields=['venue'])
+        other_piano = Piano.objects.create(
+            name='Other Schedule Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+            venue=venue_b,
+        )
+        matching = self._work_order('Tuning')
+        excluded = WorkOrder.objects.create(
+            piano=other_piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(reverse('schedule'), {
+            'org': org_a.pk,
+            'venue': venue_a.pk,
+        })
+
+        self.assertContains(response, f'WO-{matching.pk}')
+        self.assertNotContains(response, f'WO-{excluded.pk}')
+        self.assertEqual(response.context['org_filter'], str(org_a.pk))
+        self.assertEqual(response.context['venue_filter'], str(venue_a.pk))
+
+    def test_schedule_workorder_return_url_preserves_filters(self):
+        org = Organization.objects.create(name='Return Org')
+        venue = Venue.objects.create(name='Return Venue', organization=org)
+        self.piano.venue = venue
+        self.piano.save(update_fields=['venue'])
+        wo = self._work_order('Cleaning')
+
+        response = self.client.get(reverse('schedule'), {
+            'due': 'no-date',
+            'org': org.pk,
+            'venue': venue.pk,
+        })
+
+        self.assertContains(
+            response,
+            (
+                f'/work-orders/{wo.pk}/?return_url='
+                f'/schedule/%3Fdue%3Dno-date%26org%3D{org.pk}%26venue%3D{venue.pk}'
+            ),
+        )
+
     def test_schedule_due_filter_applies_before_category_grouping(self):
         today = date.today()
         overdue_tuning = self._work_order('Tuning', today - timedelta(days=1))
@@ -526,6 +776,97 @@ class TechnicianManagementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.admin.refresh_from_db()
         self.assertTrue(self.admin.role_admin)
+
+
+class TechnicianModeTests(TestCase):
+    def setUp(self):
+        self.admin_tech = Technician.objects.create_user(
+            username='admintech',
+            password='StrongPass123',
+            first_name='Admin',
+            last_name='Tech',
+            role_admin=True,
+            role_technician=True,
+        )
+        self.other_tech = Technician.objects.create_user(
+            username='othermodetech',
+            password='StrongPass123',
+            first_name='Other',
+            last_name='Tech',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.client.force_login(self.admin_tech)
+
+    def _enable_tech_mode(self):
+        session = self.client.session
+        session['tech_mode'] = True
+        session.save()
+
+    def test_dual_role_user_can_toggle_tech_mode(self):
+        response = self.client.post(reverse('toggle_tech_mode'), {
+            'tech_mode': 'on',
+            'return_url': reverse('dashboard'),
+        })
+
+        self.assertRedirects(response, reverse('dashboard'))
+        self.assertTrue(self.client.session['tech_mode'])
+
+    def test_tech_mode_uses_technician_dashboard(self):
+        self._enable_tech_mode()
+        mine = WorkOrder.objects.create(
+            assigned_tech=self.admin_tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Mine',
+        )
+        theirs = WorkOrder.objects.create(
+            assigned_tech=self.other_tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Theirs',
+        )
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'My Work')
+        self.assertContains(response, 'My Work Orders')
+        self.assertContains(response, f'WO-{mine.pk}')
+        self.assertNotContains(response, f'WO-{theirs.pk}')
+        self.assertNotContains(response, 'Pending Requests')
+
+    def test_tech_mode_hides_admin_navigation(self):
+        self._enable_tech_mode()
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'Admin Mode')
+        self.assertNotContains(response, reverse('technician_list'))
+        self.assertNotContains(response, reverse('reports'))
+
+    def test_tech_mode_admin_can_take_unassigned_work_order(self):
+        self._enable_tech_mode()
+        wo = WorkOrder.objects.create(
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Available',
+        )
+
+        detail_response = self.client.get(reverse('workorder_detail', args=[wo.pk]))
+        self.assertContains(detail_response, 'Take')
+        self.assertNotContains(detail_response, '<select name="assigned_tech"')
+
+        response = self.client.post(reverse('workorder_assign', args=[wo.pk]), {
+            'assign_action': 'assign_self',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        wo.refresh_from_db()
+        self.assertEqual(wo.assigned_tech, self.admin_tech)
+        self.assertEqual(wo.status, WorkOrder.Status.IN_PROGRESS)
 
 
 class WorkOrderAssignmentTests(TestCase):

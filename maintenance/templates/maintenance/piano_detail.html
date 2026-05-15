@@ -32,12 +32,12 @@
         </div>
       </div>
       <div class="hero-actions">
-        {% if request.user.role_admin %}
+        {% if request.user.role_admin and not request.session.tech_mode %}
         <a href="{% url 'piano_edit' piano.pk %}" class="btn btn-sm btn-secondary">Edit</a>
         {% endif %}
         <a href="{% url 'piano_photo_upload' piano.pk %}" class="btn btn-sm btn-secondary">Photos</a>
         <a href="{% url 'condition_reading_create' piano.pk %}" class="btn btn-sm btn-secondary">Condition Report</a>
-        {% if request.user.role_admin %}
+        {% if request.user.role_admin and not request.session.tech_mode %}
         <a href="{% url 'workorder_create' %}?piano={{ piano.pk }}" class="btn btn-sm btn-primary">+ Work Order</a>
         <a href="{% url 'piano_deactivate' piano.pk %}" class="btn btn-sm btn-danger">Deactivate</a>
         {% endif %}

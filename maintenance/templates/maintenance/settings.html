@@ -6,7 +6,7 @@
 {% block content %}
 <div style="max-width:720px;">
 
-  {% if request.user.role_admin %}
+  {% if request.user.role_admin and not request.session.tech_mode %}
   <!-- Company Information -->
   <div class="card" style="margin-bottom:1.5rem;">
     <div class="card-header">

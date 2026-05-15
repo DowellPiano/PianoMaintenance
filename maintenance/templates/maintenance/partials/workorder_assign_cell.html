@@ -1,7 +1,7 @@
 <div class="assign-cell">
   {% if wo.status == "Complete" or wo.status == "Cancelled" %}
     <span>{{ wo.assigned_tech.get_full_name|default:"—" }}</span>
-  {% elif request.user.role_admin %}
+  {% elif request.user.role_admin and not tech_mode %}
     {# Admin: full dropdown to assign any technician #}
     <form class="assign-form"
           hx-post="{% url 'workorder_assign' wo.pk %}"
