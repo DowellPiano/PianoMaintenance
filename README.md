@@ -79,6 +79,25 @@ pip3 install -r requirements.txt     # picks up any new Python packages
 python3 manage.py migrate            # applies any new database migrations
 ```
 
+### Demo data reset
+
+For deployments where the app should open with realistic sample data, run:
+
+```bash
+python3 manage.py reset_demo_data --yes
+```
+
+This replaces existing app data with an editable demo account and a realistic piano-service dataset: organizations, venues, pianos, schedules, work orders, logs, condition readings, requests, and inventory.
+
+Demo login:
+
+```text
+username: demo-admin
+password: DemoPass123
+```
+
+For a public demo environment, run the command as part of your deploy/release/startup script after migrations. Users can change the demo records while the app is running; running the command again resets everything back to the seeded state.
+
 ### Automated work order generation
 
 The `generate_work_orders` management command creates work orders for overdue or upcoming maintenance schedules. It is intentionally separate from page views, so browsing Work Orders or Schedule does not create records as a side effect:

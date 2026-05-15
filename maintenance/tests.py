@@ -9,7 +9,17 @@ from django.test import TestCase
 from django.test import override_settings
 from django.urls import reverse
 
-from .models import MaintenanceSchedule, Photo, Piano, Technician, WorkOrder
+from .models import (
+    CompanySettings,
+    MaintenanceRequest,
+    MaintenanceSchedule,
+    Organization,
+    Part,
+    Photo,
+    Piano,
+    Technician,
+    WorkOrder,
+)
 from .services import generate_scheduled_work_orders
 
 
@@ -366,6 +376,34 @@ class ScheduledWorkOrderGenerationTests(TestCase):
 
         self.assertIn('DRY RUN', out.getvalue())
         self.assertIn('Done. Created:', out.getvalue())
+
+
+class DemoDataCommandTests(TestCase):
+    def test_reset_demo_data_replaces_existing_records(self):
+        Technician.objects.create_user(
+            username='old-user',
+            password='StrongPass123',
+            role_admin=True,
+            role_technician=True,
+        )
+        Piano.objects.create(
+            name='Old Piano',
+            make='Old Make',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+
+        out = StringIO()
+        call_command('reset_demo_data', '--yes', stdout=out)
+
+        self.assertIn('Demo data reset complete.', out.getvalue())
+        self.assertFalse(Technician.objects.filter(username='old-user').exists())
+        self.assertTrue(Technician.objects.filter(username='demo-admin', role_admin=True).exists())
+        self.assertEqual(CompanySettings.objects.count(), 1)
+        self.assertGreaterEqual(Organization.objects.count(), 3)
+        self.assertGreaterEqual(Piano.objects.count(), 6)
+        self.assertGreaterEqual(WorkOrder.objects.count(), 5)
+        self.assertGreaterEqual(MaintenanceRequest.objects.count(), 2)
+        self.assertGreaterEqual(Part.objects.count(), 4)
 
 
 class ScheduleViewTests(TestCase):
