@@ -8,7 +8,7 @@ A Computerized Maintenance Management System (CMMS) built for piano technicians 
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.12 · Django 6.0 · Django REST Framework |
+| Backend | Python 3.12 · Django 5.2 · Django REST Framework |
 | Frontend | Django Templates · HTMX 2.0.4 |
 | Database | SQLite (dev) |
 | Auth | Django session auth · Custom `Technician` user model |
@@ -284,6 +284,9 @@ python3 manage.py expire_invitations
 
 # See whether the current environment still looks like local dev or is shaped for SaaS production
 python3 manage.py saas_readiness_report
+
+# Run Django's production deployment checks
+python3 manage.py check --deploy
 ```
 
 Recommended production env vars for the SaaS branch:
@@ -296,12 +299,43 @@ CSRF_TRUSTED_ORIGINS=https://app.example.com
 DATABASE_URL=postgresql://...
 DEFAULT_FROM_EMAIL=noreply@example.com
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=...
+EMAIL_HOST_PASSWORD=...
+EMAIL_USE_TLS=True
 PRIVATE_MEDIA_URL_TTL=900
 SUPABASE_S3_ACCESS_KEY_ID=...
 SUPABASE_S3_SECRET_ACCESS_KEY=...
 SUPABASE_S3_BUCKET=...
 SUPABASE_S3_ENDPOINT=...
+SECURE_SSL_REDIRECT=True
+SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SECURE=True
+SECURE_HSTS_SECONDS=31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS=True
+SECURE_HSTS_PRELOAD=True
 ```
+
+Before launch, validate the production environment with a real Postgres database,
+real SMTP credentials, and real Supabase/S3-compatible storage credentials:
+
+```bash
+python3 manage.py migrate
+python3 manage.py bootstrap_company \
+  --company-name "Acme Piano Service" \
+  --admin-username admin \
+  --admin-password "replace-with-a-real-temporary-password" \
+  --admin-email admin@example.com
+python3 manage.py check --deploy
+python3 manage.py saas_readiness_report
+python3 manage.py collectstatic --noinput
+```
+
+The readiness report should have no warnings before a real customer tenant is
+created. If Django is behind a proxy or load balancer, set
+`USE_X_FORWARDED_PROTO=True` only when the proxy reliably sends
+`X-Forwarded-Proto: https`.
 - `Piano.tags` is a M2M to `Tag` — use tags for any custom grouping (building wing, priority tier, client name, etc.).
 - `Organization` uses `PROTECT` on its venue FK — you must remove all venues before deleting an organization.
 - `ConditionReading.update_piano_current_state()` copies readings to denormalized fields on Piano for fast display.

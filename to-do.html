@@ -127,8 +127,8 @@
     <section class="hero">
       <div class="eyebrow">SaaS Roadmap</div>
       <h1>Piano Maintainer To-Do</h1>
-      <p>This document outlines the work needed to turn the current Django app into a production-ready multi-company SaaS platform.</p>
-      <p>The app is already in a solid early product shape: one Django project, one main domain app, template-driven UI, custom technician auth, CSV/reporting, and background-style scheduling via a management command. The next phase is mostly about tenancy, security, account lifecycle, and operational hardening.</p>
+      <p>This document tracks the remaining work needed to move the current Django app from a working multi-company product branch to a production-ready SaaS launch.</p>
+      <p>The core SaaS foundation is now in place: company-owned data, active-company session context, membership-based permissions, invitation acceptance, password recovery, private media delivery, audit activity, CSV/reporting, and tenant-aware scheduled work-order generation. The next phase is about proving the app is launch-safe through production validation, tenant-admin polish, operational policy, and a final cross-tenant safety pass.</p>
     </section>
 
     <section class="section">
@@ -144,11 +144,11 @@
           </ul>
         </div>
         <div class="card">
-          <h3>What This Means</h3>
+          <h3>Current Product Shape</h3>
           <ul>
-            <li>The app is currently effectively single-tenant in its domain model.</li>
-            <li>Auth exists, but true organization/company isolation is not fully modeled yet.</li>
-            <li>The current codebase is small enough that tenancy can still be added cleanly before the system becomes much harder to untangle.</li>
+            <li>The app is now a clean multi-tenant SaaS branch, with <code>Company</code> as the tenant root.</li>
+            <li>Tenant-owned records require <code>company</code> relationships and primary app flows use active-company scoping.</li>
+            <li>The codebase is still compact enough that launch hardening can be done deliberately before billing, broad API access, or larger operational complexity is added.</li>
           </ul>
         </div>
       </div>
@@ -193,7 +193,8 @@
         <li><strong>Done:</strong> Added tenant ownership to core domain data with required <code>company</code> relationships.</li>
         <li><strong>Done:</strong> Replaced single-company assumptions in the main queries, views, exports, background generation, and dashboard flows.</li>
         <li><strong>Done:</strong> Supported users belonging to multiple companies through membership rather than duplicate accounts.</li>
-        <li><strong>Done:</strong> Added password reset and account recovery flows for real user access.</li>
+        <li><strong>Done:</strong> Added password reset, invitation acceptance, audit logging, and private media access.</li>
+        <li><strong>Next:</strong> Validate clean production bootstrap, live email, object storage, runbooks, monitoring, backups, and final cross-tenant leak resistance.</li>
       </ol>
     </section>
 
@@ -270,19 +271,17 @@
     </section>
 
     <section class="section">
-      <h2>Recommended Implementation Order</h2>
+      <h2>Launch Gate Plan</h2>
       <ol>
-        <li>Done: model <code>Company</code> and <code>CompanyMembership</code>.</li>
-        <li>Done: add active-company context on login/session and a company switcher.</li>
-        <li>Done: add company scoping to core models and write data migrations for the SaaS branch direction.</li>
-        <li>Done: refactor queries, forms, views, exports, and services to enforce tenancy in the main app flows.</li>
-        <li>Done: add invitation flow and password reset.</li>
-        <li>Done: add audit logging and media access control.</li>
-        <li>In progress: harden background jobs, cron, and operational setup, including tenant-targeted commands and invitation-expiration cleanup.</li>
-        <li>In progress: polish onboarding and tenant admin UX, including company-scoped member lifecycle controls and invite history.</li>
+        <li><strong>Gate 1: Local SaaS verification.</strong> Run a clean-database migration, bootstrap the first company/admin, run the maintenance test suite, and run <code>saas_readiness_report</code>.</li>
+        <li><strong>Gate 2: Production services validation.</strong> Prove Postgres bootstrap, SMTP email delivery, object-storage upload, and signed private media delivery in a production-shaped environment.</li>
+        <li><strong>Gate 3: Tenant-admin lifecycle polish.</strong> Finish self-serve member activation/reactivation messaging, role-change clarity, invitation history, and first-run setup visibility.</li>
+        <li><strong>Gate 4: Operations policy.</strong> Decide platform support access, backup cadence, restore expectations, monitoring, incident ownership, and support escalation rules.</li>
+        <li><strong>Gate 5: Final SaaS safety pass.</strong> Re-check reports, exports, search/filter paths, background jobs, media endpoints, public QR requests, and production cutover posture for cross-company leaks.</li>
+        <li><strong>Gate 6: Demo and onboarding data.</strong> Add a clean seed/import story for demo tenants and new-customer onboarding without relying on the legacy private-use database.</li>
       </ol>
       <div class="note">
-        Payments are intentionally excluded from this roadmap, per your direction. The right next milestone is trustworthy multi-company tenancy, not billing.
+        Payments are intentionally excluded from this roadmap, per your direction. The right next milestone is a trustworthy, operationally boring multi-company launch.
       </div>
     </section>
 
