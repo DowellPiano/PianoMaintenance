@@ -28,6 +28,7 @@ from .forms import (
     WorkOrderLogWorkForm, ConditionReadingForm, ScheduleTemplateForm, PartForm,
     SignUpForm, CompanySettingsForm, UserProfileForm, TechnicianCreateForm,
     TechnicianUpdateForm, CompanyInvitationForm, CompanySwitcherForm,
+    BulkPianoIntervalForm,
 )
 from .models import (
     Company, CompanyInvitation, CompanyMembership,
@@ -64,6 +65,119 @@ def _piano_detail_url(piano, return_url=None):
     if return_url:
         url = f'{url}?{urlencode({"return_url": return_url})}'
     return url
+
+
+def _filtered_piano_queryset(request):
+    company = ensure_company_access(request)
+    qs = Piano.objects.filter(company=company, is_active=True).select_related(
+        'venue', 'venue__organization',
+    ).prefetch_related('photos', 'tags')
+
+    search_query = request.GET.get('q', '').strip()
+    org_filter = request.GET.get('org', '')
+    venue_filter = request.GET.get('venue', '')
+    type_filter = request.GET.get('type', '')
+    tag_filter = request.GET.get('tag', '')
+
+    if search_query:
+        qs = qs.filter(
+            Q(name__icontains=search_query) |
+            Q(make__icontains=search_query) |
+            Q(serial_number__icontains=search_query) |
+            Q(section__icontains=search_query) |
+            Q(room__icontains=search_query) |
+            Q(room_description__icontains=search_query) |
+            Q(room_access_notes__icontains=search_query) |
+            Q(tags__name__icontains=search_query)
+        ).distinct()
+    if org_filter:
+        qs = qs.filter(venue__organization_id=org_filter)
+    if venue_filter:
+        qs = qs.filter(venue_id=venue_filter)
+    if type_filter:
+        qs = qs.filter(piano_type=type_filter)
+    if tag_filter:
+        if tag_filter == 'none':
+            qs = qs.filter(tags__isnull=True)
+        else:
+            qs = qs.filter(tags__id=tag_filter)
+
+    return qs, {
+        'search_query': search_query,
+        'org_filter': org_filter,
+        'venue_filter': venue_filter,
+        'type_filter': type_filter,
+        'tag_filter': tag_filter,
+    }
+
+
+def _service_status_context(wo, today):
+    if not wo.piano_id or wo.task_type in ('', TaskType.OTHER):
+        return None
+
+    interval_fields = {
+        TaskType.TUNING: ('tuning_interval_value', 'tuning_interval_unit'),
+        TaskType.REGULATION: ('regulation_interval_value', 'regulation_interval_unit'),
+        TaskType.VOICING: ('voicing_interval_value', 'voicing_interval_unit'),
+        TaskType.CLEANING: ('cleaning_interval_value', 'cleaning_interval_unit'),
+    }
+    interval_days = None
+    if wo.schedule_id:
+        interval_days = wo.schedule.interval_days
+    else:
+        fields = interval_fields.get(wo.task_type)
+        if fields:
+            value_field, unit_field = fields
+            interval_days = wo.piano._interval_to_days(
+                getattr(wo.piano, value_field),
+                getattr(wo.piano, unit_field),
+            )
+
+    completed_work = WorkOrder.objects.filter(
+        company=wo.company,
+        piano=wo.piano,
+        task_type=wo.task_type,
+        status=WorkOrder.Status.COMPLETE,
+        completed_date__isnull=False,
+    )
+    if wo.schedule_id:
+        completed_work = completed_work.filter(schedule=wo.schedule)
+
+    last_work_order = completed_work.order_by('-completed_date').first()
+    if wo.status == WorkOrder.Status.COMPLETE and wo.completed_date:
+        last_service_date = wo.completed_date
+    elif last_work_order:
+        last_service_date = last_work_order.completed_date
+    else:
+        last_service_date = None
+
+    if not last_service_date or interval_days is None:
+        return {
+            'task_type': wo.task_type,
+            'last_service_date': last_service_date,
+            'has_interval': interval_days is not None,
+            'days_from_due': None,
+            'display_days': None,
+            'timing_label': None,
+        }
+
+    elapsed_days = (today - last_service_date).days
+    days_from_due = interval_days - elapsed_days
+    if days_from_due > 0:
+        timing_label = 'early'
+    elif days_from_due < 0:
+        timing_label = 'late'
+    else:
+        timing_label = 'due today'
+
+    return {
+        'task_type': wo.task_type,
+        'last_service_date': last_service_date,
+        'has_interval': True,
+        'days_from_due': days_from_due,
+        'display_days': abs(days_from_due),
+        'timing_label': timing_label,
+    }
 
 
 def _can_update_workorder(user, wo):
@@ -238,7 +352,7 @@ def _send_company_invitation_email(request, invitation):
     send_mail(
         subject=f"Invitation to join {invitation.company.name}",
         message=(
-            f"You've been invited to join {invitation.company.name} in Piano Maintainer.\n\n"
+            f"You've been invited to join {invitation.company.name} in Overtone.\n\n"
             f"Accept your invitation here:\n{invite_url}\n"
         ),
         from_email=settings.DEFAULT_FROM_EMAIL,
@@ -410,29 +524,7 @@ def piano_list(request):
     soon = today + timedelta(days=30)
     company = ensure_company_access(request)
 
-    qs = Piano.objects.filter(company=company, is_active=True).select_related('venue', 'venue__organization').prefetch_related('photos', 'tags')
-
-    search_query = request.GET.get('q', '').strip()
-    org_filter = request.GET.get('org', '')
-    venue_filter = request.GET.get('venue', '')
-    type_filter = request.GET.get('type', '')
-    tag_filter = request.GET.get('tag', '')
-
-    if search_query:
-        qs = qs.filter(
-            Q(name__icontains=search_query) |
-            Q(make__icontains=search_query) |
-            Q(serial_number__icontains=search_query) |
-            Q(tags__name__icontains=search_query)
-        ).distinct()
-    if org_filter:
-        qs = qs.filter(venue__organization_id=org_filter)
-    if venue_filter:
-        qs = qs.filter(venue_id=venue_filter)
-    if type_filter:
-        qs = qs.filter(piano_type=type_filter)
-    if tag_filter:
-        qs = qs.filter(tags__id=tag_filter)
+    qs, filters = _filtered_piano_queryset(request)
 
     return render(request, 'maintenance/piano_list.html', {
         'active_nav': 'pianos',
@@ -440,13 +532,43 @@ def piano_list(request):
         'organizations': Organization.objects.filter(company=company),
         'venues': Venue.objects.filter(company=company),
         'tags': Tag.objects.filter(company=company),
-        'search_query': search_query,
-        'org_filter': org_filter,
-        'venue_filter': venue_filter,
-        'type_filter': type_filter,
-        'tag_filter': tag_filter,
+        **filters,
         'today': today,
         'soon': soon,
+    })
+
+
+@admin_required
+def piano_bulk_edit(request):
+    company = ensure_company_access(request)
+    qs, filters = _filtered_piano_queryset(request)
+    pianos = list(qs)
+
+    if request.method == 'POST':
+        form = BulkPianoIntervalForm(request.POST, pianos=pianos)
+        if form.is_valid():
+            selected_ids = form.cleaned_data['piano_ids']
+            updates = form.interval_updates()
+            updated_count = qs.filter(pk__in=selected_ids).update(**updates)
+            messages.success(
+                request,
+                f'Updated maintenance intervals for {updated_count} piano'
+                f'{"s" if updated_count != 1 else ""}.',
+            )
+            return redirect(f'{request.path}?{request.GET.urlencode()}')
+    else:
+        initial = {'piano_ids': [piano.pk for piano in pianos]}
+        form = BulkPianoIntervalForm(pianos=pianos, initial=initial)
+
+    return render(request, 'maintenance/piano_bulk_edit.html', {
+        'active_nav': 'pianos',
+        'form': form,
+        'pianos': pianos,
+        'organizations': Organization.objects.filter(company=company),
+        'venues': Venue.objects.filter(company=company),
+        'tags': Tag.objects.filter(company=company),
+        'type_choices': Piano.PianoType.choices,
+        **filters,
     })
 
 
@@ -475,7 +597,12 @@ def _piano_context(piano):
             ('Voicing', piano.voicing_interval_value, piano.voicing_interval_unit, piano.next_voicing_due),
             ('Cleaning', piano.cleaning_interval_value, piano.cleaning_interval_unit, piano.next_cleaning_due),
         ],
-        'work_orders': piano.work_orders.select_related('assigned_tech').order_by('-created_at')[:20],
+        'open_work_orders': piano.work_orders.select_related('assigned_tech').exclude(
+            status__in=[WorkOrder.Status.COMPLETE, WorkOrder.Status.CANCELLED],
+        ).order_by('-created_at')[:20],
+        'work_history': piano.work_orders.select_related('assigned_tech').filter(
+            status=WorkOrder.Status.COMPLETE,
+        ).order_by('-completed_date', '-created_at')[:20],
         'condition_readings': piano.condition_readings.order_by('-recorded_at')[:20],
         'custom_schedules': piano.schedules.all(),
         'today': today,
@@ -907,7 +1034,7 @@ def workorder_list(request):
 def workorder_detail(request, pk):
     company = ensure_company_access(request)
     wo = get_object_or_404(
-        WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue', 'assigned_tech'),
+        WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue', 'assigned_tech', 'schedule'),
         pk=pk,
     )
     user = request.user
@@ -918,12 +1045,15 @@ def workorder_detail(request, pk):
     can_edit_wo = _can_update_workorder(user, wo)
     return_url = _safe_return_url(request, '/work-orders/')
 
+    today = date.today()
+
     return render(request, 'maintenance/workorder_detail.html', {
         'active_nav': 'workorders',
         'wo': wo,
         'logs': logs,
         'technicians': technicians,
-        'today': date.today(),
+        'today': today,
+        'service_status': _service_status_context(wo, today),
         'can_edit_wo': can_edit_wo,
         'is_assigned_to_me': is_assigned_to_me,
         'return_url': return_url,
@@ -1199,6 +1329,7 @@ def workorder_delete(request, pk):
         WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue'),
         pk=pk,
     )
+    return_url = _safe_return_url(request, reverse('workorder_list'))
     log_count = wo.logs.count()
 
     if request.method == 'POST':
@@ -1212,12 +1343,13 @@ def workorder_delete(request, pk):
         )
         wo.delete()
         messages.success(request, f'Work Order WO-{wo_id} deleted.')
-        return redirect('workorder_list')
+        return HttpResponseRedirect(return_url)
 
     return render(request, 'maintenance/workorder_confirm_delete.html', {
         'active_nav': 'workorders',
         'wo': wo,
         'log_count': log_count,
+        'return_url': return_url,
     })
 
 
@@ -1446,6 +1578,8 @@ def schedule(request):
     today = date.today()
     soon = today + timedelta(days=30)
     due_filter = request.GET.get('due', '')
+    org_filter = request.GET.get('org', '')
+    venue_filter = request.GET.get('venue', '')
     company = ensure_company_access(request)
 
     active_statuses = [WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS]
@@ -1454,6 +1588,10 @@ def schedule(request):
         .filter(company=company, status__in=active_statuses)
         .select_related('piano', 'piano__venue', 'assigned_tech')
     )
+    if org_filter:
+        active_wos = active_wos.filter(piano__venue__organization_id=org_filter)
+    if venue_filter:
+        active_wos = active_wos.filter(piano__venue_id=venue_filter)
     if due_filter == 'overdue':
         active_wos = active_wos.filter(due_date__lt=today)
     elif due_filter == 'next-30':
@@ -1498,20 +1636,53 @@ def schedule(request):
         ('upcoming', 'Upcoming'),
         ('no-date', 'No Due Date'),
     ]
-    if request.headers.get('HX-Request') == 'true':
-        return render(request, 'maintenance/partials/schedule_board.html', {
-            'schedule_columns': schedule_columns,
-            'due_filter': due_filter,
-            'due_filter_choices': due_filter_choices,
-            'today': today,
+    schedule_query = {}
+    if due_filter:
+        schedule_query['due'] = due_filter
+    if org_filter:
+        schedule_query['org'] = org_filter
+    if venue_filter:
+        schedule_query['venue'] = venue_filter
+    schedule_return_url = reverse('schedule')
+    schedule_query_string = urlencode(schedule_query)
+    if schedule_query_string:
+        schedule_return_url = f'{schedule_return_url}?{schedule_query_string}'
+
+    filter_base_query = {}
+    if org_filter:
+        filter_base_query['org'] = org_filter
+    if venue_filter:
+        filter_base_query['venue'] = venue_filter
+    due_filter_links = []
+    for value, label in due_filter_choices:
+        link_query = filter_base_query.copy()
+        if value:
+            link_query['due'] = value
+        query_string = urlencode(link_query)
+        due_filter_links.append({
+            'value': value,
+            'label': label,
+            'url': f'{reverse("schedule")}?{query_string}' if query_string else reverse('schedule'),
         })
+
+    schedule_context = {
+        'schedule_columns': schedule_columns,
+        'due_filter': due_filter,
+        'org_filter': org_filter,
+        'venue_filter': venue_filter,
+        'due_filter_choices': due_filter_choices,
+        'due_filter_links': due_filter_links,
+        'organizations': Organization.objects.filter(company=company),
+        'venues': Venue.objects.filter(company=company),
+        'schedule_return_url': schedule_return_url,
+        'today': today,
+    }
+    if request.headers.get('HX-Request') == 'true':
+        return render(request, 'maintenance/partials/schedule_board.html', schedule_context)
 
     return render(request, 'maintenance/schedule.html', {
         'active_nav': 'schedule',
-        'schedule_columns': schedule_columns,
-        'due_filter': due_filter,
-        'due_filter_choices': due_filter_choices,
-        'today': today,
+        **schedule_context,
     })
 
 

@@ -12,6 +12,7 @@
   </div>
   {% if company_access.can_admin %}
   <div class="gap-row">
+    <a href="{% url 'piano_bulk_edit' %}?{{ request.GET.urlencode }}" class="btn btn-secondary">Bulk Edit</a>
     <a href="{% url 'piano_import' %}" class="btn btn-secondary">Import CSV</a>
     <a href="{% url 'piano_create' %}" class="btn btn-primary">+ Add Piano</a>
   </div>
@@ -42,6 +43,7 @@
   {% if tags %}
   <select name="tag" class="form-select" style="width:160px;" onchange="this.form.submit()">
     <option value="">All Tags</option>
+    <option value="none" {% if tag_filter == "none" %}selected{% endif %}>No Tags</option>
     {% for t in tags %}
       <option value="{{ t.id }}" {% if t.id|stringformat:"d" == tag_filter %}selected{% endif %}>{{ t.name }}</option>
     {% endfor %}

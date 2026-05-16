@@ -15,9 +15,7 @@
   <div class="layout">
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
-      <a href="{% url 'dashboard' %}" class="sidebar-brand" aria-label="Overtone home">
-        <img src="{% static 'img/overtone-wordmark.png' %}" alt="Overtone" class="sidebar-brand-logo">
-      </a>
+      <a href="{% url 'dashboard' %}" class="sidebar-brand">Overtone</a>
       <nav class="sidebar-nav">
         <a href="{% url 'dashboard' %}" class="{% if active_nav == 'dashboard' %}active{% endif %}">
           <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3"><path d="M640-160v-280h160v280H640Zm-240 0v-640h160v640H400Zm-240 0v-440h160v440H160Z"/></svg></span> Dashboard
@@ -92,14 +90,12 @@
       <header class="topbar">
         <div class="gap-row">
           <button class="hamburger" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Menu">☰</button>
-          <div style="display:flex; flex-direction:column; gap:.15rem;">
-            <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>
-            {% if active_company %}
-            <span class="text-muted text-sm">Active company: {{ active_company.name }}</span>
-            {% endif %}
-          </div>
+          <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>
         </div>
         <div class="topbar-actions">
+          {% if active_company %}
+          <span class="active-company-pill">{{ active_company.name }}</span>
+          {% endif %}
           {% block topbar_actions %}{% endblock %}
         </div>
       </header>

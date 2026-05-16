@@ -56,10 +56,6 @@
   </div>
 </div>
 
-<div style="margin-bottom:1.5rem;">
-  {% include "maintenance/partials/activity_card.html" %}
-</div>
-
 {% if photos %}
 <div class="card" style="margin-bottom:1.5rem;">
   <div class="card-header">
@@ -118,5 +114,9 @@
 
 <div id="tab-content">
   {% include "maintenance/partials/piano_tab_overview.html" %}
+</div>
+
+<div style="margin-top:1.5rem;">
+  {% include "maintenance/partials/activity_card.html" %}
 </div>
 {% endblock %}

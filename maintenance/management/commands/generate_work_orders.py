@@ -6,7 +6,7 @@ Run manually:
     python3 manage.py generate_work_orders --dry-run
 
 Hourly cron example:
-    0 * * * * cd /Users/tom/Desktop/Limble\ Clone/PianoMaintenance && /usr/bin/env python3 manage.py generate_work_orders >> /tmp/piano_generate_work_orders.log 2>&1
+    0 * * * * cd /path/to/Overtone && /usr/bin/env python3 manage.py generate_work_orders >> /tmp/overtone_generate_work_orders.log 2>&1
 """
 
 from django.core.management.base import BaseCommand, CommandError

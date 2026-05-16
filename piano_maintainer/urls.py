@@ -37,6 +37,7 @@ urlpatterns = [
     # Pianos
     path('pianos/', views.piano_list, name='piano_list'),
     path('pianos/new/', views.piano_create, name='piano_create'),
+    path('pianos/bulk-edit/', views.piano_bulk_edit, name='piano_bulk_edit'),
     path('pianos/import/', views.piano_import_csv, name='piano_import'),
     path('pianos/import/sample/', views.piano_import_sample_csv, name='piano_import_sample'),
     path('pianos/qr-codes/', views.qr_codes, name='qr_codes'),

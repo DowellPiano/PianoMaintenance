@@ -6,50 +6,6 @@
 {% block content %}
 <div style="max-width:720px;">
 
-  {% if company_access.can_admin and setup_progress and not setup_progress.is_complete %}
-  <div class="card" style="margin-bottom:1.5rem;">
-    <div class="card-header">
-      <h2>Setup Progress</h2>
-      <span class="text-muted text-sm">{{ setup_progress.percent_complete }}%</span>
-    </div>
-    <div class="card-body">
-      <div class="form-row" style="margin-bottom:1rem;">
-        <div class="kpi-card" style="flex:1;">
-          <div class="kpi-label">Members</div>
-          <div class="kpi-value">{{ setup_progress.active_member_count }}</div>
-        </div>
-        <div class="kpi-card" style="flex:1;">
-          <div class="kpi-label">Organizations</div>
-          <div class="kpi-value">{{ setup_progress.organization_count }}</div>
-        </div>
-        <div class="kpi-card" style="flex:1;">
-          <div class="kpi-label">Venues</div>
-          <div class="kpi-value">{{ setup_progress.venue_count }}</div>
-        </div>
-        <div class="kpi-card" style="flex:1;">
-          <div class="kpi-label">Pianos</div>
-          <div class="kpi-value">{{ setup_progress.piano_count }}</div>
-        </div>
-      </div>
-      <ul style="list-style:none; padding:0; margin:0; display:grid; gap:.75rem;">
-        {% for task in setup_progress.tasks %}
-        <li style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
-          <div>
-            <div class="fw-medium">
-              {% if task.is_complete %}Done{% else %}To do{% endif %} · {{ task.title }}
-            </div>
-            <div class="text-muted text-sm">{{ task.detail }}</div>
-          </div>
-          {% if not task.is_complete %}
-          <a href="{{ task.cta_url }}" class="btn btn-sm btn-secondary">{{ task.cta_label }}</a>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-  </div>
-  {% endif %}
-
   {% if company_access.can_admin %}
   <!-- Company Information -->
   <div class="card" style="margin-bottom:1.5rem;">
@@ -191,6 +147,50 @@
       </form>
     </div>
   </div>
+
+  {% if company_access.can_admin and setup_progress and not setup_progress.is_complete %}
+  <div class="card" style="margin-top:1.5rem;">
+    <div class="card-header">
+      <h2>Setup Progress</h2>
+      <span class="text-muted text-sm">{{ setup_progress.percent_complete }}%</span>
+    </div>
+    <div class="card-body">
+      <div class="form-row" style="margin-bottom:1rem;">
+        <div class="kpi-card" style="flex:1;">
+          <div class="kpi-label">Members</div>
+          <div class="kpi-value">{{ setup_progress.active_member_count }}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;">
+          <div class="kpi-label">Organizations</div>
+          <div class="kpi-value">{{ setup_progress.organization_count }}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;">
+          <div class="kpi-label">Venues</div>
+          <div class="kpi-value">{{ setup_progress.venue_count }}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;">
+          <div class="kpi-label">Pianos</div>
+          <div class="kpi-value">{{ setup_progress.piano_count }}</div>
+        </div>
+      </div>
+      <ul style="list-style:none; padding:0; margin:0; display:grid; gap:.75rem;">
+        {% for task in setup_progress.tasks %}
+        <li style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
+          <div>
+            <div class="fw-medium">
+              {% if task.is_complete %}Done{% else %}To do{% endif %} · {{ task.title }}
+            </div>
+            <div class="text-muted text-sm">{{ task.detail }}</div>
+          </div>
+          {% if not task.is_complete %}
+          <a href="{{ task.cta_url }}" class="btn btn-sm btn-secondary">{{ task.cta_label }}</a>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
 
   {% if company_access.can_admin %}
   <div class="card" style="margin-top:1.5rem;">

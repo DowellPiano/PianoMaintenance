@@ -318,6 +318,24 @@ class WorkOrderStateTests(CompanyScopedTestCase):
 
         self.assertContains(response, f'href="{reverse("schedule")}"')
 
+    def test_schedule_cards_link_back_to_schedule(self):
+        wo = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Voicing',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(reverse('schedule'))
+
+        self.assertContains(
+            response,
+            f'/work-orders/{wo.pk}/?return_url=/schedule/',
+        )
+
     def test_piano_workorder_tab_links_to_workorder_detail(self):
         wo = WorkOrder.objects.create(
             company=self.company,
@@ -371,6 +389,54 @@ class WorkOrderStateTests(CompanyScopedTestCase):
         self.assertContains(response, reverse('workorder_edit', args=[wo.pk]))
         self.assertContains(response, reverse('workorder_reopen', args=[wo.pk]))
         self.assertContains(response, 'Reopen')
+
+    def test_delete_preserves_schedule_return_url(self):
+        CompanyMembership.objects.filter(company=self.company, user=self.tech).update(role_admin=True)
+        wo = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Cleaning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        detail_response = self.client.get(
+            reverse('workorder_detail', args=[wo.pk]),
+            {'return_url': reverse('schedule')},
+        )
+        self.assertContains(
+            detail_response,
+            f'{reverse("workorder_delete", args=[wo.pk])}?return_url=/schedule/',
+        )
+
+        delete_response = self.client.post(
+            reverse('workorder_delete', args=[wo.pk]),
+            {'return_url': reverse('schedule')},
+        )
+
+        self.assertRedirects(delete_response, reverse('schedule'))
+        self.assertFalse(WorkOrder.objects.filter(pk=wo.pk).exists())
+
+    def test_unsafe_return_url_falls_back_to_workorder_list(self):
+        wo = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(
+            reverse('workorder_detail', args=[wo.pk]),
+            {'return_url': 'https://example.com/steal-state'},
+        )
+
+        self.assertContains(response, f'href="{reverse("workorder_list")}"')
+        self.assertNotContains(response, 'https://example.com/steal-state')
 
     def test_workorder_detail_shows_recent_activity(self):
         wo = WorkOrder.objects.create(
@@ -627,6 +693,61 @@ class ScheduleViewTests(CompanyScopedTestCase):
         self.assertContains(response, 'id="schedule-results"')
         self.assertContains(response, 'hx-get="/schedule/?due=overdue"')
         self.assertNotContains(response, '<h1>Schedule</h1>')
+
+    def test_schedule_filters_by_organization_and_venue(self):
+        org_a = Organization.objects.create(company=self.company, name='Org A')
+        org_b = Organization.objects.create(company=self.company, name='Org B')
+        venue_a = Venue.objects.create(company=self.company, name='Venue A', organization=org_a)
+        venue_b = Venue.objects.create(company=self.company, name='Venue B', organization=org_b)
+        self.piano.venue = venue_a
+        self.piano.save(update_fields=['venue'])
+        other_piano = Piano.objects.create(
+            company=self.company,
+            name='Other Schedule Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+            venue=venue_b,
+        )
+        matching = self._work_order('Tuning')
+        excluded = WorkOrder.objects.create(
+            company=self.company,
+            piano=other_piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(reverse('schedule'), {
+            'org': org_a.pk,
+            'venue': venue_a.pk,
+        })
+
+        self.assertContains(response, f'WO-{matching.pk}')
+        self.assertNotContains(response, f'WO-{excluded.pk}')
+        self.assertEqual(response.context['org_filter'], str(org_a.pk))
+        self.assertEqual(response.context['venue_filter'], str(venue_a.pk))
+
+    def test_schedule_workorder_return_url_preserves_filters(self):
+        org = Organization.objects.create(company=self.company, name='Return Org')
+        venue = Venue.objects.create(company=self.company, name='Return Venue', organization=org)
+        self.piano.venue = venue
+        self.piano.save(update_fields=['venue'])
+        wo = self._work_order('Cleaning')
+
+        response = self.client.get(reverse('schedule'), {
+            'due': 'no-date',
+            'org': org.pk,
+            'venue': venue.pk,
+        })
+
+        self.assertContains(
+            response,
+            (
+                f'/work-orders/{wo.pk}/?return_url='
+                f'/schedule/%3Fdue%3Dno-date%26org%3D{org.pk}%26venue%3D{venue.pk}'
+            ),
+        )
 
 
 class TechnicianManagementTests(CompanyScopedTestCase):

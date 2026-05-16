@@ -1,6 +1,6 @@
-# Piano Maintainer — CMMS for Pianos
+# Overtone — CMMS for Pianos
 
-A Computerized Maintenance Management System (CMMS) built for piano technicians and facilities managers. Modeled after [Limble CMMS](https://limblecmms.com), Piano Maintainer handles preventive maintenance scheduling, work order management, service visits, condition tracking, and parts inventory — purpose-built for piano fleets in schools, venues, and studios.
+A Computerized Maintenance Management System (CMMS) built for piano technicians and facilities managers. Modeled after [Limble CMMS](https://limblecmms.com), Overtone handles preventive maintenance scheduling, work order management, service visits, condition tracking, and parts inventory — purpose-built for piano fleets in schools, venues, and studios.
 
 ---
 
@@ -113,7 +113,7 @@ python3 manage.py generate_work_orders --dry-run  # preview without saving
 Run it hourly from cron:
 
 ```cron
-0 * * * * cd /Users/tom/Desktop/Limble\ Clone/PianoMaintenance && /usr/bin/env python3 manage.py generate_work_orders >> /tmp/piano_generate_work_orders.log 2>&1
+0 * * * * cd /path/to/Overtone && /usr/bin/env python3 manage.py generate_work_orders >> /tmp/overtone_generate_work_orders.log 2>&1
 ```
 
 ---
