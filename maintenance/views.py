@@ -340,11 +340,11 @@ def maintenance_request_form(request, token):
             mr.work_order = wo
             mr.save()
             notify_maintenance_request(mr, wo, request)
-            return HttpResponse(
-                '<h2>Thank you — your request has been submitted.</h2>'
-                '<p>A work order has been created and our team will follow up.</p>',
-                content_type='text/html'
-            )
+            return render(request, 'maintenance/maintenance_request_success.html', {
+                'piano': piano,
+                'maintenance_request': mr,
+                'work_order': wo,
+            })
 
     return render(request, 'maintenance/maintenance_request_form.html',
                   {'piano': piano})

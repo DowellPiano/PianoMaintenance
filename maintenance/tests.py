@@ -271,6 +271,11 @@ class EmailNotificationTests(TestCase):
         })
 
         self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'maintenance/maintenance_request_success.html')
+        self.assertContains(response, 'Request received')
+        self.assertContains(response, 'WO-')
+        self.assertContains(response, 'Email Request Piano')
+        self.assertContains(response, 'A confirmation email was sent to reporter@example.com')
         self.assertEqual(len(mail.outbox), 2)
         admin_email = mail.outbox[0]
         requester_email = mail.outbox[1]
@@ -297,6 +302,7 @@ class EmailNotificationTests(TestCase):
         })
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No email address was included')
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['admin@example.com'])
         self.assertEqual(mail.outbox[0].reply_to, [])
