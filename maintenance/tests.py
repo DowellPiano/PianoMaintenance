@@ -302,6 +302,53 @@ class EmailNotificationTests(TestCase):
         self.assertIn('assigned to you', mail.outbox[0].subject)
 
 
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    DEFAULT_FROM_EMAIL='Piano Maintainer <app@example.com>',
+)
+class PasswordResetTests(TestCase):
+    def setUp(self):
+        mail.outbox = []
+        self.user = Technician.objects.create_user(
+            username='resettech',
+            password='OldStrongPass123',
+            email='reset@example.com',
+            role_admin=False,
+            role_technician=True,
+            is_active=True,
+        )
+
+    def test_password_reset_sends_email_for_active_user(self):
+        response = self.client.post(reverse('password_reset'), {
+            'email': 'reset@example.com',
+        })
+
+        self.assertRedirects(response, reverse('password_reset_done'))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['reset@example.com'])
+        self.assertIn('Reset your Piano Maintainer password', mail.outbox[0].subject)
+        self.assertIn('/password-reset/', mail.outbox[0].body)
+
+    def test_password_reset_confirm_updates_password(self):
+        self.client.post(reverse('password_reset'), {
+            'email': 'reset@example.com',
+        })
+        reset_url = mail.outbox[0].body.split('Use this link to choose a new password:\n', 1)[1].splitlines()[0]
+        path = '/' + reset_url.split('/', 3)[3]
+        response = self.client.get(path)
+
+        self.assertEqual(response.status_code, 302)
+        set_password_path = response['Location']
+        response = self.client.post(set_password_path, {
+            'new_password1': 'NewStrongPass123',
+            'new_password2': 'NewStrongPass123',
+        })
+
+        self.assertRedirects(response, reverse('password_reset_complete'))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('NewStrongPass123'))
+
+
 class QRCodeRoutingTests(TestCase):
     def setUp(self):
         self.piano = Piano.objects.create(
