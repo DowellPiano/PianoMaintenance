@@ -3,6 +3,7 @@ import tempfile
 from datetime import date, timedelta
 from io import StringIO
 
+from django.core import mail
 from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -221,6 +222,84 @@ class SignupTests(TestCase):
         self.assertFalse(user.is_active)
         self.assertFalse(user.role_admin)
         self.assertTrue(user.role_technician)
+
+
+@override_settings(
+    EMAIL_NOTIFICATIONS_ENABLED=True,
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    EMAIL_HOST_USER='app@example.com',
+    EMAIL_HOST_PASSWORD='test-password',
+    DEFAULT_FROM_EMAIL='Piano Maintainer <app@example.com>',
+)
+class EmailNotificationTests(TestCase):
+    def setUp(self):
+        mail.outbox = []
+        self.admin = Technician.objects.create_user(
+            username='emailadmin',
+            password='StrongPass123',
+            email='admin@example.com',
+            role_admin=True,
+            role_technician=True,
+        )
+
+    def test_signup_request_emails_admins(self):
+        response = self.client.post(reverse('signup'), {
+            'username': 'newemailtech',
+            'first_name': 'New',
+            'last_name': 'Tech',
+            'email': 'newtech@example.com',
+            'password1': 'StrongPass123',
+            'password2': 'StrongPass123',
+        })
+
+        self.assertRedirects(response, reverse('signup_pending'))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['admin@example.com'])
+        self.assertIn('New Piano Maintainer account request', mail.outbox[0].subject)
+
+    def test_public_maintenance_request_emails_admins(self):
+        piano = Piano.objects.create(
+            name='Email Request Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+
+        response = self.client.post(reverse('maintenance-request-form', args=[piano.qr_code_token]), {
+            'reported_by_name': 'Reporter',
+            'reported_by_email': 'reporter@example.com',
+            'issue_description': 'Sticky key',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['admin@example.com'])
+        self.assertIn('New maintenance request', mail.outbox[0].subject)
+        self.assertIn('Sticky key', mail.outbox[0].body)
+
+    def test_workorder_assignment_emails_assigned_technician(self):
+        tech = Technician.objects.create_user(
+            username='assignedemailtech',
+            password='StrongPass123',
+            email='assigned@example.com',
+            role_admin=False,
+            role_technician=True,
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.post(reverse('workorder_create'), {
+            'piano': '',
+            'order_type': WorkOrder.OrderType.REQUEST,
+            'task_type': 'Other',
+            'priority': WorkOrder.Priority.NORMAL,
+            'assigned_tech': tech.pk,
+            'description': 'Assigned work',
+            'due_date': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['assigned@example.com'])
+        self.assertIn('assigned to you', mail.outbox[0].subject)
 
 
 class QRCodeRoutingTests(TestCase):

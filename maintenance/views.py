@@ -29,6 +29,11 @@ from .forms import (
     SignUpForm, CompanySettingsForm, UserProfileForm, TechnicianCreateForm,
     TechnicianUpdateForm, BulkPianoIntervalForm,
 )
+from .email_notifications import (
+    notify_maintenance_request,
+    notify_signup_request,
+    notify_work_order_assigned,
+)
 
 
 def _safe_return_url(request, fallback):
@@ -334,6 +339,7 @@ def maintenance_request_form(request, token):
             )
             mr.work_order = wo
             mr.save()
+            notify_maintenance_request(mr, wo, request)
             return HttpResponse(
                 '<h2>Thank you — your request has been submitted.</h2>'
                 '<p>A work order has been created and our team will follow up.</p>',
@@ -349,6 +355,7 @@ def signup(request):
         form = SignUpForm(request.POST)
         if form.is_valid():
             user = form.save()
+            notify_signup_request(user, request)
             messages.success(
                 request,
                 f'Account request received for {user.get_short_name() or user.username}. '
@@ -927,6 +934,8 @@ def workorder_create(request):
         form = WorkOrderForm(request.POST)
         if form.is_valid():
             wo = form.save()
+            if wo.assigned_tech_id:
+                notify_work_order_assigned(wo, request)
             messages.success(request, f'Work Order WO-{wo.pk} created.')
             return redirect('workorder_detail', pk=wo.pk)
     else:
@@ -965,9 +974,12 @@ def workorder_edit(request, pk):
 
     return_url = _safe_return_url(request, _workorder_detail_url(wo))
     if request.method == 'POST':
+        previous_assigned_tech_id = wo.assigned_tech_id
         form = WorkOrderForm(request.POST, instance=wo)
         if form.is_valid():
-            form.save()
+            wo = form.save()
+            if wo.assigned_tech_id and wo.assigned_tech_id != previous_assigned_tech_id:
+                notify_work_order_assigned(wo, request)
             messages.success(request, f'Work Order WO-{wo.pk} updated.')
             return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
     else:
@@ -992,9 +1004,10 @@ def workorder_edit(request, pk):
 
 @login_required
 def workorder_assign(request, pk):
-    wo = get_object_or_404(WorkOrder, pk=pk)
+    wo = get_object_or_404(WorkOrder.objects.select_related('assigned_tech', 'piano'), pk=pk)
     user = request.user
     tech_mode = _is_tech_mode(request)
+    previous_assigned_tech_id = wo.assigned_tech_id
 
     if request.method == 'POST':
         if user.role_admin and not tech_mode:
@@ -1016,6 +1029,8 @@ def workorder_assign(request, pk):
         if wo.status == WorkOrder.Status.OPEN and wo.assigned_tech_id:
             wo.status = WorkOrder.Status.IN_PROGRESS
         wo.save()
+        if wo.assigned_tech_id and wo.assigned_tech_id != previous_assigned_tech_id:
+            notify_work_order_assigned(wo, request)
 
     technicians = Technician.objects.filter(
         is_active=True, role_technician=True,
