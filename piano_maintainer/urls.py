@@ -1,8 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path
-from django.conf import settings
-from django.conf.urls.static import static
 
 from maintenance import views
 
@@ -12,8 +10,12 @@ urlpatterns = [
     # Auth
     path('login/', auth_views.LoginView.as_view(), name='login'),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
-    path('signup/', views.signup, name='signup'),
-    path('signup/pending/', views.signup_pending, name='signup_pending'),
+    path('password-reset/', auth_views.PasswordResetView.as_view(), name='password_reset'),
+    path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
+    path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('reset/done/', auth_views.PasswordResetCompleteView.as_view(), name='password_reset_complete'),
+    path('companies/switch/', views.switch_company, name='switch_company'),
+    path('invitations/<uuid:token>/accept/', views.company_invitation_accept, name='company_invitation_accept'),
 
     # Template views
     path('', views.dashboard, name='dashboard'),
@@ -35,6 +37,7 @@ urlpatterns = [
     # Pianos
     path('pianos/', views.piano_list, name='piano_list'),
     path('pianos/new/', views.piano_create, name='piano_create'),
+    path('pianos/bulk-edit/', views.piano_bulk_edit, name='piano_bulk_edit'),
     path('pianos/import/', views.piano_import_csv, name='piano_import'),
     path('pianos/import/sample/', views.piano_import_sample_csv, name='piano_import_sample'),
     path('pianos/qr-codes/', views.qr_codes, name='qr_codes'),
@@ -47,6 +50,7 @@ urlpatterns = [
     path('pianos/<int:pk>/tab/<str:tab>/', views.piano_tab, name='piano_tab'),
     path('pianos/<int:piano_pk>/condition/new/', views.condition_reading_create, name='condition_reading_create'),
     path('pianos/<int:pk>/photos/upload/', views.piano_photo_upload, name='piano_photo_upload'),
+    path('photos/<int:photo_pk>/file/', views.photo_file, name='photo_file'),
     path('pianos/<int:pk>/photos/<int:photo_pk>/set-profile/', views.piano_set_profile_photo, name='piano_set_profile_photo'),
     path('pianos/<int:pk>/photos/<int:photo_pk>/delete/', views.piano_photo_delete, name='piano_photo_delete'),
 
@@ -84,6 +88,7 @@ urlpatterns = [
     path('technicians/', views.technician_list, name='technician_list'),
     path('technicians/new/', views.technician_create, name='technician_create'),
     path('technicians/<int:pk>/edit/', views.technician_edit, name='technician_edit'),
+    path('technicians/<int:pk>/toggle-membership/', views.technician_toggle_membership, name='technician_toggle_membership'),
     path('technicians/report/', views.technician_report, name='technician_report'),
     path('technicians/report/csv/', views.technician_report_csv, name='technician_report_csv'),
 
@@ -103,4 +108,4 @@ urlpatterns = [
     # Public QR form
     path('maintenance_request/<uuid:token>/', views.maintenance_request_form,
          name='maintenance-request-form'),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]

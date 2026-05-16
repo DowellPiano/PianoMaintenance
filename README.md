@@ -1,6 +1,6 @@
-# Piano Maintainer — CMMS for Pianos
+# Overtone — CMMS for Pianos
 
-A Computerized Maintenance Management System (CMMS) built for piano technicians and facilities managers. Modeled after [Limble CMMS](https://limblecmms.com), Piano Maintainer handles preventive maintenance scheduling, work order management, service visits, condition tracking, and parts inventory — purpose-built for piano fleets in schools, venues, and studios.
+A Computerized Maintenance Management System (CMMS) built for piano technicians and facilities managers. Modeled after [Limble CMMS](https://limblecmms.com), Overtone handles preventive maintenance scheduling, work order management, service visits, condition tracking, and parts inventory — purpose-built for piano fleets in schools, venues, and studios.
 
 ---
 
@@ -8,7 +8,7 @@ A Computerized Maintenance Management System (CMMS) built for piano technicians 
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.12 · Django 6.0 · Django REST Framework |
+| Backend | Python 3.12 · Django 5.2 · Django REST Framework |
 | Frontend | Django Templates · HTMX 2.0.4 |
 | Database | SQLite (dev) |
 | Auth | Django session auth · Custom `Technician` user model |
@@ -52,6 +52,7 @@ maintenance/
   forms.py                     Django forms
   management/commands/
     generate_work_orders.py    CLI command: auto-create overdue work orders
+    bootstrap_company.py       CLI command: create a company + initial admin
   templates/
     base.html                  Shared layout with sidebar nav
     maintenance/
@@ -79,24 +80,30 @@ pip3 install -r requirements.txt     # picks up any new Python packages
 python3 manage.py migrate            # applies any new database migrations
 ```
 
-### Demo data reset
+### Fresh SaaS bootstrap
 
-For deployments where the app should open with realistic sample data, run:
+For a brand-new SaaS environment, create the first company and company admin with:
 
 ```bash
-python3 manage.py reset_demo_data --yes
+python3 manage.py bootstrap_company \
+  --company-name "Acme Piano Service" \
+  --admin-username admin \
+  --admin-password "change-me-now" \
+  --admin-email admin@example.com \
+  --first-name Acme \
+  --last-name Admin
 ```
 
-This replaces existing app data with an editable demo account and a realistic piano-service dataset: organizations, venues, pianos, schedules, work orders, logs, condition readings, requests, and inventory.
+This creates:
+- the `Company`
+- a `CompanySettings` row
+- an initial active admin + technician membership for the chosen user
 
-Demo login:
+On the `SaaS` branch, this is the intended first-account path. Public self-service signup is disabled; additional users should join by company invitation after the initial admin is bootstrapped.
 
-```text
-username: demo-admin
-password: DemoPass123
-```
+### Disposable demo/test-data deployment
 
-For a public demo environment, run the command as part of your deploy/release/startup script after migrations. Users can change the demo records while the app is running; running the command again resets everything back to the seeded state.
+This branch is intended to match the `SaaS` branch user experience while using resettable SQLite demo data instead of a live production database.
 
 Render build command:
 
@@ -104,15 +111,13 @@ Render build command:
 pip install -r requirements.txt && python manage.py collectstatic --noinput
 ```
 
-The `collectstatic` step is required for CSS and HTMX assets in `DEBUG=False` deployments.
-
 Render start command:
 
 ```bash
 python manage.py migrate && python manage.py reset_demo_data --yes && gunicorn piano_maintainer.wsgi:application
 ```
 
-To remove sign-in friction for a disposable demo deployment, set:
+Set these Render environment variables for the no-friction demo:
 
 ```text
 DEMO_DATA_RESET_ON_DEPLOY=True
@@ -120,7 +125,7 @@ DEMO_AUTO_LOGIN=True
 DEMO_AUTO_LOGIN_USERNAME=demo-admin
 ```
 
-With demo auto-login enabled, visitors are signed into the seeded admin account automatically. `DEMO_AUTO_LOGIN` defaults to the `DEMO_DATA_RESET_ON_DEPLOY` value, so setting both explicitly is clearest on Render. Leave it disabled for any real production workspace.
+Do not set `DATABASE_URL` for the SQLite demo. Visitors are automatically signed into the seeded demo company as `demo-admin`.
 
 ### Automated work order generation
 
@@ -134,7 +139,7 @@ python3 manage.py generate_work_orders --dry-run  # preview without saving
 Run it hourly from cron:
 
 ```cron
-0 * * * * cd /Users/tom/Desktop/Limble\ Clone/PianoMaintenance && /usr/bin/env python3 manage.py generate_work_orders >> /tmp/piano_generate_work_orders.log 2>&1
+0 * * * * cd /path/to/Overtone && /usr/bin/env python3 manage.py generate_work_orders >> /tmp/overtone_generate_work_orders.log 2>&1
 ```
 
 ---
@@ -261,6 +266,102 @@ A full REST API coexists with the template UI under `/api/`, powered by Django R
 - `generate_work_orders` uses `warning_days_before` to create work orders before the actual deadline.
 - `MaintenanceRequest` submissions require only the piano's `qr_code_token` — no login. On submission, a Work Order is created automatically.
 - `Piano.is_active` powers soft delete — deactivated pianos are hidden from lists but data is preserved.
+
+### SaaS tenancy rollout
+
+The `SaaS` branch is now the clean multi-company product track. It should be treated as a fresh-database deployment target rather than a compatibility layer for the older private-use environment. The current implemented foundation includes:
+
+- `Company`, `CompanyMembership`, `CompanyInvitation`, and `AuditLog`
+- active-company request/session context and a company switcher
+- required company ownership fields on the core operational models
+- local password reset views/templates
+- invitation acceptance flow for adding users to a company
+- company-scoped query enforcement across the main UI flows
+- no default-company autofill or silent tenant fallback in the runtime model layer
+- authenticated photo delivery for company media, with local file streaming in dev and short-lived signed URLs in object storage
+- tenant-admin setup progress, invitation resend/revoke history, and company-scoped member activation controls in the settings and users flows
+
+Use local SQLite while validating these changes:
+
+```bash
+env SECRET_KEY='dev-secret-key' DEBUG=True DATABASE_URL='sqlite:////tmp/piano_saas.sqlite3' python3 manage.py migrate
+env SECRET_KEY='dev-secret-key' DEBUG=True DATABASE_URL='sqlite:////tmp/piano_saas_test.sqlite3' python3 manage.py test maintenance
+```
+
+This branch should be verified locally before any production Postgres deployment is considered.
+For private media, optional production tuning:
+
+```bash
+PRIVATE_MEDIA_URL_TTL=900
+```
+
+Operational commands for the SaaS branch:
+
+```bash
+# Generate work orders for every company
+python3 manage.py generate_work_orders
+
+# Target one tenant while testing automation behavior
+python3 manage.py generate_work_orders --company-slug=default-company
+python3 manage.py generate_work_orders --company-id=1
+
+# Expire stale invitations before they clutter the admin UX
+python3 manage.py expire_invitations
+
+# See whether the current environment still looks like local dev or is shaped for SaaS production
+python3 manage.py saas_readiness_report
+
+# Run Django's production deployment checks
+python3 manage.py check --deploy
+```
+
+Recommended production env vars for the SaaS branch:
+
+```bash
+SECRET_KEY=...
+DEBUG=False
+ALLOWED_HOSTS=app.example.com
+CSRF_TRUSTED_ORIGINS=https://app.example.com
+DATABASE_URL=postgresql://...
+DEFAULT_FROM_EMAIL=noreply@example.com
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=...
+EMAIL_HOST_PASSWORD=...
+EMAIL_USE_TLS=True
+PRIVATE_MEDIA_URL_TTL=900
+SUPABASE_S3_ACCESS_KEY_ID=...
+SUPABASE_S3_SECRET_ACCESS_KEY=...
+SUPABASE_S3_BUCKET=...
+SUPABASE_S3_ENDPOINT=...
+SECURE_SSL_REDIRECT=True
+SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SECURE=True
+SECURE_HSTS_SECONDS=31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS=True
+SECURE_HSTS_PRELOAD=True
+```
+
+Before launch, validate the production environment with a real Postgres database,
+real SMTP credentials, and real Supabase/S3-compatible storage credentials:
+
+```bash
+python3 manage.py migrate
+python3 manage.py bootstrap_company \
+  --company-name "Acme Piano Service" \
+  --admin-username admin \
+  --admin-password "replace-with-a-real-temporary-password" \
+  --admin-email admin@example.com
+python3 manage.py check --deploy
+python3 manage.py saas_readiness_report
+python3 manage.py collectstatic --noinput
+```
+
+The readiness report should have no warnings before a real customer tenant is
+created. If Django is behind a proxy or load balancer, set
+`USE_X_FORWARDED_PROTO=True` only when the proxy reliably sends
+`X-Forwarded-Proto: https`.
 - `Piano.tags` is a M2M to `Tag` — use tags for any custom grouping (building wing, priority tier, client name, etc.).
 - `Organization` uses `PROTECT` on its venue FK — you must remove all venues before deleting an organization.
 - `ConditionReading.update_piano_current_state()` copies readings to denormalized fields on Piano for fast display.

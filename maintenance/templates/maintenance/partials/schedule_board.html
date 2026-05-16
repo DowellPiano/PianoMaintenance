@@ -1,15 +1,30 @@
 <div id="schedule-results">
   <div class="schedule-filterbar">
-    {% for value, label in due_filter_choices %}
-      <a href="{% url 'schedule' %}{% if value %}?due={{ value }}{% endif %}"
-         class="schedule-filter {% if due_filter == value %}active{% endif %}"
-         hx-get="{% url 'schedule' %}{% if value %}?due={{ value }}{% endif %}"
+    {% for link in due_filter_links %}
+      <a href="{{ link.url }}"
+         class="schedule-filter {% if due_filter == link.value %}active{% endif %}"
+         hx-get="{{ link.url }}"
          hx-target="#schedule-results"
          hx-swap="outerHTML"
          hx-push-url="true">
-        {{ label }}
+        {{ link.label }}
       </a>
     {% endfor %}
+    <form method="get" class="gap-row" style="margin-left:auto;">
+      {% if due_filter %}<input type="hidden" name="due" value="{{ due_filter }}">{% endif %}
+      <select name="org" class="form-select" style="width:190px;" onchange="this.form.submit()">
+        <option value="">All Organizations</option>
+        {% for org in organizations %}
+          <option value="{{ org.id }}" {% if org.id|stringformat:"d" == org_filter %}selected{% endif %}>{{ org.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="venue" class="form-select" style="width:180px;" onchange="this.form.submit()">
+        <option value="">All Venues</option>
+        {% for venue in venues %}
+          <option value="{{ venue.id }}" {% if venue.id|stringformat:"d" == venue_filter %}selected{% endif %}>{{ venue.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
   </div>
 
   <div class="schedule-mobile-tabs" role="tablist" aria-label="Maintenance categories">
@@ -31,7 +46,7 @@
       </div>
       <div class="kanban-col-body">
         {% for wo in column.work_orders %}
-        <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ request.get_full_path|urlencode }}" class="kanban-card">
+        <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ schedule_return_url|urlencode }}" class="kanban-card">
           <div class="kc-top">
             <span class="kc-id">WO-{{ wo.pk }}</span>
             <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>

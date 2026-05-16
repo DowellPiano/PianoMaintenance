@@ -4,14 +4,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign Up — Piano Maintainer</title>
+  <title>{% if invitation %}Join {{ invitation.company.name }} — Overtone{% else %}Sign Up — Overtone{% endif %}</title>
+  <link rel="icon" type="image/png" href="{% static 'img/overtone-icon.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'img/overtone-icon.png' %}">
   <link rel="stylesheet" href="{% static 'css/base.css' %}">
 </head>
 <body>
   <div class="login-page">
     <div class="login-card">
-      <h1>Piano Maintainer</h1>
-      <p class="subtitle">Request a technician account</p>
+      <h1>Overtone</h1>
+      <p class="subtitle">
+        {% if invitation %}
+          Accept your invitation to join {{ invitation.company.name }}
+        {% else %}
+          Create your account
+        {% endif %}
+      </p>
 
       {% if form.errors %}
         <div class="alert alert-error">
@@ -59,7 +67,7 @@
           <label class="form-label" for="id_password2">Confirm Password *</label>
           <input class="form-input" type="password" name="password2" id="id_password2" required>
         </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;">Request Account</button>
+        <button type="submit" class="btn btn-primary" style="width:100%;">Create Account</button>
       </form>
 
       <p style="text-align:center; margin-top:1rem; font-size:.88rem;">

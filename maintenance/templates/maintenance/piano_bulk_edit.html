@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Edit Pianos — Overtone{% endblock %}
+{% block topbar_title %}Bulk Edit Pianos{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'piano_list' %}?{{ request.GET.urlencode }}" class="text-muted text-sm">← Back to Pianos</a>
+</div>
+
+<div class="page-header">
+  <div>
+    <h1>Bulk Edit Pianos</h1>
+    <p class="page-subtitle">{{ pianos|length }} piano{{ pianos|length|pluralize }} in the current selection</p>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <input type="text" name="q" value="{{ search_query }}" placeholder="Search pianos…"
+         class="form-input" style="width:240px;">
+  <select name="org" class="form-select" style="width:180px;" onchange="this.form.submit()">
+    <option value="">All Organizations</option>
+    {% for o in organizations %}
+      <option value="{{ o.id }}" {% if o.id|stringformat:"d" == org_filter %}selected{% endif %}>{{ o.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="venue" class="form-select" style="width:180px;" onchange="this.form.submit()">
+    <option value="">All Venues</option>
+    {% for v in venues %}
+      <option value="{{ v.id }}" {% if v.id|stringformat:"d" == venue_filter %}selected{% endif %}>{{ v.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="type" class="form-select" style="width:150px;" onchange="this.form.submit()">
+    <option value="">All Types</option>
+    {% for val, label in type_choices %}
+      <option value="{{ val }}" {% if type_filter == val %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  {% if tags %}
+  <select name="tag" class="form-select" style="width:160px;" onchange="this.form.submit()">
+    <option value="">All Tags</option>
+    <option value="none" {% if tag_filter == "none" %}selected{% endif %}>No Tags</option>
+    {% for t in tags %}
+      <option value="{{ t.id }}" {% if t.id|stringformat:"d" == tag_filter %}selected{% endif %}>{{ t.name }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+</form>
+
+<form method="post">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-error">{{ form.non_field_errors.0 }}</div>
+  {% endif %}
+
+  <div class="wo-detail-grid">
+    <div class="card">
+      <div class="card-header">
+        <h2>Selected Pianos</h2>
+        <button type="button" class="btn btn-xs btn-secondary" onclick="document.querySelectorAll('input[name=piano_ids]').forEach(c => c.checked = true)">Select All</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:42px;"></th>
+              <th>Piano</th>
+              <th>Location</th>
+              <th>Tags</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for piano in pianos %}
+            <tr>
+              <td><input type="checkbox" name="piano_ids" value="{{ piano.pk }}" checked></td>
+              <td>
+                <a href="{% url 'piano_detail' piano.pk %}">{{ piano.name }}</a>
+                <div class="text-dim text-sm">{{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %}</div>
+              </td>
+              <td class="text-sm">{{ piano.venue_name }}{% if piano.section %} · {{ piano.section }}{% endif %}{% if piano.room %} · {{ piano.room }}{% endif %}</td>
+              <td class="text-sm">
+                {% for tag in piano.tags.all %}
+                  <span class="tag-chip-sm">{{ tag.name }}</span>
+                {% empty %}
+                  <span class="text-dim">—</span>
+                {% endfor %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-muted" style="text-align:center; padding:2rem;">No pianos match these filters.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>Maintenance Intervals</h2></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="gap-row">
+            <input type="checkbox" name="update_tuning" value="on">
+            <span class="form-label" style="margin:0;">Tuning</span>
+          </label>
+          <div class="gap-row">
+            <input class="form-input" type="number" name="tuning_interval_value" min="1" placeholder="6" style="width:90px;">
+            <select class="form-select" name="tuning_interval_unit" style="width:120px;">
+              <option value="months">months</option>
+              <option value="days">days</option>
+            </select>
+          </div>
+          {% if form.tuning_interval_value.errors %}<span class="form-error">{{ form.tuning_interval_value.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-group">
+          <label class="gap-row">
+            <input type="checkbox" name="update_regulation" value="on">
+            <span class="form-label" style="margin:0;">Regulation</span>
+          </label>
+          <div class="gap-row">
+            <input class="form-input" type="number" name="regulation_interval_value" min="1" placeholder="12" style="width:90px;">
+            <select class="form-select" name="regulation_interval_unit" style="width:120px;">
+              <option value="months">months</option>
+              <option value="days">days</option>
+            </select>
+          </div>
+          {% if form.regulation_interval_value.errors %}<span class="form-error">{{ form.regulation_interval_value.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-group">
+          <label class="gap-row">
+            <input type="checkbox" name="update_voicing" value="on">
+            <span class="form-label" style="margin:0;">Voicing</span>
+          </label>
+          <div class="gap-row">
+            <input class="form-input" type="number" name="voicing_interval_value" min="1" placeholder="12" style="width:90px;">
+            <select class="form-select" name="voicing_interval_unit" style="width:120px;">
+              <option value="months">months</option>
+              <option value="days">days</option>
+            </select>
+          </div>
+          {% if form.voicing_interval_value.errors %}<span class="form-error">{{ form.voicing_interval_value.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-group">
+          <label class="gap-row">
+            <input type="checkbox" name="update_cleaning" value="on">
+            <span class="form-label" style="margin:0;">Cleaning</span>
+          </label>
+          <div class="gap-row">
+            <input class="form-input" type="number" name="cleaning_interval_value" min="1" placeholder="6" style="width:90px;">
+            <select class="form-select" name="cleaning_interval_unit" style="width:120px;">
+              <option value="months">months</option>
+              <option value="days">days</option>
+            </select>
+          </div>
+          {% if form.cleaning_interval_value.errors %}<span class="form-error">{{ form.cleaning_interval_value.errors.0 }}</span>{% endif %}
+        </div>
+
+        <button type="submit" class="btn btn-primary" {% if not pianos %}disabled{% endif %}>Apply Changes</button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

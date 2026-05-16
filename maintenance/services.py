@@ -1,7 +1,16 @@
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-from .models import MaintenanceSchedule, Piano, WorkOrder
+from .models import (
+    CompanyInvitation,
+    CompanyMembership,
+    CompanySettings,
+    MaintenanceSchedule,
+    Organization,
+    Piano,
+    Venue,
+    WorkOrder,
+)
 
 
 @dataclass
@@ -12,7 +21,114 @@ class WorkOrderGenerationResult:
     messages: list[str] = field(default_factory=list)
 
 
-def generate_scheduled_work_orders(today=None, dry_run=False):
+@dataclass(frozen=True)
+class CompanySetupTask:
+    key: str
+    title: str
+    detail: str
+    is_complete: bool
+    cta_label: str
+
+
+@dataclass(frozen=True)
+class CompanySetupProgress:
+    tasks: list[CompanySetupTask]
+    organization_count: int
+    venue_count: int
+    piano_count: int
+    active_member_count: int
+    pending_invitation_count: int
+
+    @property
+    def completed_count(self):
+        return sum(1 for task in self.tasks if task.is_complete)
+
+    @property
+    def total_count(self):
+        return len(self.tasks)
+
+    @property
+    def percent_complete(self):
+        if not self.tasks:
+            return 100
+        return int((self.completed_count / self.total_count) * 100)
+
+    @property
+    def is_complete(self):
+        return all(task.is_complete for task in self.tasks)
+
+
+def build_company_setup_progress(company):
+    settings = CompanySettings.objects.filter(company=company).first()
+    organization_count = Organization.objects.filter(company=company).count()
+    venue_count = Venue.objects.filter(company=company).count()
+    piano_count = Piano.objects.filter(company=company, is_active=True).count()
+    active_member_count = CompanyMembership.objects.filter(
+        company=company,
+        is_active=True,
+        user__is_active=True,
+    ).count()
+    pending_invitation_count = CompanyInvitation.objects.filter(
+        company=company,
+        status=CompanyInvitation.Status.PENDING,
+    ).count()
+
+    profile_complete = bool(
+        settings
+        and (settings.company_name or company.name)
+        and (settings.email or settings.phone or settings.address)
+    )
+    team_complete = active_member_count > 1 or pending_invitation_count > 0
+
+    tasks = [
+        CompanySetupTask(
+            key="company_profile",
+            title="Complete company profile",
+            detail="Add contact details and default labor settings for this company.",
+            is_complete=profile_complete,
+            cta_label="Open Settings",
+        ),
+        CompanySetupTask(
+            key="team",
+            title="Add your team",
+            detail="Invite another admin or technician so the company is not dependent on one login.",
+            is_complete=team_complete,
+            cta_label="Invite Teammate",
+        ),
+        CompanySetupTask(
+            key="organizations",
+            title="Create an organization",
+            detail="Add the school, church, venue group, or client account you serve.",
+            is_complete=organization_count > 0,
+            cta_label="Add Organization",
+        ),
+        CompanySetupTask(
+            key="venues",
+            title="Create a venue",
+            detail="Set up the physical location technicians travel to.",
+            is_complete=venue_count > 0,
+            cta_label="Add Venue",
+        ),
+        CompanySetupTask(
+            key="pianos",
+            title="Add your first piano",
+            detail="Create at least one active piano so work orders and schedules have something to run against.",
+            is_complete=piano_count > 0,
+            cta_label="Add Piano",
+        ),
+    ]
+
+    return CompanySetupProgress(
+        tasks=tasks,
+        organization_count=organization_count,
+        venue_count=venue_count,
+        piano_count=piano_count,
+        active_member_count=active_member_count,
+        pending_invitation_count=pending_invitation_count,
+    )
+
+
+def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
     """
     Create preventive work orders for due piano maintenance.
 
@@ -30,7 +146,11 @@ def generate_scheduled_work_orders(today=None, dry_run=False):
         ('Cleaning', 'next_cleaning_due', 'cleaning_interval_value'),
     ]
 
-    for piano in Piano.objects.filter(is_active=True):
+    piano_qs = Piano.objects.filter(is_active=True)
+    if company is not None:
+        piano_qs = piano_qs.filter(company=company)
+
+    for piano in piano_qs:
         needs_save = []
         for task_type, due_field, interval_field in built_in_types:
             due_date = getattr(piano, due_field)
@@ -60,6 +180,7 @@ def generate_scheduled_work_orders(today=None, dry_run=False):
                 result.messages.append(f"[DRY RUN] Would create WO: {message}")
             else:
                 WorkOrder.objects.create(
+                    company=piano.company,
                     piano=piano,
                     order_type=WorkOrder.OrderType.PREVENTIVE,
                     task_type=task_type,
@@ -74,7 +195,11 @@ def generate_scheduled_work_orders(today=None, dry_run=False):
         if needs_save:
             piano.save(update_fields=needs_save)
 
-    for sched in MaintenanceSchedule.objects.filter(is_active=True).select_related('piano'):
+    schedule_qs = MaintenanceSchedule.objects.filter(is_active=True).select_related('piano')
+    if company is not None:
+        schedule_qs = schedule_qs.filter(company=company)
+
+    for sched in schedule_qs:
         exists = WorkOrder.objects.filter(
             piano=sched.piano,
             schedule=sched,
@@ -96,6 +221,7 @@ def generate_scheduled_work_orders(today=None, dry_run=False):
             result.messages.append(f"[DRY RUN] Would create WO: {message}")
         else:
             WorkOrder.objects.create(
+                company=sched.company,
                 piano=sched.piano,
                 order_type=WorkOrder.OrderType.PREVENTIVE,
                 task_type=sched.task_type,

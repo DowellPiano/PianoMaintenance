@@ -3,13 +3,15 @@ from django.contrib.auth import get_user_model, login
 from django.shortcuts import redirect
 from django.utils.http import url_has_allowed_host_and_scheme
 
+from .tenancy import ACTIVE_COMPANY_SESSION_KEY, resolve_active_company_access
+
 
 class DemoAutoLoginMiddleware:
     """
     Auto-login a configured demo user when demo mode is enabled.
 
-    This is intended for disposable demo deployments only. It leaves admin,
-    static/media assets, and public QR maintenance request pages alone.
+    This branch uses the same SaaS UX as the SaaS branch, but can run as a
+    disposable test-data demo without sign-in friction.
     """
 
     SKIPPED_PREFIXES = (
@@ -63,3 +65,33 @@ class DemoAutoLoginMiddleware:
         ):
             return next_url
         return settings.LOGIN_REDIRECT_URL
+
+
+class ActiveCompanyMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        request.active_company = None
+        request.active_membership = None
+        request.company_access = None
+        request.available_companies = []
+
+        if request.user.is_authenticated:
+            access = resolve_active_company_access(
+                request.user,
+                request.session.get(ACTIVE_COMPANY_SESSION_KEY),
+            )
+            request.active_company = access.company
+            request.active_membership = access.membership
+            request.company_access = access
+            request.available_companies = list(
+                request.user.company_memberships.filter(
+                    is_active=True,
+                    company__is_active=True,
+                ).select_related("company").order_by("company__name")
+            )
+            if access.company:
+                request.session[ACTIVE_COMPANY_SESSION_KEY] = access.company.pk
+
+        return self.get_response(request)

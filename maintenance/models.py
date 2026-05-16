@@ -32,21 +32,174 @@ class IntervalUnit(models.TextChoices):
     DAYS = "days", "Days"
 
 
-# ---------------------------------------------------------------------------
-# Organization  (administrative owner — who signs the contract)
-# ---------------------------------------------------------------------------
-class Tag(models.Model):
-    """Free-form label that can be attached to pianos."""
-    name = models.CharField(max_length=100, unique=True)
+class Company(models.Model):
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=80, unique=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["name"]
+        verbose_name_plural = "Companies"
 
     def __str__(self):
         return self.name
 
 
+class CompanyMembership(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="memberships",
+    )
+    user = models.ForeignKey(
+        "Technician",
+        on_delete=models.CASCADE,
+        related_name="company_memberships",
+    )
+    role_admin = models.BooleanField(default=False)
+    role_technician = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["company__name", "user__username"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "user"],
+                name="unique_company_membership",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user} @ {self.company}"
+
+    @property
+    def role_display(self):
+        if self.role_admin and self.role_technician:
+            return "Admin + Technician"
+        if self.role_admin:
+            return "Admin"
+        if self.role_technician:
+            return "Technician"
+        return "No Role"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.user.sync_role_flags()
+
+    def delete(self, *args, **kwargs):
+        user = self.user
+        super().delete(*args, **kwargs)
+        user.sync_role_flags()
+
+
+class CompanyInvitation(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        REVOKED = "revoked", "Revoked"
+        EXPIRED = "expired", "Expired"
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="invitations",
+    )
+    email = models.EmailField()
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
+    role_admin = models.BooleanField(default=False)
+    role_technician = models.BooleanField(default=True)
+    invited_by = models.ForeignKey(
+        "Technician",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sent_company_invitations",
+    )
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "email", "status"],
+                condition=models.Q(status="pending"),
+                name="unique_pending_invitation_per_company_email",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Invite {self.email} to {self.company}"
+
+    @property
+    def is_expired(self):
+        return self.expires_at <= timezone.now()
+
+
+class AuditLog(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="audit_logs",
+    )
+    actor = models.ForeignKey(
+        "Technician",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="audit_logs",
+    )
+    event_type = models.CharField(max_length=80)
+    target_model = models.CharField(max_length=80, blank=True)
+    target_id = models.CharField(max_length=80, blank=True)
+    message = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.company} · {self.event_type}"
+
+
+# ---------------------------------------------------------------------------
+# Organization  (administrative owner — who signs the contract)
+# ---------------------------------------------------------------------------
+class Tag(models.Model):
+    """Free-form label that can be attached to pianos."""
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="tags",
+    )
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["company", "name"], name="unique_tag_name_per_company")
+        ]
+
+    def __str__(self):
+        return self.name
+
 class Organization(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="organizations",
+    )
     name = models.CharField(max_length=200)
     short_name = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
@@ -70,6 +223,11 @@ class Organization(models.Model):
 # Venue  (physical location a technician drives to)
 # ---------------------------------------------------------------------------
 class Venue(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="venues",
+    )
     name = models.CharField(max_length=200)
     short_name = models.CharField(max_length=50, blank=True)
     organization = models.ForeignKey(
@@ -104,6 +262,11 @@ class Piano(models.Model):
         UPRIGHT = "Upright", "Upright"
         DIGITAL = "Digital", "Digital"
 
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="pianos",
+    )
     venue = models.ForeignKey(
         Venue, null=True, blank=True, on_delete=models.SET_NULL, related_name="pianos"
     )
@@ -307,10 +470,42 @@ class Technician(AbstractUser):
         full = self.get_full_name()
         return full if full else self.username
 
+    def sync_role_flags(self, save=True):
+        memberships = self.company_memberships.filter(is_active=True)
+        self.role_admin = memberships.filter(role_admin=True).exists()
+        self.role_technician = memberships.filter(role_technician=True).exists()
+        if save and self.pk:
+            self.save(update_fields=["role_admin", "role_technician"])
+
+    def active_company_memberships(self):
+        return self.company_memberships.filter(
+            is_active=True,
+            company__is_active=True,
+        ).select_related("company")
+
+    def membership_for_company(self, company):
+        if not self.pk or company is None:
+            return None
+        company_id = getattr(company, "pk", company)
+        return self.active_company_memberships().filter(company_id=company_id).first()
+
+    def has_company_role(self, company, *, admin=False, technician=False):
+        membership = self.membership_for_company(company)
+        if membership is None:
+            return False
+        if admin and not membership.role_admin:
+            return False
+        if technician and not membership.role_technician:
+            return False
+        return True
+
     @property
     def can_be_assigned(self):
-        """Only users with the technician role can be assigned work orders."""
+        """Global derived flag; prefer can_be_assigned_in_company() for tenancy-aware checks."""
         return self.role_technician
+
+    def can_be_assigned_in_company(self, company):
+        return self.has_company_role(company, technician=True)
 
     @property
     def role_display(self):
@@ -340,6 +535,11 @@ class TaskType(models.TextChoices):
 # ScheduleTemplate  (reusable blueprint)
 # ---------------------------------------------------------------------------
 class ScheduleTemplate(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="schedule_templates",
+    )
     name = models.CharField(max_length=200)
     task_name = models.CharField(max_length=200)
     task_type = models.CharField(max_length=20, choices=TaskType.choices)
@@ -353,13 +553,17 @@ class ScheduleTemplate(models.Model):
     def __str__(self):
         return self.name
 
-
 # ---------------------------------------------------------------------------
 # MaintenanceSchedule
 # ---------------------------------------------------------------------------
 class MaintenanceSchedule(models.Model):
     TaskType = TaskType  # keep existing references working
 
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="maintenance_schedules",
+    )
     piano = models.ForeignKey(
         Piano, on_delete=models.CASCADE, related_name="schedules"
     )
@@ -424,6 +628,11 @@ class WorkOrder(models.Model):
         HIGH = "High", "High"
         URGENT = "Urgent", "Urgent"
 
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="work_orders",
+    )
     piano = models.ForeignKey(
         Piano, null=True, blank=True, on_delete=models.SET_NULL, related_name="work_orders"
     )
@@ -476,6 +685,11 @@ class WorkOrder(models.Model):
 # MaintenanceLog
 # ---------------------------------------------------------------------------
 class MaintenanceLog(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="maintenance_logs",
+    )
     work_order = models.ForeignKey(
         WorkOrder, on_delete=models.CASCADE, related_name="logs"
     )
@@ -498,11 +712,15 @@ class MaintenanceLog(models.Model):
     def __str__(self):
         return f"Log #{self.pk} ({self.logged_at:%Y-%m-%d})"
 
-
 # ---------------------------------------------------------------------------
 # ConditionReading
 # ---------------------------------------------------------------------------
 class ConditionReading(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="condition_readings",
+    )
     piano = models.ForeignKey(
         Piano, null=True, blank=True, on_delete=models.SET_NULL, related_name="condition_readings"
     )
@@ -604,6 +822,11 @@ class ConditionReading(models.Model):
 # Part
 # ---------------------------------------------------------------------------
 class Part(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="parts",
+    )
     name = models.CharField(max_length=200)
     part_number = models.CharField(max_length=100, blank=True)
     supplier = models.CharField(max_length=200, blank=True)
@@ -628,6 +851,11 @@ class Part(models.Model):
 # PartUsed
 # ---------------------------------------------------------------------------
 class PartUsed(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="parts_used",
+    )
     log = models.ForeignKey(
         MaintenanceLog, on_delete=models.CASCADE, related_name="parts_used"
     )
@@ -646,7 +874,6 @@ class PartUsed(models.Model):
     def __str__(self):
         return f"{self.quantity_used}× Part #{self.part_id} (Log #{self.log_id})"
 
-
 # ---------------------------------------------------------------------------
 # MaintenanceRequest
 # ---------------------------------------------------------------------------
@@ -656,6 +883,11 @@ class MaintenanceRequest(models.Model):
         ASSIGNED = "Assigned", "Assigned"
         RESOLVED = "Resolved", "Resolved"
 
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="maintenance_requests",
+    )
     piano = models.ForeignKey(
         Piano, null=True, blank=True, on_delete=models.SET_NULL, related_name="maintenance_requests"
     )
@@ -684,11 +916,11 @@ class MaintenanceRequest(models.Model):
     def __str__(self):
         return f"Request #{self.pk} · {self.status}"
 
-
 # ---------------------------------------------------------------------------
 # Photo
 # ---------------------------------------------------------------------------
 class Photo(models.Model):
+    company    = models.ForeignKey(Company,   on_delete=models.CASCADE, related_name='photos')
     piano      = models.ForeignKey(Piano,     null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
     work_order = models.ForeignKey(WorkOrder, null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
     image      = models.ImageField(upload_to='photos/%y/%m/%d/', validators=[validate_image_file])
@@ -699,6 +931,25 @@ class Photo(models.Model):
     class Meta:
         ordering = ['-uploaded_at']
 
+    def clean(self):
+        if not self.piano_id and not self.work_order_id:
+            raise ValidationError('A photo must belong to a piano or a work order.')
+
+        if self.piano_id and self.piano.company_id != self.company_id:
+            raise ValidationError('Photo company must match the related piano company.')
+
+        if self.work_order_id and self.work_order.company_id != self.company_id:
+            raise ValidationError('Photo company must match the related work order company.')
+
+        if self.piano_id and self.work_order_id:
+            work_order_piano_id = self.work_order.piano_id
+            if work_order_piano_id and work_order_piano_id != self.piano_id:
+                raise ValidationError('Photo piano must match the related work order piano.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         if self.piano_id:
             return f"Photo #{self.pk} (Piano #{self.piano_id})"
@@ -706,11 +957,15 @@ class Photo(models.Model):
             return f"Photo #{self.pk} (WO #{self.work_order_id})"
         return f"Photo #{self.pk}"
 
-
 # ---------------------------------------------------------------------------
 # Company Settings (singleton)
 # ---------------------------------------------------------------------------
 class CompanySettings(models.Model):
+    company = models.OneToOneField(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="settings",
+    )
     company_name = models.CharField(max_length=200, blank=True)
     address = models.TextField(blank=True)
     phone = models.CharField(max_length=30, blank=True)
@@ -727,14 +982,7 @@ class CompanySettings(models.Model):
     def __str__(self):
         return self.company_name or "Company Settings"
 
-    def save(self, *args, **kwargs):
-        # Enforce singleton: always use pk=1
-        self.pk = 1
-        super().save(*args, **kwargs)
-
     @classmethod
-    def load(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+    def load_for_company(cls, company):
+        obj, _ = cls.objects.get_or_create(company=company)
         return obj
-
-

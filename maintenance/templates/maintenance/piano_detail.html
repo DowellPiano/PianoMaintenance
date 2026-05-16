@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ piano.name }} — Piano Maintainer{% endblock %}
+{% block title %}{{ piano.name }} — Overtone{% endblock %}
 {% block topbar_title %}{{ piano.name }}{% endblock %}
 
 
@@ -32,12 +32,12 @@
         </div>
       </div>
       <div class="hero-actions">
-        {% if request.user.role_admin %}
+        {% if company_access.can_admin %}
         <a href="{% url 'piano_edit' piano.pk %}" class="btn btn-sm btn-secondary">Edit</a>
         {% endif %}
         <a href="{% url 'piano_photo_upload' piano.pk %}" class="btn btn-sm btn-secondary">Photos</a>
         <a href="{% url 'condition_reading_create' piano.pk %}" class="btn btn-sm btn-secondary">Condition Report</a>
-        {% if request.user.role_admin %}
+        {% if company_access.can_admin %}
         <a href="{% url 'workorder_create' %}?piano={{ piano.pk }}" class="btn btn-sm btn-primary">+ Work Order</a>
         <a href="{% url 'piano_deactivate' piano.pk %}" class="btn btn-sm btn-danger">Deactivate</a>
         {% endif %}
@@ -66,9 +66,9 @@
     <div class="photo-grid">
       {% for photo in photos %}
       <div class="photo-thumb">
-        <img src="{{ photo.image.url }}" alt="{{ photo.caption|default:piano.name }}" loading="lazy">
+        <img src="{% url 'photo_file' photo.pk %}" alt="{{ photo.caption|default:piano.name }}" loading="lazy">
         {% if photo.is_profile_photo %}<span class="profile-star">Profile</span>{% endif %}
-        {% if request.user.role_admin or request.user.role_technician %}
+        {% if company_access.can_admin or company_access.can_technician %}
         <form method="post"
               action="{% url 'piano_photo_delete' piano.pk photo.pk %}"
               class="photo-delete-form"
@@ -114,5 +114,9 @@
 
 <div id="tab-content">
   {% include "maintenance/partials/piano_tab_overview.html" %}
+</div>
+
+<div style="margin-top:1.5rem;">
+  {% include "maintenance/partials/activity_card.html" %}
 </div>
 {% endblock %}

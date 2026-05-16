@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}WO-{{ wo.pk }} — Piano Maintainer{% endblock %}
+{% block title %}WO-{{ wo.pk }} — Overtone{% endblock %}
 {% block topbar_title %}WO-{{ wo.pk }}{% endblock %}
 
 
@@ -43,8 +43,8 @@
             <button type="submit" class="btn btn-sm btn-primary">Reopen</button>
           </form>
         {% endif %}
-        {% if request.user.role_admin %}
-          <a href="{% url 'workorder_delete' wo.pk %}" class="btn btn-sm btn-danger">Delete</a>
+        {% if company_access.can_admin %}
+          <a href="{% url 'workorder_delete' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-sm btn-danger">Delete</a>
         {% endif %}
         {% if wo.status != "Complete" and wo.status != "Cancelled" and can_edit_wo %}
           <a href="{% url 'workorder_log_work' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-sm btn-primary">
@@ -68,6 +68,23 @@
           <tr><td>Piano</td><td>{% if wo.piano %}<a href="{% url 'piano_detail' wo.piano.pk %}">{{ wo.piano.name }}</a>{% else %}<span class="text-dim">{{ wo.piano_name }}</span>{% endif %}</td></tr>
           <tr><td>Venue</td><td>{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% else %}—{% endif %}</td></tr>
           <tr><td>Order Type</td><td>{{ wo.task_type|default:wo.order_type }}</td></tr>
+          {% if service_status %}
+          <tr><td>Last {{ service_status.task_type }}</td><td>{{ service_status.last_service_date|date:"M d, Y"|default:"—" }}</td></tr>
+          <tr>
+            <td>Service Timing</td>
+            <td>
+              {% if not service_status.last_service_date %}
+                No completed {{ service_status.task_type|lower }} on record
+              {% elif not service_status.has_interval %}
+                No interval configured
+              {% elif service_status.timing_label == "due today" %}
+                Due today
+              {% else %}
+                {{ service_status.display_days }} day{{ service_status.display_days|pluralize }} {{ service_status.timing_label }}
+              {% endif %}
+            </td>
+          </tr>
+          {% endif %}
           <tr><td>Priority</td><td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td></tr>
           <tr><td>Status</td><td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td></tr>
           <tr>
@@ -136,5 +153,9 @@
       </tbody>
     </table>
   </div>
+</div>
+
+<div style="margin-top:1.5rem;">
+  {% include "maintenance/partials/activity_card.html" %}
 </div>
 {% endblock %}

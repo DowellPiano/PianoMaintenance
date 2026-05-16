@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Delete WO-{{ wo.pk }} — Piano Maintainer{% endblock %}
+{% block title %}Delete WO-{{ wo.pk }} — Overtone{% endblock %}
 {% block topbar_title %}Delete Work Order{% endblock %}
 
 {% block content %}
 <div style="margin-bottom:1rem;">
-  <a href="{% url 'workorder_detail' wo.pk %}" class="text-muted text-sm">&larr; Back to WO-{{ wo.pk }}</a>
+  <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ return_url|urlencode }}" class="text-muted text-sm">&larr; Back to WO-{{ wo.pk }}</a>
 </div>
 
 <div class="card" style="max-width:520px;">
@@ -35,8 +35,9 @@
 
     <form method="post">
       {% csrf_token %}
+      <input type="hidden" name="return_url" value="{{ return_url }}">
       <div style="display:flex; gap:.5rem; justify-content:flex-end;">
-        <a href="{% url 'workorder_detail' wo.pk %}" class="btn btn-secondary">Cancel</a>
+        <a href="{% url 'workorder_detail' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-secondary">Cancel</a>
         <button type="submit" class="btn btn-danger">Delete Permanently</button>
       </div>
     </form>

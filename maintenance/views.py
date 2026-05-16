@@ -1,33 +1,44 @@
 import csv
 import io
+import mimetypes
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 from functools import wraps
 from urllib.parse import urlencode
 
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
-from django.utils import timezone
+from django.contrib.auth.forms import PasswordChangeForm
+from django.core.mail import send_mail
+from django.core.files.storage import FileSystemStorage
 from django.db.models import Q, Count, Sum, Max, DecimalField
 from django.db.models.functions import Coalesce
+from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import HttpResponse, HttpResponseRedirect
-from django.contrib import messages
+from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
+from .audit import log_audit_event, target_audit_events
+from .forms import (
+    OrganizationForm, VenueForm, PianoForm, WorkOrderForm, WorkOrderCompleteForm,
+    WorkOrderLogWorkForm, ConditionReadingForm, ScheduleTemplateForm, PartForm,
+    SignUpForm, CompanySettingsForm, UserProfileForm, TechnicianCreateForm,
+    TechnicianUpdateForm, CompanyInvitationForm, CompanySwitcherForm,
+    BulkPianoIntervalForm,
+)
 from .models import (
+    Company, CompanyInvitation, CompanyMembership,
     Organization, Venue, Piano, WorkOrder, MaintenanceRequest,
     MaintenanceSchedule, ScheduleTemplate, ConditionReading,
     Technician, Part, PartUsed, MaintenanceLog, TaskType, Photo, Tag,
     CompanySettings,
 )
-from django.contrib.auth.forms import PasswordChangeForm
-from django.contrib.auth import update_session_auth_hash
-from .forms import (
-    OrganizationForm, VenueForm, PianoForm, WorkOrderForm, WorkOrderCompleteForm,
-    WorkOrderLogWorkForm, ConditionReadingForm, ScheduleTemplateForm, PartForm,
-    SignUpForm, CompanySettingsForm, UserProfileForm, TechnicianCreateForm,
-    TechnicianUpdateForm,
-)
+from .tenancy import ACTIVE_COMPANY_SESSION_KEY, company_queryset, company_users, ensure_company_access
+from .services import build_company_setup_progress
 
 
 def _safe_return_url(request, fallback):
@@ -56,15 +67,129 @@ def _piano_detail_url(piano, return_url=None):
     return url
 
 
+def _filtered_piano_queryset(request):
+    company = ensure_company_access(request)
+    qs = Piano.objects.filter(company=company, is_active=True).select_related(
+        'venue', 'venue__organization',
+    ).prefetch_related('photos', 'tags')
+
+    search_query = request.GET.get('q', '').strip()
+    org_filter = request.GET.get('org', '')
+    venue_filter = request.GET.get('venue', '')
+    type_filter = request.GET.get('type', '')
+    tag_filter = request.GET.get('tag', '')
+
+    if search_query:
+        qs = qs.filter(
+            Q(name__icontains=search_query) |
+            Q(make__icontains=search_query) |
+            Q(serial_number__icontains=search_query) |
+            Q(section__icontains=search_query) |
+            Q(room__icontains=search_query) |
+            Q(room_description__icontains=search_query) |
+            Q(room_access_notes__icontains=search_query) |
+            Q(tags__name__icontains=search_query)
+        ).distinct()
+    if org_filter:
+        qs = qs.filter(venue__organization_id=org_filter)
+    if venue_filter:
+        qs = qs.filter(venue_id=venue_filter)
+    if type_filter:
+        qs = qs.filter(piano_type=type_filter)
+    if tag_filter:
+        if tag_filter == 'none':
+            qs = qs.filter(tags__isnull=True)
+        else:
+            qs = qs.filter(tags__id=tag_filter)
+
+    return qs, {
+        'search_query': search_query,
+        'org_filter': org_filter,
+        'venue_filter': venue_filter,
+        'type_filter': type_filter,
+        'tag_filter': tag_filter,
+    }
+
+
+def _service_status_context(wo, today):
+    if not wo.piano_id or wo.task_type in ('', TaskType.OTHER):
+        return None
+
+    interval_fields = {
+        TaskType.TUNING: ('tuning_interval_value', 'tuning_interval_unit'),
+        TaskType.REGULATION: ('regulation_interval_value', 'regulation_interval_unit'),
+        TaskType.VOICING: ('voicing_interval_value', 'voicing_interval_unit'),
+        TaskType.CLEANING: ('cleaning_interval_value', 'cleaning_interval_unit'),
+    }
+    interval_days = None
+    if wo.schedule_id:
+        interval_days = wo.schedule.interval_days
+    else:
+        fields = interval_fields.get(wo.task_type)
+        if fields:
+            value_field, unit_field = fields
+            interval_days = wo.piano._interval_to_days(
+                getattr(wo.piano, value_field),
+                getattr(wo.piano, unit_field),
+            )
+
+    completed_work = WorkOrder.objects.filter(
+        company=wo.company,
+        piano=wo.piano,
+        task_type=wo.task_type,
+        status=WorkOrder.Status.COMPLETE,
+        completed_date__isnull=False,
+    )
+    if wo.schedule_id:
+        completed_work = completed_work.filter(schedule=wo.schedule)
+
+    last_work_order = completed_work.order_by('-completed_date').first()
+    if wo.status == WorkOrder.Status.COMPLETE and wo.completed_date:
+        last_service_date = wo.completed_date
+    elif last_work_order:
+        last_service_date = last_work_order.completed_date
+    else:
+        last_service_date = None
+
+    if not last_service_date or interval_days is None:
+        return {
+            'task_type': wo.task_type,
+            'last_service_date': last_service_date,
+            'has_interval': interval_days is not None,
+            'days_from_due': None,
+            'display_days': None,
+            'timing_label': None,
+        }
+
+    elapsed_days = (today - last_service_date).days
+    days_from_due = interval_days - elapsed_days
+    if days_from_due > 0:
+        timing_label = 'early'
+    elif days_from_due < 0:
+        timing_label = 'late'
+    else:
+        timing_label = 'due today'
+
+    return {
+        'task_type': wo.task_type,
+        'last_service_date': last_service_date,
+        'has_interval': True,
+        'days_from_due': days_from_due,
+        'display_days': abs(days_from_due),
+        'timing_label': timing_label,
+    }
+
+
 def _can_update_workorder(user, wo):
-    return user.role_admin or (
-        user.role_technician
+    return user.has_company_role(wo.company, admin=True) or (
+        user.has_company_role(wo.company, technician=True)
         and (wo.assigned_tech_id == user.pk or wo.assigned_tech_id is None)
     )
 
 
 def _filtered_workorders(request):
-    qs = WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech')
+    company = ensure_company_access(request)
+    qs = WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue', 'assigned_tech')
 
     search_query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '')
@@ -140,6 +265,102 @@ def _filtered_workorders(request):
     }
 
 
+def _user_is_company_admin(request):
+    return bool(request.active_membership and request.active_membership.role_admin)
+
+
+def _user_is_company_technician(request):
+    return bool(request.active_membership and request.active_membership.role_technician)
+
+
+def _company_organizations(request):
+    return Organization.objects.filter(company=ensure_company_access(request))
+
+
+def _company_venues(request):
+    return Venue.objects.filter(company=ensure_company_access(request))
+
+
+def _company_pianos(request):
+    return Piano.objects.filter(company=ensure_company_access(request))
+
+
+def _company_workorders(request):
+    return WorkOrder.objects.filter(company=ensure_company_access(request))
+
+
+def _company_parts(request):
+    return Part.objects.filter(company=ensure_company_access(request))
+
+
+def _company_tags(request):
+    return Tag.objects.filter(company=ensure_company_access(request))
+
+
+def _company_settings(request):
+    return CompanySettings.load_for_company(ensure_company_access(request))
+
+
+SETUP_TASK_URLS = {
+    'company_profile': 'settings',
+    'team': 'settings',
+    'organizations': 'organization_create',
+    'venues': 'venue_create',
+    'pianos': 'piano_create',
+}
+
+
+def _setup_progress_context(company):
+    progress = build_company_setup_progress(company)
+    tasks = []
+    for task in progress.tasks:
+        url_name = SETUP_TASK_URLS.get(task.key)
+        tasks.append({
+            'key': task.key,
+            'title': task.title,
+            'detail': task.detail,
+            'is_complete': task.is_complete,
+            'cta_label': task.cta_label,
+            'cta_url': reverse(url_name) if url_name else '',
+        })
+    return {
+        'tasks': tasks,
+        'completed_count': progress.completed_count,
+        'total_count': progress.total_count,
+        'percent_complete': progress.percent_complete,
+        'is_complete': progress.is_complete,
+        'organization_count': progress.organization_count,
+        'venue_count': progress.venue_count,
+        'piano_count': progress.piano_count,
+        'active_member_count': progress.active_member_count,
+        'pending_invitation_count': progress.pending_invitation_count,
+    }
+
+
+def _user_can_view_company_media(user, company):
+    return user.is_authenticated and user.membership_for_company(company) is not None
+
+
+def _activity_events(company, target, *, limit=5):
+    return target_audit_events(company=company, target=target, limit=limit)
+
+
+def _send_company_invitation_email(request, invitation):
+    invite_url = request.build_absolute_uri(
+        reverse('company_invitation_accept', args=[invitation.token])
+    )
+    send_mail(
+        subject=f"Invitation to join {invitation.company.name}",
+        message=(
+            f"You've been invited to join {invitation.company.name} in Overtone.\n\n"
+            f"Accept your invitation here:\n{invite_url}\n"
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[invitation.email],
+        fail_silently=False,
+    )
+
+
 # ── Role-based access ────────────────────────────────────────────
 
 def admin_required(view_func):
@@ -147,7 +368,7 @@ def admin_required(view_func):
     @wraps(view_func)
     @login_required
     def wrapper(request, *args, **kwargs):
-        if not request.user.role_admin:
+        if not _user_is_company_admin(request):
             messages.error(request, 'Admin access required.')
             return redirect('dashboard')
         return view_func(request, *args, **kwargs)
@@ -159,7 +380,7 @@ def staff_required(view_func):
     @wraps(view_func)
     @login_required
     def wrapper(request, *args, **kwargs):
-        if not (request.user.role_admin or request.user.role_technician):
+        if not (_user_is_company_admin(request) or _user_is_company_technician(request)):
             messages.error(request, 'Technician access required.')
             return redirect('dashboard')
         return view_func(request, *args, **kwargs)
@@ -192,6 +413,7 @@ def maintenance_request_form(request, token):
         email = request.POST.get('reported_by_email', '').strip()[:254]
         if issue:
             mr = MaintenanceRequest.objects.create(
+                company=piano.company,
                 piano=piano,
                 reported_by_name=name,
                 reported_by_email=email,
@@ -199,6 +421,7 @@ def maintenance_request_form(request, token):
                 status='Assigned',
             )
             wo = WorkOrder.objects.create(
+                company=piano.company,
                 piano=piano,
                 order_type=WorkOrder.OrderType.REQUEST,
                 status=WorkOrder.Status.OPEN,
@@ -217,26 +440,6 @@ def maintenance_request_form(request, token):
                   {'piano': piano})
 
 
-def signup(request):
-    if request.method == 'POST':
-        form = SignUpForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            messages.success(
-                request,
-                f'Account request received for {user.get_short_name() or user.username}. '
-                'An admin must activate it before you can sign in.',
-            )
-            return redirect('signup_pending')
-    else:
-        form = SignUpForm()
-    return render(request, 'registration/signup.html', {'form': form})
-
-
-def signup_pending(request):
-    return render(request, 'registration/signup_pending.html')
-
-
 # ── Dashboard ──────────────────────────────────────────────────────
 
 @login_required
@@ -244,11 +447,13 @@ def dashboard(request):
     today = date.today()
     month_start = today.replace(day=1)
     user = request.user
-    is_admin = user.role_admin
+    company = ensure_company_access(request)
+    is_admin = _user_is_company_admin(request)
+    setup_progress = _setup_progress_context(company) if is_admin else None
 
     if is_admin:
         # Admin sees everything
-        wo_base = WorkOrder.objects
+        wo_base = WorkOrder.objects.filter(company=company)
         overdue_count = wo_base.filter(
             status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
             due_date__lt=today,
@@ -256,11 +461,12 @@ def dashboard(request):
         open_wo_count = wo_base.filter(status=WorkOrder.Status.OPEN).count()
         in_progress_count = wo_base.filter(status=WorkOrder.Status.IN_PROGRESS).count()
         pending_request_count = MaintenanceRequest.objects.filter(
+            company=company,
             status=MaintenanceRequest.RequestStatus.NEW,
         ).count()
-        piano_count = Piano.objects.filter(is_active=True).count()
-        venue_count = Venue.objects.count()
-        org_count = Organization.objects.count()
+        piano_count = Piano.objects.filter(company=company, is_active=True).count()
+        venue_count = Venue.objects.filter(company=company).count()
+        org_count = Organization.objects.filter(company=company).count()
         completed_this_month = wo_base.filter(
             status=WorkOrder.Status.COMPLETE,
             completed_date__gte=month_start,
@@ -272,7 +478,7 @@ def dashboard(request):
         )
     else:
         # Tech-only: show only their own assigned work
-        my_wos = WorkOrder.objects.filter(assigned_tech=user)
+        my_wos = WorkOrder.objects.filter(company=company, assigned_tech=user)
         overdue_count = my_wos.filter(
             status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
             due_date__lt=today,
@@ -306,6 +512,7 @@ def dashboard(request):
         'org_count': org_count,
         'completed_this_month': completed_this_month,
         'dashboard_work_orders': dashboard_work_orders,
+        'setup_progress': setup_progress,
     })
 
 
@@ -315,44 +522,53 @@ def dashboard(request):
 def piano_list(request):
     today = date.today()
     soon = today + timedelta(days=30)
+    company = ensure_company_access(request)
 
-    qs = Piano.objects.filter(is_active=True).select_related('venue', 'venue__organization').prefetch_related('photos', 'tags')
-
-    search_query = request.GET.get('q', '').strip()
-    org_filter = request.GET.get('org', '')
-    venue_filter = request.GET.get('venue', '')
-    type_filter = request.GET.get('type', '')
-    tag_filter = request.GET.get('tag', '')
-
-    if search_query:
-        qs = qs.filter(
-            Q(name__icontains=search_query) |
-            Q(make__icontains=search_query) |
-            Q(serial_number__icontains=search_query) |
-            Q(tags__name__icontains=search_query)
-        ).distinct()
-    if org_filter:
-        qs = qs.filter(venue__organization_id=org_filter)
-    if venue_filter:
-        qs = qs.filter(venue_id=venue_filter)
-    if type_filter:
-        qs = qs.filter(piano_type=type_filter)
-    if tag_filter:
-        qs = qs.filter(tags__id=tag_filter)
+    qs, filters = _filtered_piano_queryset(request)
 
     return render(request, 'maintenance/piano_list.html', {
         'active_nav': 'pianos',
         'pianos': qs,
-        'organizations': Organization.objects.all(),
-        'venues': Venue.objects.all(),
-        'tags': Tag.objects.all(),
-        'search_query': search_query,
-        'org_filter': org_filter,
-        'venue_filter': venue_filter,
-        'type_filter': type_filter,
-        'tag_filter': tag_filter,
+        'organizations': Organization.objects.filter(company=company),
+        'venues': Venue.objects.filter(company=company),
+        'tags': Tag.objects.filter(company=company),
+        **filters,
         'today': today,
         'soon': soon,
+    })
+
+
+@admin_required
+def piano_bulk_edit(request):
+    company = ensure_company_access(request)
+    qs, filters = _filtered_piano_queryset(request)
+    pianos = list(qs)
+
+    if request.method == 'POST':
+        form = BulkPianoIntervalForm(request.POST, pianos=pianos)
+        if form.is_valid():
+            selected_ids = form.cleaned_data['piano_ids']
+            updates = form.interval_updates()
+            updated_count = qs.filter(pk__in=selected_ids).update(**updates)
+            messages.success(
+                request,
+                f'Updated maintenance intervals for {updated_count} piano'
+                f'{"s" if updated_count != 1 else ""}.',
+            )
+            return redirect(f'{request.path}?{request.GET.urlencode()}')
+    else:
+        initial = {'piano_ids': [piano.pk for piano in pianos]}
+        form = BulkPianoIntervalForm(pianos=pianos, initial=initial)
+
+    return render(request, 'maintenance/piano_bulk_edit.html', {
+        'active_nav': 'pianos',
+        'form': form,
+        'pianos': pianos,
+        'organizations': Organization.objects.filter(company=company),
+        'venues': Venue.objects.filter(company=company),
+        'tags': Tag.objects.filter(company=company),
+        'type_choices': Piano.PianoType.choices,
+        **filters,
     })
 
 
@@ -381,7 +597,12 @@ def _piano_context(piano):
             ('Voicing', piano.voicing_interval_value, piano.voicing_interval_unit, piano.next_voicing_due),
             ('Cleaning', piano.cleaning_interval_value, piano.cleaning_interval_unit, piano.next_cleaning_due),
         ],
-        'work_orders': piano.work_orders.select_related('assigned_tech').order_by('-created_at')[:20],
+        'open_work_orders': piano.work_orders.select_related('assigned_tech').exclude(
+            status__in=[WorkOrder.Status.COMPLETE, WorkOrder.Status.CANCELLED],
+        ).order_by('-created_at')[:20],
+        'work_history': piano.work_orders.select_related('assigned_tech').filter(
+            status=WorkOrder.Status.COMPLETE,
+        ).order_by('-completed_date', '-created_at')[:20],
         'condition_readings': piano.condition_readings.order_by('-recorded_at')[:20],
         'custom_schedules': piano.schedules.all(),
         'today': today,
@@ -390,20 +611,41 @@ def _piano_context(piano):
 
 @login_required
 def piano_detail(request, pk):
-    piano = get_object_or_404(Piano.objects.select_related('venue').prefetch_related('tags'), pk=pk)
+    piano = get_object_or_404(
+        Piano.objects.filter(company=ensure_company_access(request)).select_related('venue').prefetch_related('tags'),
+        pk=pk,
+    )
     ctx = _piano_context(piano)
     ctx['qr_url'] = request.build_absolute_uri(f'/maintenance_request/{piano.qr_code_token}/')
     ctx['photos'] = piano.photos.all()
     ctx['piano_tags'] = piano.tags.all()
-    ctx['available_tags'] = Tag.objects.filter(pianos__is_active=True).exclude(pk__in=piano.tags.all()).distinct()
+    ctx['available_tags'] = Tag.objects.filter(company=piano.company, pianos__is_active=True).exclude(pk__in=piano.tags.all()).distinct()
     ctx['return_url'] = _safe_return_url(request, '/pianos/')
     ctx['workorder_return_url'] = _piano_detail_url(piano)
+    ctx['activity_events'] = _activity_events(piano.company, piano)
     return render(request, 'maintenance/piano_detail.html', ctx)
 
 
 @login_required
+def photo_file(request, photo_pk):
+    photo = get_object_or_404(Photo, pk=photo_pk)
+    if not _user_can_view_company_media(request.user, photo.company):
+        return HttpResponseForbidden("You do not have access to this photo.")
+
+    storage = photo.image.storage
+    if isinstance(storage, FileSystemStorage):
+        content_type, _ = mimetypes.guess_type(photo.image.name)
+        return FileResponse(photo.image.open("rb"), content_type=content_type or "application/octet-stream")
+
+    return redirect(storage.url(photo.image.name, expire=settings.PRIVATE_MEDIA_URL_TTL))
+
+
+@login_required
 def piano_tab(request, pk, tab):
-    piano = get_object_or_404(Piano.objects.select_related('venue'), pk=pk)
+    piano = get_object_or_404(
+        Piano.objects.filter(company=ensure_company_access(request)).select_related('venue'),
+        pk=pk,
+    )
     ctx = _piano_context(piano)
     ctx['workorder_return_url'] = _piano_detail_url(piano)
     templates = {
@@ -418,52 +660,78 @@ def piano_tab(request, pk, tab):
 
 @admin_required
 def piano_create(request):
+    company = ensure_company_access(request)
     if request.method == 'POST':
-        form = PianoForm(request.POST)
+        form = PianoForm(request.POST, company=company)
         if form.is_valid():
-            piano = form.save()
+            piano = form.save(commit=False)
+            piano.company = company
+            piano.save()
+            form.save_m2m()
+            log_audit_event(
+                company=company,
+                actor=request.user,
+                event_type='piano.created',
+                target=piano,
+                message=f'Created piano {piano.name}.',
+            )
             messages.success(request, f'Piano "{piano.name}" created.')
             return redirect('piano_detail', pk=piano.pk)
     else:
-        form = PianoForm()
+        form = PianoForm(company=company)
 
     return render(request, 'maintenance/piano_form.html', {
         'active_nav': 'pianos',
         'form': form,
         'piano': None,
-        'venues': Venue.objects.all(),
+        'venues': Venue.objects.filter(company=company),
         'type_choices': Piano.PianoType.choices,
     })
 
 
 @admin_required
 def piano_edit(request, pk):
-    piano = get_object_or_404(Piano, pk=pk)
+    company = ensure_company_access(request)
+    piano = get_object_or_404(Piano, company=company, pk=pk)
 
     if request.method == 'POST':
-        form = PianoForm(request.POST, instance=piano)
+        form = PianoForm(request.POST, instance=piano, company=company)
         if form.is_valid():
             form.save()
+            log_audit_event(
+                company=company,
+                actor=request.user,
+                event_type='piano.updated',
+                target=piano,
+                message=f'Updated piano {piano.name}.',
+            )
             messages.success(request, f'Piano "{piano.name}" updated.')
             return redirect('piano_detail', pk=piano.pk)
     else:
-        form = PianoForm(instance=piano)
+        form = PianoForm(instance=piano, company=company)
 
     return render(request, 'maintenance/piano_form.html', {
         'active_nav': 'pianos',
         'form': form,
         'piano': piano,
-        'venues': Venue.objects.all(),
+        'venues': Venue.objects.filter(company=company),
         'type_choices': Piano.PianoType.choices,
     })
 
 
 @admin_required
 def piano_deactivate(request, pk):
-    piano = get_object_or_404(Piano, pk=pk)
+    piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST':
         piano.is_active = False
         piano.save(update_fields=['is_active'])
+        log_audit_event(
+            company=piano.company,
+            actor=request.user,
+            event_type='piano.deactivated',
+            target=piano,
+            message=f'Deactivated piano {piano.name}.',
+        )
         messages.success(request, f'Piano "{piano.name}" has been deactivated.')
         return redirect('piano_list')
     return render(request, 'maintenance/piano_confirm_deactivate.html', {
@@ -476,17 +744,17 @@ def _piano_tags_context(piano):
     return {
         'piano': piano,
         'piano_tags': piano.tags.all(),
-        'available_tags': Tag.objects.filter(pianos__is_active=True).exclude(pk__in=piano.tags.all()).distinct(),
+        'available_tags': Tag.objects.filter(company=piano.company, pianos__is_active=True).exclude(pk__in=piano.tags.all()).distinct(),
     }
 
 
 @admin_required
 def piano_add_tag(request, pk):
-    piano = get_object_or_404(Piano, pk=pk)
+    piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST':
         tag_name = request.POST.get('tag_name', '').strip()
         if tag_name:
-            tag, _ = Tag.objects.get_or_create(name=tag_name)
+            tag, _ = Tag.objects.get_or_create(company=piano.company, name=tag_name)
             piano.tags.add(tag)
     if request.headers.get('HX-Request'):
         return render(request, 'maintenance/partials/piano_tags.html', _piano_tags_context(piano))
@@ -495,11 +763,11 @@ def piano_add_tag(request, pk):
 
 @admin_required
 def piano_remove_tag(request, pk, tag_pk):
-    piano = get_object_or_404(Piano, pk=pk)
+    piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST':
         piano.tags.remove(tag_pk)
-        if not Tag.objects.filter(pk=tag_pk, pianos__is_active=True).exists():
-            Tag.objects.filter(pk=tag_pk).delete()
+        if not Tag.objects.filter(company=piano.company, pk=tag_pk, pianos__is_active=True).exists():
+            Tag.objects.filter(company=piano.company, pk=tag_pk).delete()
     if request.headers.get('HX-Request'):
         return render(request, 'maintenance/partials/piano_tags.html', _piano_tags_context(piano))
     return redirect('piano_detail', pk=piano.pk)
@@ -509,7 +777,7 @@ def piano_remove_tag(request, pk, tag_pk):
 
 @login_required
 def organization_list(request):
-    organizations = Organization.objects.annotate(venue_count=Count('venues'))
+    organizations = _company_organizations(request).annotate(venue_count=Count('venues'))
     return render(request, 'maintenance/organization_list.html', {
         'active_nav': 'organizations',
         'organizations': organizations,
@@ -518,25 +786,31 @@ def organization_list(request):
 
 @login_required
 def organization_detail(request, pk):
-    organization = get_object_or_404(Organization, pk=pk)
-    venues = Venue.objects.filter(organization=organization).annotate(piano_count=Count('pianos'))
+    company = ensure_company_access(request)
+    organization = get_object_or_404(Organization, company=company, pk=pk)
+    venues = Venue.objects.filter(company=company, organization=organization).annotate(piano_count=Count('pianos'))
     return render(request, 'maintenance/organization_detail.html', {
         'active_nav': 'organizations',
         'organization': organization,
         'venues': venues,
+        'activity_events': _activity_events(company, organization),
     })
 
 
 @admin_required
 def organization_create(request):
+    company = ensure_company_access(request)
     if request.method == 'POST':
-        form = OrganizationForm(request.POST)
+        form = OrganizationForm(request.POST, company=company)
         if form.is_valid():
-            org = form.save()
+            org = form.save(commit=False)
+            org.company = company
+            org.save()
+            log_audit_event(company=company, actor=request.user, event_type='organization.created', target=org)
             messages.success(request, f'Organization "{org.name}" created.')
             return redirect('organization_detail', pk=org.pk)
     else:
-        form = OrganizationForm()
+        form = OrganizationForm(company=company)
 
     return render(request, 'maintenance/organization_form.html', {
         'active_nav': 'organizations',
@@ -547,16 +821,18 @@ def organization_create(request):
 
 @admin_required
 def organization_edit(request, pk):
-    organization = get_object_or_404(Organization, pk=pk)
+    company = ensure_company_access(request)
+    organization = get_object_or_404(Organization, company=company, pk=pk)
 
     if request.method == 'POST':
-        form = OrganizationForm(request.POST, instance=organization)
+        form = OrganizationForm(request.POST, instance=organization, company=company)
         if form.is_valid():
             form.save()
+            log_audit_event(company=company, actor=request.user, event_type='organization.updated', target=organization)
             messages.success(request, f'Organization "{organization.name}" updated.')
             return redirect('organization_detail', pk=organization.pk)
     else:
-        form = OrganizationForm(instance=organization)
+        form = OrganizationForm(instance=organization, company=company)
 
     return render(request, 'maintenance/organization_form.html', {
         'active_nav': 'organizations',
@@ -567,11 +843,19 @@ def organization_edit(request, pk):
 
 @admin_required
 def organization_delete(request, pk):
-    organization = get_object_or_404(Organization, pk=pk)
+    organization = get_object_or_404(Organization, company=ensure_company_access(request), pk=pk)
     venue_count = organization.venues.count()
 
     if request.method == 'POST':
         name = organization.name
+        company = organization.company
+        log_audit_event(
+            company=company,
+            actor=request.user,
+            event_type='organization.deleted',
+            target=organization,
+            message=f'Deleted organization {name}.',
+        )
         organization.delete()  # venues SET_NULL'd, keep existing
         messages.success(request, f'Organization "{name}" deleted.')
         return redirect('organization_list')
@@ -587,7 +871,7 @@ def organization_delete(request, pk):
 
 @login_required
 def venue_list(request):
-    venues = Venue.objects.select_related('organization').annotate(piano_count=Count('pianos'))
+    venues = _company_venues(request).select_related('organization').annotate(piano_count=Count('pianos'))
     return render(request, 'maintenance/venue_list.html', {
         'active_nav': 'venues',
         'venues': venues,
@@ -596,9 +880,11 @@ def venue_list(request):
 
 @login_required
 def venue_detail(request, pk):
-    venue = get_object_or_404(Venue.objects.select_related('organization'), pk=pk)
-    pianos = Piano.objects.filter(venue=venue, is_active=True).select_related('venue')
+    company = ensure_company_access(request)
+    venue = get_object_or_404(Venue.objects.filter(company=company).select_related('organization'), pk=pk)
+    pianos = Piano.objects.filter(company=company, venue=venue, is_active=True).select_related('venue')
     open_wo_count = WorkOrder.objects.filter(
+        company=company,
         piano__venue=venue,
         status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
     ).count()
@@ -607,57 +893,72 @@ def venue_detail(request, pk):
         'venue': venue,
         'pianos': pianos,
         'open_wo_count': open_wo_count,
+        'activity_events': _activity_events(company, venue),
     })
 
 
 @admin_required
 def venue_create(request):
+    company = ensure_company_access(request)
     if request.method == 'POST':
-        form = VenueForm(request.POST)
+        form = VenueForm(request.POST, company=company)
         if form.is_valid():
-            venue = form.save()
+            venue = form.save(commit=False)
+            venue.company = company
+            venue.save()
+            log_audit_event(company=company, actor=request.user, event_type='venue.created', target=venue)
             messages.success(request, f'Venue "{venue.name}" created.')
             return redirect('venue_detail', pk=venue.pk)
     else:
-        form = VenueForm()
+        form = VenueForm(company=company)
 
     return render(request, 'maintenance/venue_form.html', {
         'active_nav': 'venues',
         'form': form,
         'venue': None,
-        'organizations': Organization.objects.all(),
+        'organizations': Organization.objects.filter(company=company),
     })
 
 
 @admin_required
 def venue_edit(request, pk):
-    venue = get_object_or_404(Venue, pk=pk)
+    company = ensure_company_access(request)
+    venue = get_object_or_404(Venue, company=company, pk=pk)
 
     if request.method == 'POST':
-        form = VenueForm(request.POST, instance=venue)
+        form = VenueForm(request.POST, instance=venue, company=company)
         if form.is_valid():
             form.save()
+            log_audit_event(company=company, actor=request.user, event_type='venue.updated', target=venue)
             messages.success(request, f'Venue "{venue.name}" updated.')
             return redirect('venue_detail', pk=venue.pk)
     else:
-        form = VenueForm(instance=venue)
+        form = VenueForm(instance=venue, company=company)
 
     return render(request, 'maintenance/venue_form.html', {
         'active_nav': 'venues',
         'form': form,
         'venue': venue,
-        'organizations': Organization.objects.all(),
+        'organizations': Organization.objects.filter(company=company),
     })
 
 
 @admin_required
 def venue_delete(request, pk):
-    venue = get_object_or_404(Venue.objects.select_related('organization'), pk=pk)
-    piano_count = Piano.objects.filter(venue=venue).count()
+    company = ensure_company_access(request)
+    venue = get_object_or_404(Venue.objects.filter(company=company).select_related('organization'), pk=pk)
+    piano_count = Piano.objects.filter(company=company, venue=venue).count()
 
     if request.method == 'POST':
         name = venue.name
         org_pk = venue.organization_id
+        log_audit_event(
+            company=company,
+            actor=request.user,
+            event_type='venue.deleted',
+            target=venue,
+            message=f'Deleted venue {name}.',
+        )
         venue.delete()  # stamps venue_display on pianos, then SET_NULL
         messages.success(request, f'Venue "{name}" deleted.')
         if org_pk:
@@ -676,6 +977,7 @@ def venue_delete(request, pk):
 @login_required
 def workorder_list(request):
     today = date.today()
+    company = ensure_company_access(request)
     qs, filters = _filtered_workorders(request)
 
     sort_columns = []
@@ -714,8 +1016,8 @@ def workorder_list(request):
         'venue_filter': filters['venue_filter'],
         'completed_from': filters['completed_from'],
         'completed_to': filters['completed_to'],
-        'organizations': Organization.objects.all(),
-        'venues': Venue.objects.all(),
+        'organizations': Organization.objects.filter(company=company),
+        'venues': Venue.objects.filter(company=company),
         'status_choices': WorkOrder.Status.choices,
         'priority_choices': WorkOrder.Priority.choices,
         'type_choices': TaskType.choices,
@@ -730,38 +1032,46 @@ def workorder_list(request):
 
 @login_required
 def workorder_detail(request, pk):
+    company = ensure_company_access(request)
     wo = get_object_or_404(
-        WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech'),
+        WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue', 'assigned_tech', 'schedule'),
         pk=pk,
     )
     user = request.user
     logs = wo.logs.select_related('technician').order_by('-logged_at')
-    technicians = Technician.objects.filter(
-        is_active=True, role_technician=True,
-    ).order_by('first_name', 'last_name')
+    technicians = company_users(company, technicians_only=True).order_by('first_name', 'last_name')
 
     is_assigned_to_me = wo.assigned_tech_id == user.pk
     can_edit_wo = _can_update_workorder(user, wo)
     return_url = _safe_return_url(request, '/work-orders/')
+
+    today = date.today()
 
     return render(request, 'maintenance/workorder_detail.html', {
         'active_nav': 'workorders',
         'wo': wo,
         'logs': logs,
         'technicians': technicians,
-        'today': date.today(),
+        'today': today,
+        'service_status': _service_status_context(wo, today),
         'can_edit_wo': can_edit_wo,
         'is_assigned_to_me': is_assigned_to_me,
         'return_url': return_url,
+        'activity_events': _activity_events(company, wo, limit=8),
     })
 
 
 @admin_required
 def workorder_create(request):
+    company = ensure_company_access(request)
     if request.method == 'POST':
-        form = WorkOrderForm(request.POST)
+        form = WorkOrderForm(request.POST, company=company)
         if form.is_valid():
-            wo = form.save()
+            wo = form.save(commit=False)
+            wo.company = company
+            wo.save()
+            form.save_m2m()
+            log_audit_event(company=company, actor=request.user, event_type='workorder.created', target=wo)
             messages.success(request, f'Work Order WO-{wo.pk} created.')
             return redirect('workorder_detail', pk=wo.pk)
     else:
@@ -769,7 +1079,7 @@ def workorder_create(request):
         piano_pk = request.GET.get('piano')
         if piano_pk:
             initial['piano'] = piano_pk
-        form = WorkOrderForm(initial=initial)
+        form = WorkOrderForm(initial=initial, company=company)
 
     return render(request, 'maintenance/workorder_form.html', {
         'active_nav': 'workorders',
@@ -778,9 +1088,9 @@ def workorder_create(request):
         'return_url': '/work-orders/',
         'form_title': 'Create Work Order',
         'submit_label': 'Create Work Order',
-        'pianos': Piano.objects.filter(is_active=True).select_related('venue'),
-        'venues': Venue.objects.all(),
-        'technicians': Technician.objects.filter(is_active=True, role_technician=True),
+        'pianos': Piano.objects.filter(company=company, is_active=True).select_related('venue'),
+        'venues': Venue.objects.filter(company=company),
+        'technicians': company_users(company, technicians_only=True),
         'type_choices': WorkOrder.OrderType.choices,
         'task_type_choices': TaskType.choices,
         'status_choices': WorkOrder.Status.choices,
@@ -790,8 +1100,9 @@ def workorder_create(request):
 
 @login_required
 def workorder_edit(request, pk):
+    company = ensure_company_access(request)
     wo = get_object_or_404(
-        WorkOrder.objects.select_related('piano', 'assigned_tech'),
+        WorkOrder.objects.filter(company=company).select_related('piano', 'assigned_tech'),
         pk=pk,
     )
     if not _can_update_workorder(request.user, wo):
@@ -800,13 +1111,14 @@ def workorder_edit(request, pk):
 
     return_url = _safe_return_url(request, _workorder_detail_url(wo))
     if request.method == 'POST':
-        form = WorkOrderForm(request.POST, instance=wo)
+        form = WorkOrderForm(request.POST, instance=wo, company=company)
         if form.is_valid():
             form.save()
+            log_audit_event(company=company, actor=request.user, event_type='workorder.updated', target=wo)
             messages.success(request, f'Work Order WO-{wo.pk} updated.')
             return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
     else:
-        form = WorkOrderForm(instance=wo)
+        form = WorkOrderForm(instance=wo, company=company)
 
     return render(request, 'maintenance/workorder_form.html', {
         'active_nav': 'workorders',
@@ -815,9 +1127,9 @@ def workorder_edit(request, pk):
         'return_url': return_url,
         'form_title': f'Edit WO-{wo.pk}',
         'submit_label': 'Save Changes',
-        'pianos': Piano.objects.filter(is_active=True).select_related('venue'),
-        'venues': Venue.objects.all(),
-        'technicians': Technician.objects.filter(is_active=True, role_technician=True),
+        'pianos': Piano.objects.filter(company=company, is_active=True).select_related('venue'),
+        'venues': Venue.objects.filter(company=company),
+        'technicians': company_users(company, technicians_only=True),
         'type_choices': WorkOrder.OrderType.choices,
         'task_type_choices': TaskType.choices,
         'status_choices': WorkOrder.Status.choices,
@@ -827,21 +1139,24 @@ def workorder_edit(request, pk):
 
 @login_required
 def workorder_assign(request, pk):
-    wo = get_object_or_404(WorkOrder, pk=pk)
+    company = ensure_company_access(request)
+    wo = get_object_or_404(WorkOrder, company=company, pk=pk)
     user = request.user
 
     if request.method == 'POST':
-        if user.role_admin:
+        previous_assigned_tech_id = wo.assigned_tech_id
+        previous_status = wo.status
+        if _user_is_company_admin(request):
             # Admin can assign any technician
             tech_id = request.POST.get('assigned_tech')
             if tech_id:
                 try:
-                    wo.assigned_tech_id = int(tech_id)
+                    wo.assigned_tech = company_users(company, technicians_only=True).get(pk=int(tech_id))
                 except (ValueError, TypeError):
                     pass
             else:
                 wo.assigned_tech = None
-        elif user.role_technician:
+        elif _user_is_company_technician(request):
             # Tech can only assign self to unassigned WOs
             action = request.POST.get('assign_action')
             if action == 'assign_self' and wo.assigned_tech is None:
@@ -851,9 +1166,23 @@ def workorder_assign(request, pk):
             wo.status = WorkOrder.Status.IN_PROGRESS
         wo.save()
 
-    technicians = Technician.objects.filter(
-        is_active=True, role_technician=True,
-    ).order_by('first_name', 'last_name')
+        if wo.assigned_tech_id != previous_assigned_tech_id or wo.status != previous_status:
+            assignee_name = wo.assigned_tech.get_full_name() if wo.assigned_tech else 'Unassigned'
+            log_audit_event(
+                company=company,
+                actor=request.user,
+                event_type='workorder.assigned',
+                target=wo,
+                message=f'Assignment changed to {assignee_name}.',
+                metadata={
+                    'previous_assigned_tech_id': previous_assigned_tech_id,
+                    'new_assigned_tech_id': wo.assigned_tech_id,
+                    'previous_status': previous_status,
+                    'new_status': wo.status,
+                },
+            )
+
+    technicians = company_users(company, technicians_only=True).order_by('first_name', 'last_name')
     return render(request, 'maintenance/partials/workorder_assign_cell.html', {
         'wo': wo,
         'technicians': technicians,
@@ -862,17 +1191,18 @@ def workorder_assign(request, pk):
 
 @login_required
 def workorder_complete(request, pk):
+    company = ensure_company_access(request)
     wo = get_object_or_404(
-        WorkOrder.objects.select_related('piano', 'assigned_tech'),
+        WorkOrder.objects.filter(company=company).select_related('piano', 'assigned_tech'),
         pk=pk,
     )
     user = request.user
     return_url = _safe_return_url(request, f'/work-orders/{wo.pk}/')
-    if wo.assigned_tech_id and not user.role_admin and wo.assigned_tech_id != user.pk:
+    if wo.assigned_tech_id and not _user_is_company_admin(request) and wo.assigned_tech_id != user.pk:
         messages.error(request, 'You can only complete work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 
-    parts = Part.objects.all().order_by('name')
+    parts = Part.objects.filter(company=company).order_by('name')
 
     if request.method == 'POST':
         form = WorkOrderCompleteForm(request.POST)
@@ -884,6 +1214,7 @@ def workorder_complete(request, pk):
             # Create the maintenance log
             tech = wo.assigned_tech or request.user
             log = MaintenanceLog.objects.create(
+                company=company,
                 work_order=wo,
                 technician=tech,
                 piano=wo.piano,
@@ -895,7 +1226,7 @@ def workorder_complete(request, pk):
             # Handle photo uploads (validate type and size)
             for f in request.FILES.getlist('photos'):
                 if _validate_upload(f) is None:
-                    Photo.objects.create(work_order=wo, image=f, caption='')
+                    Photo.objects.create(company=company, piano=wo.piano, work_order=wo, image=f, caption='')
 
             # Handle parts used
             part_ids = request.POST.getlist('part_id')
@@ -903,10 +1234,11 @@ def workorder_complete(request, pk):
             for pid, qty in zip(part_ids, part_qtys):
                 if pid and qty:
                     try:
-                        part = Part.objects.get(pk=int(pid))
+                        part = Part.objects.get(company=company, pk=int(pid))
                         qty_int = int(qty)
                         if qty_int > 0:
                             PartUsed.objects.create(
+                                company=company,
                                 log=log,
                                 part=part,
                                 quantity_used=qty_int,
@@ -950,12 +1282,14 @@ def workorder_complete(request, pk):
                         cr_data[field] = val
                 cr_data['notes'] = form.cleaned_data.get('condition_notes', '')
                 reading = ConditionReading.objects.create(
+                    company=company,
                     piano=wo.piano,
                     log=log,
                     **cr_data,
                 )
                 reading.update_piano_current_state()
 
+            log_audit_event(company=company, actor=request.user, event_type='workorder.completed', target=wo)
             messages.success(request, f'Work Order WO-{wo.pk} completed.')
             return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
     else:
@@ -990,28 +1324,38 @@ def workorder_complete(request, pk):
 
 @admin_required
 def workorder_delete(request, pk):
+    company = ensure_company_access(request)
     wo = get_object_or_404(
-        WorkOrder.objects.select_related('piano', 'piano__venue'),
+        WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue'),
         pk=pk,
     )
+    return_url = _safe_return_url(request, reverse('workorder_list'))
     log_count = wo.logs.count()
 
     if request.method == 'POST':
         wo_id = wo.pk
+        log_audit_event(
+            company=company,
+            actor=request.user,
+            event_type='workorder.deleted',
+            target=wo,
+            message=f'Deleted work order WO-{wo_id}.',
+        )
         wo.delete()
         messages.success(request, f'Work Order WO-{wo_id} deleted.')
-        return redirect('workorder_list')
+        return HttpResponseRedirect(return_url)
 
     return render(request, 'maintenance/workorder_confirm_delete.html', {
         'active_nav': 'workorders',
         'wo': wo,
         'log_count': log_count,
+        'return_url': return_url,
     })
 
 
 @login_required
 def workorder_reopen(request, pk):
-    wo = get_object_or_404(WorkOrder, pk=pk)
+    wo = get_object_or_404(WorkOrder, company=ensure_company_access(request), pk=pk)
     return_url = _safe_return_url(request, _workorder_detail_url(wo))
 
     if request.method != 'POST':
@@ -1026,6 +1370,7 @@ def workorder_reopen(request, pk):
     wo.status = WorkOrder.Status.IN_PROGRESS if wo.assigned_tech_id else WorkOrder.Status.OPEN
     wo.completed_date = None
     wo.save(update_fields=['status', 'completed_date'])
+    log_audit_event(company=wo.company, actor=request.user, event_type='workorder.reopened', target=wo)
     messages.success(request, f'WO-{wo.pk} reopened.')
     return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 
@@ -1033,17 +1378,18 @@ def workorder_reopen(request, pk):
 @login_required
 def workorder_log_work(request, pk):
     """Log work against a work order without completing it."""
+    company = ensure_company_access(request)
     wo = get_object_or_404(
-        WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech'),
+        WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue', 'assigned_tech'),
         pk=pk,
     )
     user = request.user
     return_url = _safe_return_url(request, f'/work-orders/{wo.pk}/')
-    if wo.assigned_tech_id and not user.role_admin and wo.assigned_tech_id != user.pk:
+    if wo.assigned_tech_id and not _user_is_company_admin(request) and wo.assigned_tech_id != user.pk:
         messages.error(request, 'You can only log work on work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 
-    parts = Part.objects.all().order_by('name')
+    parts = Part.objects.filter(company=company).order_by('name')
 
     if request.method == 'POST':
         form = WorkOrderLogWorkForm(request.POST)
@@ -1053,6 +1399,7 @@ def workorder_log_work(request, pk):
 
             tech = wo.assigned_tech or request.user
             log = MaintenanceLog.objects.create(
+                company=company,
                 work_order=wo,
                 technician=tech,
                 piano=wo.piano,
@@ -1064,7 +1411,7 @@ def workorder_log_work(request, pk):
             # Handle photo uploads
             for f in request.FILES.getlist('photos'):
                 if _validate_upload(f) is None:
-                    Photo.objects.create(work_order=wo, image=f, caption='')
+                    Photo.objects.create(company=company, piano=wo.piano, work_order=wo, image=f, caption='')
 
             # Handle parts used
             part_ids = request.POST.getlist('part_id')
@@ -1072,10 +1419,11 @@ def workorder_log_work(request, pk):
             for pid, qty in zip(part_ids, part_qtys):
                 if pid and qty:
                     try:
-                        part = Part.objects.get(pk=int(pid))
+                        part = Part.objects.get(company=company, pk=int(pid))
                         qty_int = int(qty)
                         if qty_int > 0:
                             PartUsed.objects.create(
+                                company=company,
                                 log=log,
                                 part=part,
                                 quantity_used=qty_int,
@@ -1093,6 +1441,7 @@ def workorder_log_work(request, pk):
             elif wo.assigned_tech_id == user.pk:
                 wo.save(update_fields=['assigned_tech'])
 
+            log_audit_event(company=company, actor=request.user, event_type='workorder.work_logged', target=wo)
             messages.success(request, f'Work logged for WO-{wo.pk}.')
             return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
     else:
@@ -1152,7 +1501,7 @@ def _validate_upload(f):
 
 @login_required
 def piano_photo_upload(request, pk):
-    piano = get_object_or_404(Piano, pk=pk)
+    piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST':
         caption = request.POST.get('caption', '')
         files = request.FILES.getlist('photos')
@@ -1163,9 +1512,17 @@ def piano_photo_upload(request, pk):
                 messages.error(request, err)
                 continue
             is_profile = not piano.photos.exists() and uploaded == 0
-            Photo.objects.create(piano=piano, image=f, caption=caption, is_profile_photo=is_profile)
+            Photo.objects.create(company=piano.company, piano=piano, image=f, caption=caption, is_profile_photo=is_profile)
             uploaded += 1
         if uploaded:
+            log_audit_event(
+                company=piano.company,
+                actor=request.user,
+                event_type='piano.photo_uploaded',
+                target=piano,
+                message=f'Uploaded {uploaded} photo(s).',
+                metadata={'uploaded_count': uploaded},
+            )
             messages.success(request, f'{uploaded} photo(s) uploaded.')
         return redirect('piano_detail', pk=piano.pk)
 
@@ -1177,7 +1534,7 @@ def piano_photo_upload(request, pk):
 
 @login_required
 def piano_set_profile_photo(request, pk, photo_pk):
-    piano = get_object_or_404(Piano, pk=pk)
+    piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST':
         piano.photos.update(is_profile_photo=False)
         Photo.objects.filter(pk=photo_pk, piano=piano).update(is_profile_photo=True)
@@ -1186,11 +1543,12 @@ def piano_set_profile_photo(request, pk, photo_pk):
 
 @staff_required
 def piano_photo_delete(request, pk, photo_pk):
-    piano = get_object_or_404(Piano, pk=pk)
-    photo = get_object_or_404(Photo, pk=photo_pk, piano=piano)
+    piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=pk)
+    photo = get_object_or_404(Photo, company=piano.company, pk=photo_pk, piano=piano)
 
     if request.method == 'POST':
         was_profile = photo.is_profile_photo
+        photo_name = photo.image.name if photo.image else ''
         if photo.image:
             photo.image.delete(save=False)
         photo.delete()
@@ -1201,6 +1559,14 @@ def piano_photo_delete(request, pk, photo_pk):
                 next_photo.is_profile_photo = True
                 next_photo.save(update_fields=['is_profile_photo'])
 
+        log_audit_event(
+            company=piano.company,
+            actor=request.user,
+            event_type='piano.photo_deleted',
+            target=piano,
+            message='Deleted a piano photo.',
+            metadata={'was_profile_photo': was_profile, 'image_name': photo_name},
+        )
         messages.success(request, 'Photo deleted.')
     return redirect('piano_detail', pk=piano.pk)
 
@@ -1212,13 +1578,20 @@ def schedule(request):
     today = date.today()
     soon = today + timedelta(days=30)
     due_filter = request.GET.get('due', '')
+    org_filter = request.GET.get('org', '')
+    venue_filter = request.GET.get('venue', '')
+    company = ensure_company_access(request)
 
     active_statuses = [WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS]
     active_wos = (
         WorkOrder.objects
-        .filter(status__in=active_statuses)
+        .filter(company=company, status__in=active_statuses)
         .select_related('piano', 'piano__venue', 'assigned_tech')
     )
+    if org_filter:
+        active_wos = active_wos.filter(piano__venue__organization_id=org_filter)
+    if venue_filter:
+        active_wos = active_wos.filter(piano__venue_id=venue_filter)
     if due_filter == 'overdue':
         active_wos = active_wos.filter(due_date__lt=today)
     elif due_filter == 'next-30':
@@ -1263,20 +1636,53 @@ def schedule(request):
         ('upcoming', 'Upcoming'),
         ('no-date', 'No Due Date'),
     ]
-    if request.headers.get('HX-Request') == 'true':
-        return render(request, 'maintenance/partials/schedule_board.html', {
-            'schedule_columns': schedule_columns,
-            'due_filter': due_filter,
-            'due_filter_choices': due_filter_choices,
-            'today': today,
+    schedule_query = {}
+    if due_filter:
+        schedule_query['due'] = due_filter
+    if org_filter:
+        schedule_query['org'] = org_filter
+    if venue_filter:
+        schedule_query['venue'] = venue_filter
+    schedule_return_url = reverse('schedule')
+    schedule_query_string = urlencode(schedule_query)
+    if schedule_query_string:
+        schedule_return_url = f'{schedule_return_url}?{schedule_query_string}'
+
+    filter_base_query = {}
+    if org_filter:
+        filter_base_query['org'] = org_filter
+    if venue_filter:
+        filter_base_query['venue'] = venue_filter
+    due_filter_links = []
+    for value, label in due_filter_choices:
+        link_query = filter_base_query.copy()
+        if value:
+            link_query['due'] = value
+        query_string = urlencode(link_query)
+        due_filter_links.append({
+            'value': value,
+            'label': label,
+            'url': f'{reverse("schedule")}?{query_string}' if query_string else reverse('schedule'),
         })
+
+    schedule_context = {
+        'schedule_columns': schedule_columns,
+        'due_filter': due_filter,
+        'org_filter': org_filter,
+        'venue_filter': venue_filter,
+        'due_filter_choices': due_filter_choices,
+        'due_filter_links': due_filter_links,
+        'organizations': Organization.objects.filter(company=company),
+        'venues': Venue.objects.filter(company=company),
+        'schedule_return_url': schedule_return_url,
+        'today': today,
+    }
+    if request.headers.get('HX-Request') == 'true':
+        return render(request, 'maintenance/partials/schedule_board.html', schedule_context)
 
     return render(request, 'maintenance/schedule.html', {
         'active_nav': 'schedule',
-        'schedule_columns': schedule_columns,
-        'due_filter': due_filter,
-        'due_filter_choices': due_filter_choices,
-        'today': today,
+        **schedule_context,
     })
 
 
@@ -1286,6 +1692,7 @@ def schedule(request):
 def request_list(request):
     qs = (
         MaintenanceRequest.objects
+        .filter(company=ensure_company_access(request))
         .select_related('piano', 'piano__venue', 'work_order')
         .order_by('-created_at')
     )
@@ -1304,9 +1711,10 @@ def request_list(request):
 
 @admin_required
 def request_approve(request, pk):
-    mr = get_object_or_404(MaintenanceRequest, pk=pk)
+    mr = get_object_or_404(MaintenanceRequest, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST' and not mr.work_order:
         wo = WorkOrder.objects.create(
+            company=mr.company,
             piano=mr.piano,
             order_type=WorkOrder.OrderType.REQUEST,
             status=WorkOrder.Status.OPEN,
@@ -1316,16 +1724,30 @@ def request_approve(request, pk):
         mr.work_order = wo
         mr.status = MaintenanceRequest.RequestStatus.ASSIGNED
         mr.save()
+        log_audit_event(
+            company=mr.company,
+            actor=request.user,
+            event_type='maintenance_request.approved',
+            target=mr,
+            message=f'Approved request and created WO-{wo.pk}.',
+        )
         messages.success(request, f'Request approved — WO-{wo.pk} created.')
     return redirect('request_list')
 
 
 @admin_required
 def request_reject(request, pk):
-    mr = get_object_or_404(MaintenanceRequest, pk=pk)
+    mr = get_object_or_404(MaintenanceRequest, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST':
         mr.status = MaintenanceRequest.RequestStatus.RESOLVED
         mr.save()
+        log_audit_event(
+            company=mr.company,
+            actor=request.user,
+            event_type='maintenance_request.rejected',
+            target=mr,
+            message='Marked request as resolved.',
+        )
         messages.success(request, 'Request marked as resolved.')
     return redirect('request_list')
 
@@ -1348,12 +1770,13 @@ CONDITION_FIELD_LIST = [
 
 @login_required
 def condition_reading_create(request, piano_pk):
-    piano = get_object_or_404(Piano, pk=piano_pk)
+    piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=piano_pk)
 
     if request.method == 'POST':
         form = ConditionReadingForm(request.POST)
         if form.is_valid():
             reading = form.save(commit=False)
+            reading.company = piano.company
             reading.piano = piano
             reading.save()
             reading.update_piano_current_state()
@@ -1394,7 +1817,7 @@ def condition_reading_create(request, piano_pk):
 
 @admin_required
 def template_list(request):
-    templates = ScheduleTemplate.objects.all()
+    templates = ScheduleTemplate.objects.filter(company=ensure_company_access(request))
     return render(request, 'maintenance/template_list.html', {
         'active_nav': 'schedule',
         'templates': templates,
@@ -1403,10 +1826,13 @@ def template_list(request):
 
 @admin_required
 def template_create(request):
+    company = ensure_company_access(request)
     if request.method == 'POST':
         form = ScheduleTemplateForm(request.POST)
         if form.is_valid():
-            form.save()
+            template = form.save(commit=False)
+            template.company = company
+            template.save()
             messages.success(request, 'Template created.')
             return redirect('template_list')
     else:
@@ -1420,7 +1846,7 @@ def template_create(request):
 
 @admin_required
 def template_edit(request, pk):
-    tmpl = get_object_or_404(ScheduleTemplate, pk=pk)
+    tmpl = get_object_or_404(ScheduleTemplate, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST':
         form = ScheduleTemplateForm(request.POST, instance=tmpl)
         if form.is_valid():
@@ -1439,18 +1865,20 @@ def template_edit(request, pk):
 
 @admin_required
 def template_apply(request, pk):
-    tmpl = get_object_or_404(ScheduleTemplate, pk=pk)
-    pianos = Piano.objects.filter(is_active=True).select_related('venue')
+    company = ensure_company_access(request)
+    tmpl = get_object_or_404(ScheduleTemplate, company=company, pk=pk)
+    pianos = Piano.objects.filter(company=company, is_active=True).select_related('venue')
 
     if request.method == 'POST':
         piano_ids = request.POST.getlist('pianos')
         created = 0
         for pid in piano_ids:
             try:
-                piano = Piano.objects.get(pk=int(pid))
+                piano = Piano.objects.get(company=company, pk=int(pid))
             except (Piano.DoesNotExist, ValueError, TypeError):
                 continue
             MaintenanceSchedule.objects.create(
+                company=company,
                 piano=piano,
                 template=tmpl,
                 task_name=tmpl.task_name,
@@ -1472,7 +1900,7 @@ def template_apply(request, pk):
 
 @admin_required
 def schedule_toggle(request, pk):
-    sched = get_object_or_404(MaintenanceSchedule, pk=pk)
+    sched = get_object_or_404(MaintenanceSchedule, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST':
         sched.is_active = not sched.is_active
         sched.save()
@@ -1483,7 +1911,7 @@ def schedule_toggle(request, pk):
 
 @admin_required
 def schedule_delete(request, pk):
-    sched = get_object_or_404(MaintenanceSchedule, pk=pk)
+    sched = get_object_or_404(MaintenanceSchedule, company=ensure_company_access(request), pk=pk)
     piano_pk = sched.piano_id
     if request.method == 'POST':
         sched.delete()
@@ -1495,19 +1923,31 @@ def schedule_delete(request, pk):
 
 @admin_required
 def technician_list(request):
-    techs = (
-        Technician.objects
+    company = ensure_company_access(request)
+    memberships = list(
+        CompanyMembership.objects
+        .filter(company=company)
+        .select_related('user')
         .annotate(
             open_work_order_count=Count(
-                'work_orders',
-                filter=Q(work_orders__status__in=[
-                    WorkOrder.Status.OPEN,
-                    WorkOrder.Status.IN_PROGRESS,
-                ]),
+                'user__work_orders',
+                filter=Q(
+                    user__work_orders__status__in=[
+                        WorkOrder.Status.OPEN,
+                        WorkOrder.Status.IN_PROGRESS,
+                    ],
+                    user__work_orders__company=company,
+                ),
             ),
         )
-        .order_by('-is_active', 'first_name', 'last_name', 'username')
+        .order_by('-is_active', '-user__is_active', 'user__first_name', 'user__last_name', 'user__username')
     )
+    techs = []
+    for membership in memberships:
+        tech = membership.user
+        tech.company_membership = membership
+        tech.open_work_order_count = membership.open_work_order_count
+        techs.append(tech)
     return render(request, 'maintenance/technician_list.html', {
         'active_nav': 'technicians',
         'technicians': techs,
@@ -1516,10 +1956,24 @@ def technician_list(request):
 
 @admin_required
 def technician_create(request):
+    company = ensure_company_access(request)
     if request.method == 'POST':
         form = TechnicianCreateForm(request.POST)
         if form.is_valid():
-            user = form.save()
+            user = form.save(commit=False)
+            user.role_admin = False
+            user.role_technician = False
+            user.save()
+            CompanyMembership.objects.update_or_create(
+                company=company,
+                user=user,
+                defaults={
+                    'role_admin': form.cleaned_data['role_admin'],
+                    'role_technician': form.cleaned_data['role_technician'],
+                    'is_active': user.is_active,
+                },
+            )
+            log_audit_event(company=company, actor=request.user, event_type='membership.created', target=user)
             messages.success(request, f'User {user.username} created.')
             return redirect('technician_list')
     else:
@@ -1536,22 +1990,55 @@ def technician_create(request):
 
 @admin_required
 def technician_edit(request, pk):
-    tech = get_object_or_404(Technician, pk=pk)
+    company = ensure_company_access(request)
+    membership = get_object_or_404(
+        CompanyMembership.objects.select_related('user'),
+        company=company,
+        user_id=pk,
+    )
+    tech = membership.user
+    original_account_active = tech.is_active
     if request.method == 'POST':
         form = TechnicianUpdateForm(request.POST, instance=tech)
         if form.is_valid():
             updated = form.save(commit=False)
+            desired_membership_active = form.cleaned_data['is_active']
+            membership_was_active = membership.is_active
+            updated.is_active = original_account_active
             if updated.pk == request.user.pk:
-                if not updated.is_active:
-                    form.add_error('is_active', 'You cannot deactivate your own account.')
-                if not updated.role_admin:
+                if not desired_membership_active:
+                    form.add_error('is_active', 'You cannot deactivate your own access to this company.')
+                if not form.cleaned_data.get('role_admin'):
                     form.add_error('role_admin', 'You cannot remove your own admin role.')
             if not form.errors:
                 updated.save()
+                membership.role_admin = form.cleaned_data['role_admin']
+                membership.role_technician = form.cleaned_data['role_technician']
+                membership.is_active = desired_membership_active
+                membership.save()
+                event_type = 'membership.updated'
+                message = 'Updated membership roles.'
+                if membership_was_active != desired_membership_active:
+                    event_type = 'membership.activated' if desired_membership_active else 'membership.deactivated'
+                    message = (
+                        'Activated company access.'
+                        if desired_membership_active
+                        else 'Deactivated company access.'
+                    )
+                log_audit_event(
+                    company=company,
+                    actor=request.user,
+                    event_type=event_type,
+                    target=tech,
+                    message=message,
+                )
                 messages.success(request, f'User {updated.username} updated.')
                 return redirect('technician_list')
     else:
         form = TechnicianUpdateForm(instance=tech)
+        form.fields['is_active'].initial = membership.is_active
+        form.fields['role_admin'].initial = membership.role_admin
+        form.fields['role_technician'].initial = membership.role_technician
     return render(request, 'maintenance/technician_form.html', {
         'active_nav': 'technicians',
         'form': form,
@@ -1561,7 +2048,42 @@ def technician_edit(request, pk):
 
 
 @admin_required
+def technician_toggle_membership(request, pk):
+    company = ensure_company_access(request)
+    membership = get_object_or_404(
+        CompanyMembership.objects.select_related('user'),
+        company=company,
+        user_id=pk,
+    )
+    tech = membership.user
+
+    if request.method != 'POST':
+        return redirect('technician_list')
+
+    if tech.pk == request.user.pk and membership.is_active:
+        messages.error(request, 'You cannot deactivate your own access to this company.')
+        return redirect('technician_list')
+
+    membership.is_active = not membership.is_active
+    membership.save()
+    activated = membership.is_active
+    log_audit_event(
+        company=company,
+        actor=request.user,
+        event_type='membership.activated' if activated else 'membership.deactivated',
+        target=tech,
+        message='Activated company access.' if activated else 'Deactivated company access.',
+    )
+    if activated:
+        messages.success(request, f'{tech.get_full_name() or tech.username} is active in {company.name} again.')
+    else:
+        messages.success(request, f'{tech.get_full_name() or tech.username} was removed from the active roster for {company.name}.')
+    return redirect('technician_list')
+
+
+@admin_required
 def technician_report(request):
+    company = ensure_company_access(request)
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
 
@@ -1572,22 +2094,22 @@ def technician_report(request):
         log_q &= Q(logs__logged_at__date__lte=date_to)
 
     techs = (
-        Technician.objects
+        company_users(company)
         .filter(is_active=True)
         .annotate(
             total_hours=Coalesce(
-                Sum('logs__hours_worked', filter=log_q),
+                Sum('logs__hours_worked', filter=log_q & Q(logs__company=company)),
                 Decimal('0'),
                 output_field=DecimalField(),
             ),
             wo_count=Count(
                 'logs__work_order',
                 distinct=True,
-                filter=log_q,
+                filter=log_q & Q(logs__company=company),
             ),
             last_activity=Max(
                 'logs__logged_at',
-                filter=log_q,
+                filter=log_q & Q(logs__company=company),
             ),
         )
         .order_by('last_name', 'first_name')
@@ -1609,6 +2131,7 @@ def technician_report(request):
 
 @admin_required
 def technician_report_csv(request):
+    company = ensure_company_access(request)
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
 
@@ -1619,22 +2142,22 @@ def technician_report_csv(request):
         log_q &= Q(logs__logged_at__date__lte=date_to)
 
     techs = (
-        Technician.objects
+        company_users(company)
         .filter(is_active=True)
         .annotate(
             total_hours=Coalesce(
-                Sum('logs__hours_worked', filter=log_q),
+                Sum('logs__hours_worked', filter=log_q & Q(logs__company=company)),
                 Decimal('0'),
                 output_field=DecimalField(),
             ),
             wo_count=Count(
                 'logs__work_order',
                 distinct=True,
-                filter=log_q,
+                filter=log_q & Q(logs__company=company),
             ),
             last_activity=Max(
                 'logs__logged_at',
-                filter=log_q,
+                filter=log_q & Q(logs__company=company),
             ),
         )
         .order_by('last_name', 'first_name')
@@ -1659,7 +2182,7 @@ def technician_report_csv(request):
 
 @admin_required
 def part_list(request):
-    parts = Part.objects.all()
+    parts = Part.objects.filter(company=ensure_company_access(request))
     return render(request, 'maintenance/part_list.html', {
         'active_nav': 'parts',
         'parts': parts,
@@ -1668,10 +2191,20 @@ def part_list(request):
 
 @admin_required
 def part_create(request):
+    company = ensure_company_access(request)
     if request.method == 'POST':
         form = PartForm(request.POST)
         if form.is_valid():
-            form.save()
+            part = form.save(commit=False)
+            part.company = company
+            part.save()
+            log_audit_event(
+                company=company,
+                actor=request.user,
+                event_type='part.created',
+                target=part,
+                message=f'Created part {part.name}.',
+            )
             messages.success(request, 'Part added.')
             return redirect('part_list')
     else:
@@ -1685,11 +2218,18 @@ def part_create(request):
 
 @admin_required
 def part_edit(request, pk):
-    part = get_object_or_404(Part, pk=pk)
+    part = get_object_or_404(Part, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST':
         form = PartForm(request.POST, instance=part)
         if form.is_valid():
             form.save()
+            log_audit_event(
+                company=part.company,
+                actor=request.user,
+                event_type='part.updated',
+                target=part,
+                message=f'Updated part {part.name}.',
+            )
             messages.success(request, 'Part updated.')
             return redirect('part_list')
     else:
@@ -1730,6 +2270,7 @@ def piano_import_sample_csv(request):
 
 @admin_required
 def piano_import_csv(request):
+    company = ensure_company_access(request)
     MAX_CSV_SIZE = 5 * 1024 * 1024  # 5 MB
     MAX_CSV_ROWS = 5000
 
@@ -1749,16 +2290,18 @@ def piano_import_csv(request):
             try:
                 org_name = row.get('organization', '').strip()
                 venue_name = row.get('venue', '').strip()
-                org, _ = Organization.objects.get_or_create(name=org_name) if org_name else (None, False)
+                org, _ = Organization.objects.get_or_create(company=company, name=org_name) if org_name else (None, False)
                 if not org:
-                    org = Organization.objects.first()
+                    org = Organization.objects.filter(company=company).first()
                     if not org:
-                        org = Organization.objects.create(name='Default Organization')
+                        org = Organization.objects.create(company=company, name='Default Organization')
                 venue, _ = Venue.objects.get_or_create(
+                    company=company,
                     name=venue_name,
                     defaults={'organization': org},
                 )
                 Piano.objects.create(
+                    company=company,
                     name=row.get('name', '').strip(),
                     make=row.get('make', '').strip(),
                     model=row.get('model', '').strip(),
@@ -1776,6 +2319,13 @@ def piano_import_csv(request):
                 errors.append(f'Row {i}: {e}')
 
         if created:
+            log_audit_event(
+                company=company,
+                actor=request.user,
+                event_type='piano.imported',
+                message=f'Imported {created} piano(s) from CSV.',
+                metadata={'created_count': created, 'error_count': len(errors)},
+            )
             messages.success(request, f'{created} piano(s) imported.')
         if errors:
             messages.warning(request, f'{len(errors)} row(s) skipped. First error: {errors[0]}')
@@ -1790,7 +2340,7 @@ def piano_import_csv(request):
 
 @admin_required
 def qr_codes(request):
-    pianos = Piano.objects.filter(is_active=True).select_related('venue').order_by('venue__name', 'name')
+    pianos = Piano.objects.filter(company=ensure_company_access(request), is_active=True).select_related('venue').order_by('venue__name', 'name')
     base_url = request.build_absolute_uri('/maintenance_request/')
     piano_qrs = []
     for p in pianos:
@@ -1806,7 +2356,7 @@ def qr_codes(request):
 
 @admin_required
 def qr_codes_csv(request):
-    pianos = Piano.objects.filter(is_active=True).select_related('venue').order_by('venue__name', 'name')
+    pianos = Piano.objects.filter(company=ensure_company_access(request), is_active=True).select_related('venue').order_by('venue__name', 'name')
     base_url = request.build_absolute_uri('/maintenance_request/')
 
     response = HttpResponse(content_type='text/csv')
@@ -1838,12 +2388,19 @@ def reports(request):
 
 @admin_required
 def report_export_workorders(request):
+    company = ensure_company_access(request)
+    log_audit_event(
+        company=company,
+        actor=request.user,
+        event_type='report.workorders_exported',
+        message='Exported work orders CSV.',
+    )
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="work_orders.csv"'
     writer = csv.writer(response)
     writer.writerow(['ID', 'Piano', 'Venue', 'Type', 'Status', 'Priority',
                      'Assigned To', 'Due Date', 'Completed', 'Created', 'Description'])
-    wos = WorkOrder.objects.select_related('piano', 'piano__venue', 'assigned_tech').order_by('-created_at')
+    wos = WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue', 'assigned_tech').order_by('-created_at')
     for wo in wos:
         writer.writerow([
             f'WO-{wo.pk}',
@@ -1863,12 +2420,19 @@ def report_export_workorders(request):
 
 @admin_required
 def report_export_pianos(request):
+    company = ensure_company_access(request)
+    log_audit_event(
+        company=company,
+        actor=request.user,
+        event_type='report.pianos_exported',
+        message='Exported pianos CSV.',
+    )
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="pianos.csv"'
     writer = csv.writer(response)
     writer.writerow(['Name', 'Make', 'Model', 'Serial Number', 'Type',
                      'Venue', 'Section', 'Room', 'Year Built', 'Year Acquired', 'Notes'])
-    pianos = Piano.objects.filter(is_active=True).select_related('venue').order_by('name')
+    pianos = Piano.objects.filter(company=company, is_active=True).select_related('venue').order_by('name')
     for p in pianos:
         writer.writerow([
             p.name, p.make, p.model, p.serial_number, p.piano_type,
@@ -1882,21 +2446,44 @@ def report_export_pianos(request):
 
 @login_required
 def settings_page(request):
-    is_admin = request.user.role_admin
-    company = CompanySettings.load() if is_admin else None
-    company_form = CompanySettingsForm(instance=company, prefix='company') if is_admin else None
+    is_admin = _user_is_company_admin(request)
+    active_company = ensure_company_access(request)
+    setup_progress = _setup_progress_context(active_company) if is_admin else None
+    company_settings = CompanySettings.load_for_company(active_company) if is_admin else None
+    company_form = CompanySettingsForm(instance=company_settings, prefix='company') if is_admin else None
     profile_form = UserProfileForm(instance=request.user, prefix='profile')
     password_form = PasswordChangeForm(user=request.user, prefix='password')
+    invitation_form = CompanyInvitationForm(prefix='invite') if is_admin else None
+    pending_invitations = (
+        CompanyInvitation.objects.filter(
+            company=active_company,
+            status=CompanyInvitation.Status.PENDING,
+        ).order_by('-created_at')
+        if is_admin else []
+    )
+    recent_invitations = (
+        CompanyInvitation.objects.filter(company=active_company)
+        .exclude(status=CompanyInvitation.Status.PENDING)
+        .order_by('-created_at')[:10]
+        if is_admin else []
+    )
 
     if request.method == 'POST':
         action = request.POST.get('action')
 
         if action == 'company' and is_admin:
             company_form = CompanySettingsForm(
-                request.POST, instance=company, prefix='company',
+                request.POST, instance=company_settings, prefix='company',
             )
             if company_form.is_valid():
                 company_form.save()
+                log_audit_event(
+                    company=active_company,
+                    actor=request.user,
+                    event_type='company_settings.updated',
+                    target=company_settings,
+                    message='Updated company settings.',
+                )
                 messages.success(request, 'Company settings saved.')
                 return redirect('settings')
 
@@ -1919,9 +2506,134 @@ def settings_page(request):
                 messages.success(request, 'Password changed.')
                 return redirect('settings')
 
+        elif action == 'invite' and is_admin:
+            invitation_form = CompanyInvitationForm(request.POST, prefix='invite')
+            if invitation_form.is_valid():
+                invitation = invitation_form.save(commit=False)
+                invitation.company = active_company
+                invitation.invited_by = request.user
+                invitation.expires_at = timezone.now() + timedelta(days=7)
+                invitation.save()
+                _send_company_invitation_email(request, invitation)
+                log_audit_event(company=active_company, actor=request.user, event_type='invitation.created', target=invitation)
+                messages.success(request, f'Invitation sent to {invitation.email}.')
+                return redirect('settings')
+
+        elif action == 'invite_revoke' and is_admin:
+            invitation = get_object_or_404(
+                CompanyInvitation,
+                company=active_company,
+                pk=request.POST.get('invitation_id'),
+                status=CompanyInvitation.Status.PENDING,
+            )
+            invitation.status = CompanyInvitation.Status.REVOKED
+            invitation.save(update_fields=['status'])
+            log_audit_event(company=active_company, actor=request.user, event_type='invitation.revoked', target=invitation)
+            messages.success(request, f'Invitation revoked for {invitation.email}.')
+            return redirect('settings')
+
+        elif action == 'invite_resend' and is_admin:
+            invitation = get_object_or_404(
+                CompanyInvitation,
+                company=active_company,
+                pk=request.POST.get('invitation_id'),
+                status=CompanyInvitation.Status.PENDING,
+            )
+            invitation.token = uuid.uuid4()
+            invitation.expires_at = timezone.now() + timedelta(days=7)
+            invitation.save(update_fields=['token', 'expires_at'])
+            _send_company_invitation_email(request, invitation)
+            log_audit_event(company=active_company, actor=request.user, event_type='invitation.resent', target=invitation)
+            messages.success(request, f'Invitation resent to {invitation.email}.')
+            return redirect('settings')
+
     return render(request, 'maintenance/settings.html', {
         'active_nav': 'settings',
         'company_form': company_form,
         'profile_form': profile_form,
         'password_form': password_form,
+        'invitation_form': invitation_form,
+        'pending_invitations': pending_invitations,
+        'recent_invitations': recent_invitations,
+        'setup_progress': setup_progress,
+    })
+
+
+@login_required
+def switch_company(request):
+    if request.method != 'POST':
+        return redirect('dashboard')
+
+    form = CompanySwitcherForm(request.POST)
+    if form.is_valid():
+        company_id = form.cleaned_data['company_id']
+        if request.user.membership_for_company(company_id):
+            request.session[ACTIVE_COMPANY_SESSION_KEY] = company_id
+            messages.success(request, 'Active company updated.')
+    return redirect(request.POST.get('next') or 'dashboard')
+
+
+def company_invitation_accept(request, token):
+    invitation = get_object_or_404(
+        CompanyInvitation.objects.select_related('company'),
+        token=token,
+    )
+    if invitation.status != CompanyInvitation.Status.PENDING or invitation.is_expired:
+        messages.error(request, 'This invitation is no longer valid.')
+        return redirect('login')
+
+    if request.user.is_authenticated:
+        user = request.user
+        if invitation.email and user.email and invitation.email.lower() != user.email.lower():
+            messages.error(request, 'Please sign in with the invited email address to accept this invitation.')
+            return redirect('settings')
+        CompanyMembership.objects.update_or_create(
+            company=invitation.company,
+            user=user,
+            defaults={
+                'role_admin': invitation.role_admin,
+                'role_technician': invitation.role_technician,
+                'is_active': True,
+            },
+        )
+        invitation.status = CompanyInvitation.Status.ACCEPTED
+        invitation.accepted_at = timezone.now()
+        invitation.save(update_fields=['status', 'accepted_at'])
+        request.session[ACTIVE_COMPANY_SESSION_KEY] = invitation.company_id
+        messages.success(request, f'You joined {invitation.company.name}.')
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        form = SignUpForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.is_active = True
+            user.email = invitation.email
+            user.role_admin = False
+            user.role_technician = False
+            user.save()
+            CompanyMembership.objects.update_or_create(
+                company=invitation.company,
+                user=user,
+                defaults={
+                    'role_admin': invitation.role_admin,
+                    'role_technician': invitation.role_technician,
+                    'is_active': True,
+                },
+            )
+            invitation.status = CompanyInvitation.Status.ACCEPTED
+            invitation.accepted_at = timezone.now()
+            invitation.save(update_fields=['status', 'accepted_at'])
+            messages.success(request, 'Account created. You can sign in now.')
+            return redirect('login')
+    else:
+        form = SignUpForm(initial={
+            'email': invitation.email,
+            'first_name': invitation.first_name,
+            'last_name': invitation.last_name,
+        })
+
+    return render(request, 'registration/signup.html', {
+        'form': form,
+        'invitation': invitation,
     })

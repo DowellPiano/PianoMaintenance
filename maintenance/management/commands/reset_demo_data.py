@@ -6,6 +6,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from maintenance.models import (
+    AuditLog,
+    Company,
+    CompanyInvitation,
+    CompanyMembership,
     CompanySettings,
     ConditionLevel,
     ConditionReading,
@@ -48,7 +52,12 @@ class Command(BaseCommand):
         self._clear_existing_data()
         today = timezone.localdate()
 
+        company = Company.objects.create(
+            name="Overtone Piano Service",
+            slug="overtone-demo",
+        )
         CompanySettings.objects.create(
+            company=company,
             company_name="Overtone Piano Service",
             address="421 Tuning Fork Lane\nChicago, IL 60605",
             phone="(312) 555-0148",
@@ -66,6 +75,13 @@ class Command(BaseCommand):
             role_technician=True,
             is_staff=True,
         )
+        CompanyMembership.objects.create(
+            company=company,
+            user=admin,
+            role_admin=True,
+            role_technician=True,
+            is_active=True,
+        )
         tech_mina = Technician.objects.create_user(
             username="mina-tech",
             password=DEMO_PASSWORD,
@@ -74,6 +90,13 @@ class Command(BaseCommand):
             email="mina@overtone.example",
             role_admin=False,
             role_technician=True,
+        )
+        CompanyMembership.objects.create(
+            company=company,
+            user=tech_mina,
+            role_admin=False,
+            role_technician=True,
+            is_active=True,
         )
         tech_luis = Technician.objects.create_user(
             username="luis-tech",
@@ -84,8 +107,16 @@ class Command(BaseCommand):
             role_admin=False,
             role_technician=True,
         )
+        CompanyMembership.objects.create(
+            company=company,
+            user=tech_luis,
+            role_admin=False,
+            role_technician=True,
+            is_active=True,
+        )
 
         district = Organization.objects.create(
+            company=company,
             name="North Shore Arts Academy",
             short_name="NSAA",
             address="810 Lakeview Ave\nEvanston, IL 60201",
@@ -95,6 +126,7 @@ class Command(BaseCommand):
             notes="High-use teaching fleet. Academic calendar peaks in October and April.",
         )
         hall_org = Organization.objects.create(
+            company=company,
             name="Riverside Performing Arts Center",
             short_name="RPAC",
             address="220 W Riverfront Dr\nChicago, IL 60606",
@@ -104,6 +136,7 @@ class Command(BaseCommand):
             notes="Concert instruments require pre-event touch-ups and humidity monitoring.",
         )
         studio_org = Organization.objects.create(
+            company=company,
             name="South Loop Community Music",
             short_name="SLCM",
             address="64 E 18th St\nChicago, IL 60616",
@@ -114,6 +147,7 @@ class Command(BaseCommand):
 
         venues = {
             "conservatory": Venue.objects.create(
+                company=company,
                 organization=district,
                 name="Conservatory Building",
                 short_name="Conservatory",
@@ -123,6 +157,7 @@ class Command(BaseCommand):
                 access_notes="Check in at security desk. Practice wing requires staff badge.",
             ),
             "recital": Venue.objects.create(
+                company=company,
                 organization=district,
                 name="East Recital Hall",
                 short_name="ERH",
@@ -132,6 +167,7 @@ class Command(BaseCommand):
                 access_notes="Stage key stored in hall office lockbox.",
             ),
             "riverside": Venue.objects.create(
+                company=company,
                 organization=hall_org,
                 name="Mainstage Hall",
                 short_name="Mainstage",
@@ -141,6 +177,7 @@ class Command(BaseCommand):
                 access_notes="Coordinate all stage access around rehearsals.",
             ),
             "south_loop": Venue.objects.create(
+                company=company,
                 organization=studio_org,
                 name="South Loop Teaching Studios",
                 short_name="Teaching Studios",
@@ -152,7 +189,7 @@ class Command(BaseCommand):
         }
 
         tags = {
-            name: Tag.objects.create(name=name)
+            name: Tag.objects.create(company=company, name=name)
             for name in [
                 "Concert",
                 "Practice Room",
@@ -270,6 +307,7 @@ class Command(BaseCommand):
 
         templates = [
             ScheduleTemplate.objects.create(
+                company=company,
                 name="Concert Tuning - 6 Month",
                 task_name="Full concert tuning",
                 task_type=TaskType.TUNING,
@@ -278,6 +316,7 @@ class Command(BaseCommand):
                 description="Standard tuning cycle for performance instruments.",
             ),
             ScheduleTemplate.objects.create(
+                company=company,
                 name="Annual Regulation Review",
                 task_name="Action regulation review",
                 task_type=TaskType.REGULATION,
@@ -286,6 +325,7 @@ class Command(BaseCommand):
                 description="Assess touch weight, repetition, let-off, and key dip.",
             ),
             ScheduleTemplate.objects.create(
+                company=company,
                 name="Quarterly Cleaning",
                 task_name="Cabinet, keybed, and pedal cleaning",
                 task_type=TaskType.CLEANING,
@@ -297,6 +337,7 @@ class Command(BaseCommand):
 
         for piano in pianos:
             MaintenanceSchedule.objects.create(
+                company=company,
                 piano=piano,
                 template=templates[0],
                 task_name=templates[0].task_name,
@@ -307,6 +348,7 @@ class Command(BaseCommand):
             )
             if piano.piano_type != Piano.PianoType.DIGITAL:
                 MaintenanceSchedule.objects.create(
+                    company=company,
                     piano=piano,
                     template=templates[1],
                     task_name=templates[1].task_name,
@@ -316,6 +358,7 @@ class Command(BaseCommand):
                     last_service_date=today - timedelta(days=340),
                 )
             MaintenanceSchedule.objects.create(
+                company=company,
                 piano=piano,
                 template=templates[2],
                 task_name=templates[2].task_name,
@@ -327,6 +370,7 @@ class Command(BaseCommand):
 
         parts = {
             "strings": Part.objects.create(
+                company=company,
                 name="Mapes bass string set",
                 part_number="MBS-STD",
                 supplier="PianoTek",
@@ -335,6 +379,7 @@ class Command(BaseCommand):
                 reorder_threshold=1,
             ),
             "felt": Part.objects.create(
+                company=company,
                 name="Key bushing felt",
                 part_number="KBF-RED",
                 supplier="Schaff",
@@ -343,6 +388,7 @@ class Command(BaseCommand):
                 reorder_threshold=3,
             ),
             "casters": Part.objects.create(
+                company=company,
                 name="Grand caster cup set",
                 part_number="GCC-BLK",
                 supplier="Jansen",
@@ -351,6 +397,7 @@ class Command(BaseCommand):
                 reorder_threshold=2,
             ),
             "pedal": Part.objects.create(
+                company=company,
                 name="Pedal lyre screw kit",
                 part_number="PLS-14",
                 supplier="PianoTek",
@@ -389,6 +436,7 @@ class Command(BaseCommand):
         )
 
         completed = WorkOrder.objects.create(
+            company=company,
             piano=pianos[1],
             assigned_tech=tech_mina,
             order_type=WorkOrder.OrderType.PREVENTIVE,
@@ -400,6 +448,7 @@ class Command(BaseCommand):
             completed_date=today - timedelta(days=11),
         )
         log = MaintenanceLog.objects.create(
+            company=company,
             work_order=completed,
             technician=tech_mina,
             piano=pianos[1],
@@ -408,6 +457,7 @@ class Command(BaseCommand):
             notes="Instrument ready for faculty recital series.",
         )
         PartUsed.objects.create(
+            company=company,
             log=log,
             part=parts["pedal"],
             quantity_used=1,
@@ -415,6 +465,7 @@ class Command(BaseCommand):
         )
 
         WorkOrder.objects.create(
+            company=company,
             piano=pianos[0],
             assigned_tech=admin,
             order_type=WorkOrder.OrderType.PREVENTIVE,
@@ -425,6 +476,7 @@ class Command(BaseCommand):
             due_date=today - timedelta(days=2),
         )
         WorkOrder.objects.create(
+            company=company,
             piano=pianos[2],
             assigned_tech=tech_luis,
             order_type=WorkOrder.OrderType.PREVENTIVE,
@@ -435,6 +487,7 @@ class Command(BaseCommand):
             due_date=today + timedelta(days=2),
         )
         WorkOrder.objects.create(
+            company=company,
             piano=pianos[3],
             assigned_tech=None,
             order_type=WorkOrder.OrderType.PREVENTIVE,
@@ -445,6 +498,7 @@ class Command(BaseCommand):
             due_date=today - timedelta(days=20),
         )
         WorkOrder.objects.create(
+            company=company,
             piano=pianos[4],
             assigned_tech=tech_mina,
             order_type=WorkOrder.OrderType.REQUEST,
@@ -456,6 +510,7 @@ class Command(BaseCommand):
         )
 
         request_wo = WorkOrder.objects.create(
+            company=company,
             piano=pianos[5],
             assigned_tech=None,
             order_type=WorkOrder.OrderType.REQUEST,
@@ -466,6 +521,7 @@ class Command(BaseCommand):
             due_date=today + timedelta(days=14),
         )
         MaintenanceRequest.objects.create(
+            company=company,
             piano=pianos[5],
             reported_by_name="Jules Turner",
             reported_by_email="jules@slcm.example",
@@ -474,6 +530,7 @@ class Command(BaseCommand):
             work_order=request_wo,
         )
         MaintenanceRequest.objects.create(
+            company=company,
             piano=pianos[0],
             reported_by_name="Sam Patel",
             reported_by_email="sam@rpac.example",
@@ -494,6 +551,8 @@ class Command(BaseCommand):
         )
 
     def _clear_existing_data(self):
+        AuditLog.objects.all().delete()
+        CompanyInvitation.objects.all().delete()
         MaintenanceRequest.objects.all().delete()
         PartUsed.objects.all().delete()
         ConditionReading.objects.all().delete()
@@ -507,7 +566,9 @@ class Command(BaseCommand):
         Organization.objects.all().delete()
         Tag.objects.all().delete()
         CompanySettings.objects.all().delete()
+        CompanyMembership.objects.all().delete()
         Technician.objects.all().delete()
+        Company.objects.all().delete()
 
     def _create_piano(
         self,
@@ -528,6 +589,7 @@ class Command(BaseCommand):
         notes,
     ):
         piano = Piano.objects.create(
+            company=venue.company,
             venue=venue,
             name=name,
             make=make,
@@ -560,6 +622,7 @@ class Command(BaseCommand):
         recorded_at,
     ):
         reading = ConditionReading.objects.create(
+            company=piano.company,
             piano=piano,
             pitch_before_cents=pitch - Decimal("1.50"),
             pitch_after_cents=pitch,
