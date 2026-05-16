@@ -15,15 +15,27 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">Piano Maintainer</div>
       {% if request.user.role_admin and request.user.role_technician %}
-      <form method="post" action="{% url 'toggle_tech_mode' %}" style="padding:0 .75rem .75rem;">
+      <form method="post" action="{% url 'toggle_tech_mode' %}" class="mode-switch-form">
         {% csrf_token %}
         <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
         {% if request.session.tech_mode %}
           <input type="hidden" name="tech_mode" value="off">
-          <button type="submit" class="btn btn-sm btn-secondary" style="width:100%;">Admin Mode</button>
+          <button type="submit"
+                  class="mode-switch mode-switch-tech"
+                  aria-label="Switch to Admin mode">
+            <span class="mode-label active">Tech</span>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span class="mode-label">Admin</span>
+          </button>
         {% else %}
           <input type="hidden" name="tech_mode" value="on">
-          <button type="submit" class="btn btn-sm btn-secondary" style="width:100%;">Tech Mode</button>
+          <button type="submit"
+                  class="mode-switch mode-switch-admin"
+                  aria-label="Switch to Tech mode">
+            <span class="mode-label">Tech</span>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span class="mode-label active">Admin</span>
+          </button>
         {% endif %}
       </form>
       {% endif %}

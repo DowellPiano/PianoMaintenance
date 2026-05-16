@@ -257,7 +257,7 @@ class EmailNotificationTests(TestCase):
         self.assertEqual(mail.outbox[0].to, ['admin@example.com'])
         self.assertIn('New Piano Maintainer account request', mail.outbox[0].subject)
 
-    def test_public_maintenance_request_emails_admins(self):
+    def test_public_maintenance_request_emails_admins_and_requester(self):
         piano = Piano.objects.create(
             name='Email Request Piano',
             make='Yamaha',
@@ -271,10 +271,35 @@ class EmailNotificationTests(TestCase):
         })
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 2)
+        admin_email = mail.outbox[0]
+        requester_email = mail.outbox[1]
+        self.assertEqual(admin_email.to, ['admin@example.com'])
+        self.assertEqual(admin_email.reply_to, ['reporter@example.com'])
+        self.assertIn('New service request', admin_email.subject)
+        self.assertIn('Sticky key', admin_email.body)
+        self.assertEqual(requester_email.to, ['reporter@example.com'])
+        self.assertEqual(requester_email.reply_to, ['admin@example.com'])
+        self.assertIn('We received your service request', requester_email.subject)
+        self.assertIn('Sticky key', requester_email.body)
+
+    def test_public_maintenance_request_without_email_only_emails_admins(self):
+        piano = Piano.objects.create(
+            name='No Reporter Email Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+
+        response = self.client.post(reverse('maintenance-request-form', args=[piano.qr_code_token]), {
+            'reported_by_name': 'Reporter',
+            'reported_by_email': '',
+            'issue_description': 'Pedal squeak',
+        })
+
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['admin@example.com'])
-        self.assertIn('New maintenance request', mail.outbox[0].subject)
-        self.assertIn('Sticky key', mail.outbox[0].body)
+        self.assertEqual(mail.outbox[0].reply_to, [])
 
     def test_workorder_assignment_emails_assigned_technician(self):
         tech = Technician.objects.create_user(
@@ -968,7 +993,9 @@ class TechnicianModeTests(TestCase):
 
         response = self.client.get(reverse('dashboard'))
 
-        self.assertContains(response, 'Admin Mode')
+        self.assertContains(response, 'mode-switch mode-switch-tech')
+        self.assertContains(response, '<span class="mode-label active">Tech</span>', html=True)
+        self.assertContains(response, '<span class="mode-label">Admin</span>', html=True)
         self.assertNotContains(response, reverse('technician_list'))
         self.assertNotContains(response, reverse('reports'))
 

@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 from django.urls import reverse
 
 from .models import CompanySettings, Technician
@@ -41,18 +41,19 @@ def _absolute_url(request, path):
     return request.build_absolute_uri(path)
 
 
-def _send_notification(subject, body, recipients):
+def _send_notification(subject, body, recipients, reply_to=None):
     recipients = _unique_recipients(recipients)
     if not _notifications_enabled() or not recipients:
         return 0
 
-    return send_mail(
+    message = EmailMessage(
         subject,
         body,
         settings.DEFAULT_FROM_EMAIL,
         recipients,
-        fail_silently=True,
+        reply_to=_unique_recipients(reply_to or []),
     )
+    return message.send(fail_silently=True)
 
 
 def notify_signup_request(user, request=None):
@@ -76,16 +77,40 @@ def notify_maintenance_request(maintenance_request, work_order, request=None):
 
     piano_name = maintenance_request.piano.name if maintenance_request.piano else maintenance_request.piano_display
     url = _absolute_url(request, reverse('workorder_detail', args=[work_order.pk]))
-    subject = f'New maintenance request for {piano_name}'
-    body = (
-        f'A public maintenance request created WO-{work_order.pk}.\n\n'
+    admin_subject = f'New service request for {piano_name}'
+    admin_body = (
+        f'A public service request created WO-{work_order.pk}.\n\n'
         f'Piano: {piano_name}\n'
         f'Reported by: {maintenance_request.reported_by_name or "Not provided"}\n'
         f'Reporter email: {maintenance_request.reported_by_email or "Not provided"}\n\n'
         f'Issue:\n{maintenance_request.issue_description}\n\n'
         f'Open work order: {url}'
     )
-    return _send_notification(subject, body, _admin_recipients())
+    admin_recipients = _admin_recipients()
+    sent_count = _send_notification(
+        admin_subject,
+        admin_body,
+        admin_recipients,
+        reply_to=[maintenance_request.reported_by_email],
+    )
+
+    if maintenance_request.reported_by_email:
+        requester_subject = f'We received your service request for {piano_name}'
+        requester_body = (
+            f'Thanks for letting us know about {piano_name}.\n\n'
+            f'We received your service request and created WO-{work_order.pk}. '
+            f'Our team will review it and follow up if needed.\n\n'
+            f'Issue submitted:\n{maintenance_request.issue_description}\n\n'
+            'You can reply to this email if you need to add more details.'
+        )
+        sent_count += _send_notification(
+            requester_subject,
+            requester_body,
+            [maintenance_request.reported_by_email],
+            reply_to=admin_recipients or [settings.DEFAULT_FROM_EMAIL],
+        )
+
+    return sent_count
 
 
 def notify_work_order_assigned(work_order, request=None):
