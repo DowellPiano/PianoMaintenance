@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "anymail",
     "maintenance",
 ]
 
@@ -222,6 +223,11 @@ DEFAULT_FROM_EMAIL = config(
     "DEFAULT_FROM_EMAIL",
     default="noreply@pianomaintainer.local",
 )
+RESEND_API_KEY = config("RESEND_API_KEY", default="")
+ANYMAIL = {
+    "RESEND_API_KEY": RESEND_API_KEY,
+    "REQUESTS_TIMEOUT": EMAIL_TIMEOUT,
+}
 PRIVATE_MEDIA_URL_TTL = config(
     "PRIVATE_MEDIA_URL_TTL",
     default=900,

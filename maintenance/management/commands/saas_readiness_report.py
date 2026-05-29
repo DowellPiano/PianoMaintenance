@@ -29,6 +29,9 @@ class Command(BaseCommand):
         email_backend = getattr(settings, "EMAIL_BACKEND", "")
         if email_backend == "django.core.mail.backends.console.EmailBackend":
             warnings.append("EMAIL_BACKEND is still using the console backend.")
+        elif email_backend == "anymail.backends.resend.EmailBackend":
+            if not getattr(settings, "RESEND_API_KEY", ""):
+                warnings.append("RESEND_API_KEY is not configured for Resend email delivery.")
         elif email_backend == "django.core.mail.backends.smtp.EmailBackend":
             if getattr(settings, "EMAIL_HOST", "") in ("", "localhost"):
                 warnings.append("EMAIL_HOST is not configured for production SMTP email delivery.")

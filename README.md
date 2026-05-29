@@ -301,13 +301,8 @@ DATABASE_CONN_MAX_AGE=600
 DATABASE_SSL_REQUIRE=True
 DEFAULT_FROM_EMAIL=noreply@example.com
 EMAIL_NOTIFICATIONS_ENABLED=True
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.example.com
-EMAIL_PORT=587
-EMAIL_HOST_USER=...
-EMAIL_HOST_PASSWORD=...
-EMAIL_USE_TLS=True
-EMAIL_USE_SSL=False
+EMAIL_BACKEND=anymail.backends.resend.EmailBackend
+RESEND_API_KEY=...
 EMAIL_TIMEOUT=10
 PRIVATE_MEDIA_URL_TTL=900
 SUPABASE_S3_REQUIRED=True
@@ -336,6 +331,12 @@ if the storage bucket, endpoint, access key, or secret key is missing. This
 prevents production uploads from falling back to the local `media/` directory.
 Supabase S3 endpoints use the form
 `https://project-ref.storage.supabase.co/storage/v1/s3`.
+
+For production email, use Resend over HTTPS rather than SMTP. Create a Resend
+API key with sending access, verify the sending domain or sender address in
+Resend, and set `EMAIL_BACKEND=anymail.backends.resend.EmailBackend` with
+`RESEND_API_KEY` in the deployment environment. Keep `DEFAULT_FROM_EMAIL` aligned
+with the verified Resend sender.
 
 ```bash
 python3 manage.py migrate
