@@ -28,6 +28,7 @@ ENV/
 .env
 .env.*
 !.env.example
+to-do.html
 *.pem
 *.key
 
