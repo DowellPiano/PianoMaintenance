@@ -5,6 +5,7 @@ Django settings for piano_maintainer project.
 from importlib.util import find_spec
 from pathlib import Path
 from decouple import config, Csv
+from django.core.exceptions import ImproperlyConfigured
 import dj_database_url, os
 from dotenv import load_dotenv
 
@@ -41,16 +42,30 @@ INSTALLED_APPS = [
     "maintenance",
 ]
 
+SUPABASE_S3_REQUIRED = config("SUPABASE_S3_REQUIRED", default=False, cast=bool)
+SUPABASE_S3_ENV_KEYS = (
+    "SUPABASE_S3_ACCESS_KEY_ID",
+    "SUPABASE_S3_SECRET_ACCESS_KEY",
+    "SUPABASE_S3_BUCKET",
+    "SUPABASE_S3_ENDPOINT",
+)
+SUPABASE_S3_MISSING_KEYS = [key for key in SUPABASE_S3_ENV_KEYS if not os.getenv(key)]
 SUPABASE_S3_BUCKET = os.getenv("SUPABASE_S3_BUCKET")
 SUPABASE_S3_ENABLED = all(
     os.getenv(key)
-    for key in (
-        "SUPABASE_S3_ACCESS_KEY_ID",
-        "SUPABASE_S3_SECRET_ACCESS_KEY",
-        "SUPABASE_S3_BUCKET",
-        "SUPABASE_S3_ENDPOINT",
-    )
+    for key in SUPABASE_S3_ENV_KEYS
 ) and find_spec("storages") is not None
+
+if SUPABASE_S3_REQUIRED and SUPABASE_S3_MISSING_KEYS:
+    raise ImproperlyConfigured(
+        "SUPABASE_S3_REQUIRED=True but these settings are missing: "
+        + ", ".join(SUPABASE_S3_MISSING_KEYS)
+    )
+
+if SUPABASE_S3_REQUIRED and find_spec("storages") is None:
+    raise ImproperlyConfigured(
+        "SUPABASE_S3_REQUIRED=True but django-storages is not installed."
+    )
 
 if SUPABASE_S3_ENABLED:
     INSTALLED_APPS.append("storages")
@@ -126,12 +141,18 @@ WSGI_APPLICATION = "piano_maintainer.wsgi.application"
 
 # DATABASE
 DATABASE_URL = config("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
+DATABASE_CONN_MAX_AGE = config("DATABASE_CONN_MAX_AGE", default=600, cast=int)
+DATABASE_SSL_REQUIRE = not DATABASE_URL.startswith("sqlite:") and config(
+    "DATABASE_SSL_REQUIRE",
+    default=not DEBUG and not DATABASE_URL.startswith("sqlite:"),
+    cast=bool,
+)
 
 DATABASES = {
     "default": dj_database_url.config(
         default=DATABASE_URL,
-        conn_max_age=600,
-        ssl_require=not DEBUG and not DATABASE_URL.startswith("sqlite:"),
+        conn_max_age=DATABASE_CONN_MAX_AGE,
+        ssl_require=DATABASE_SSL_REQUIRE,
     )
 }
 
@@ -196,6 +217,7 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
 EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
 DEFAULT_FROM_EMAIL = config(
     "DEFAULT_FROM_EMAIL",
     default="noreply@pianomaintainer.local",

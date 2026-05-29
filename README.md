@@ -296,15 +296,21 @@ SECRET_KEY=...
 DEBUG=False
 ALLOWED_HOSTS=app.example.com
 CSRF_TRUSTED_ORIGINS=https://app.example.com
-DATABASE_URL=postgresql://...
+DATABASE_URL=postgresql://user:password@host:5432/database?sslmode=require
+DATABASE_CONN_MAX_AGE=600
+DATABASE_SSL_REQUIRE=True
 DEFAULT_FROM_EMAIL=noreply@example.com
+EMAIL_NOTIFICATIONS_ENABLED=True
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
 EMAIL_HOST_USER=...
 EMAIL_HOST_PASSWORD=...
 EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+EMAIL_TIMEOUT=10
 PRIVATE_MEDIA_URL_TTL=900
+SUPABASE_S3_REQUIRED=True
 SUPABASE_S3_ACCESS_KEY_ID=...
 SUPABASE_S3_SECRET_ACCESS_KEY=...
 SUPABASE_S3_BUCKET=...
@@ -319,6 +325,17 @@ SECURE_HSTS_PRELOAD=True
 
 Before launch, validate the production environment with a real Postgres database,
 real SMTP credentials, and real Supabase/S3-compatible storage credentials:
+
+For Supabase Postgres, use the direct or pooler connection string supplied by
+Supabase and append `?sslmode=require` if the URL does not already include SSL
+parameters.
+
+For Supabase Storage, use Supabase S3-compatible storage credentials, not the
+publishable client key. With `SUPABASE_S3_REQUIRED=True`, Django fails startup
+if the storage bucket, endpoint, access key, or secret key is missing. This
+prevents production uploads from falling back to the local `media/` directory.
+Supabase S3 endpoints use the form
+`https://project-ref.storage.supabase.co/storage/v1/s3`.
 
 ```bash
 python3 manage.py migrate
