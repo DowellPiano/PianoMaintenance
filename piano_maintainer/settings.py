@@ -181,6 +181,11 @@ LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 24
+EMAIL_NOTIFICATIONS_ENABLED = config(
+    "EMAIL_NOTIFICATIONS_ENABLED",
+    default=False,
+    cast=bool,
+)
 EMAIL_BACKEND = config(
     "EMAIL_BACKEND",
     default="django.core.mail.backends.console.EmailBackend",

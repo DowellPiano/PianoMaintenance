@@ -43,7 +43,7 @@
             <button type="submit" class="btn btn-sm btn-primary">Reopen</button>
           </form>
         {% endif %}
-        {% if company_access.can_admin %}
+        {% if company_access.can_admin and not tech_mode %}
           <a href="{% url 'workorder_delete' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-sm btn-danger">Delete</a>
         {% endif %}
         {% if wo.status != "Complete" and wo.status != "Cancelled" and can_edit_wo %}

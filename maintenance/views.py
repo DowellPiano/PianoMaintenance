@@ -30,6 +30,10 @@ from .forms import (
     TechnicianUpdateForm, CompanyInvitationForm, CompanySwitcherForm,
     BulkPianoIntervalForm,
 )
+from .email_notifications import (
+    notify_maintenance_request,
+    notify_work_order_assigned,
+)
 from .models import (
     Company, CompanyInvitation, CompanyMembership,
     Organization, Venue, Piano, WorkOrder, MaintenanceRequest,
@@ -180,8 +184,20 @@ def _service_status_context(wo, today):
     }
 
 
-def _can_update_workorder(user, wo):
-    return user.has_company_role(wo.company, admin=True) or (
+def _is_tech_mode(request):
+    membership = getattr(request, 'active_membership', None)
+    return bool(
+        request.user.is_authenticated
+        and membership
+        and membership.is_active
+        and membership.role_admin
+        and membership.role_technician
+        and request.session.get('tech_mode')
+    )
+
+
+def _can_update_workorder(user, wo, tech_mode=False):
+    return (user.has_company_role(wo.company, admin=True) and not tech_mode) or (
         user.has_company_role(wo.company, technician=True)
         and (wo.assigned_tech_id == user.pk or wo.assigned_tech_id is None)
     )
@@ -190,6 +206,7 @@ def _can_update_workorder(user, wo):
 def _filtered_workorders(request):
     company = ensure_company_access(request)
     qs = WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue', 'assigned_tech')
+    tech_mode = _is_tech_mode(request)
 
     search_query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '')
@@ -223,6 +240,11 @@ def _filtered_workorders(request):
         sort_key = 'created'
     if sort_dir not in ('asc', 'desc'):
         sort_dir = 'desc'
+
+    if tech_mode:
+        qs = qs.filter(Q(assigned_tech=request.user) | Q(assigned_tech__isnull=True))
+        if not status_filter and not completed_from and not completed_to:
+            qs = qs.filter(status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS])
 
     if search_query:
         qs = qs.filter(
@@ -387,6 +409,22 @@ def staff_required(view_func):
     return wrapper
 
 
+@login_required
+def toggle_tech_mode(request):
+    membership = getattr(request, 'active_membership', None)
+    if not (membership and membership.is_active and membership.role_admin and membership.role_technician):
+        messages.error(request, 'Tech Mode is only available to admin technicians.')
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        enabled = request.POST.get('tech_mode') == 'on'
+        request.session['tech_mode'] = enabled
+        messages.success(request, 'Tech Mode enabled.' if enabled else 'Admin Mode enabled.')
+
+    return_url = _safe_return_url(request, reverse('dashboard'))
+    return HttpResponseRedirect(return_url)
+
+
 # ── Public (no login) ──────────────────────────────────────────────
 
 def maintenance_request_form(request, token):
@@ -430,11 +468,12 @@ def maintenance_request_form(request, token):
             )
             mr.work_order = wo
             mr.save()
-            return HttpResponse(
-                '<h2>Thank you — your request has been submitted.</h2>'
-                '<p>A work order has been created and our team will follow up.</p>',
-                content_type='text/html'
-            )
+            notify_maintenance_request(mr, wo, request)
+            return render(request, 'maintenance/maintenance_request_success.html', {
+                'piano': piano,
+                'maintenance_request': mr,
+                'work_order': wo,
+            })
 
     return render(request, 'maintenance/maintenance_request_form.html',
                   {'piano': piano})
@@ -448,7 +487,8 @@ def dashboard(request):
     month_start = today.replace(day=1)
     user = request.user
     company = ensure_company_access(request)
-    is_admin = _user_is_company_admin(request)
+    tech_mode = _is_tech_mode(request)
+    is_admin = _user_is_company_admin(request) and not tech_mode
     setup_progress = _setup_progress_context(company) if is_admin else None
 
     if is_admin:
@@ -503,6 +543,7 @@ def dashboard(request):
     return render(request, 'maintenance/dashboard.html', {
         'active_nav': 'dashboard',
         'is_admin': is_admin,
+        'tech_mode': tech_mode,
         'overdue_count': overdue_count,
         'open_wo_count': open_wo_count,
         'in_progress_count': in_progress_count,
@@ -979,6 +1020,7 @@ def workorder_list(request):
     today = date.today()
     company = ensure_company_access(request)
     qs, filters = _filtered_workorders(request)
+    tech_mode = _is_tech_mode(request)
 
     sort_columns = []
     for key, label in [
@@ -1005,6 +1047,7 @@ def workorder_list(request):
     context = {
         'active_nav': 'workorders',
         'work_orders': qs,
+        'tech_mode': tech_mode,
         'sort_key': filters['sort_key'],
         'sort_dir': filters['sort_dir'],
         'sort_columns': sort_columns,
@@ -1018,6 +1061,7 @@ def workorder_list(request):
         'completed_to': filters['completed_to'],
         'organizations': Organization.objects.filter(company=company),
         'venues': Venue.objects.filter(company=company),
+        'technicians': company_users(company, technicians_only=True).order_by('first_name', 'last_name'),
         'status_choices': WorkOrder.Status.choices,
         'priority_choices': WorkOrder.Priority.choices,
         'type_choices': TaskType.choices,
@@ -1042,7 +1086,8 @@ def workorder_detail(request, pk):
     technicians = company_users(company, technicians_only=True).order_by('first_name', 'last_name')
 
     is_assigned_to_me = wo.assigned_tech_id == user.pk
-    can_edit_wo = _can_update_workorder(user, wo)
+    tech_mode = _is_tech_mode(request)
+    can_edit_wo = _can_update_workorder(user, wo, tech_mode)
     return_url = _safe_return_url(request, '/work-orders/')
 
     today = date.today()
@@ -1055,6 +1100,7 @@ def workorder_detail(request, pk):
         'today': today,
         'service_status': _service_status_context(wo, today),
         'can_edit_wo': can_edit_wo,
+        'tech_mode': tech_mode,
         'is_assigned_to_me': is_assigned_to_me,
         'return_url': return_url,
         'activity_events': _activity_events(company, wo, limit=8),
@@ -1072,6 +1118,8 @@ def workorder_create(request):
             wo.save()
             form.save_m2m()
             log_audit_event(company=company, actor=request.user, event_type='workorder.created', target=wo)
+            if wo.assigned_tech_id:
+                notify_work_order_assigned(wo, request)
             messages.success(request, f'Work Order WO-{wo.pk} created.')
             return redirect('workorder_detail', pk=wo.pk)
     else:
@@ -1105,16 +1153,19 @@ def workorder_edit(request, pk):
         WorkOrder.objects.filter(company=company).select_related('piano', 'assigned_tech'),
         pk=pk,
     )
-    if not _can_update_workorder(request.user, wo):
+    if not _can_update_workorder(request.user, wo, _is_tech_mode(request)):
         messages.error(request, 'You can only edit work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, _safe_return_url(request, '/work-orders/')))
 
     return_url = _safe_return_url(request, _workorder_detail_url(wo))
     if request.method == 'POST':
+        previous_assigned_tech_id = wo.assigned_tech_id
         form = WorkOrderForm(request.POST, instance=wo, company=company)
         if form.is_valid():
-            form.save()
+            wo = form.save()
             log_audit_event(company=company, actor=request.user, event_type='workorder.updated', target=wo)
+            if wo.assigned_tech_id and wo.assigned_tech_id != previous_assigned_tech_id:
+                notify_work_order_assigned(wo, request)
             messages.success(request, f'Work Order WO-{wo.pk} updated.')
             return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
     else:
@@ -1140,13 +1191,14 @@ def workorder_edit(request, pk):
 @login_required
 def workorder_assign(request, pk):
     company = ensure_company_access(request)
-    wo = get_object_or_404(WorkOrder, company=company, pk=pk)
+    wo = get_object_or_404(WorkOrder.objects.select_related('assigned_tech', 'piano'), company=company, pk=pk)
     user = request.user
+    tech_mode = _is_tech_mode(request)
+    previous_assigned_tech_id = wo.assigned_tech_id
 
     if request.method == 'POST':
-        previous_assigned_tech_id = wo.assigned_tech_id
         previous_status = wo.status
-        if _user_is_company_admin(request):
+        if _user_is_company_admin(request) and not tech_mode:
             # Admin can assign any technician
             tech_id = request.POST.get('assigned_tech')
             if tech_id:
@@ -1181,11 +1233,14 @@ def workorder_assign(request, pk):
                     'new_status': wo.status,
                 },
             )
+        if wo.assigned_tech_id and wo.assigned_tech_id != previous_assigned_tech_id:
+            notify_work_order_assigned(wo, request)
 
     technicians = company_users(company, technicians_only=True).order_by('first_name', 'last_name')
     return render(request, 'maintenance/partials/workorder_assign_cell.html', {
         'wo': wo,
         'technicians': technicians,
+        'tech_mode': tech_mode,
     })
 
 
@@ -1198,7 +1253,7 @@ def workorder_complete(request, pk):
     )
     user = request.user
     return_url = _safe_return_url(request, f'/work-orders/{wo.pk}/')
-    if wo.assigned_tech_id and not _user_is_company_admin(request) and wo.assigned_tech_id != user.pk:
+    if wo.assigned_tech_id and (not _user_is_company_admin(request) or _is_tech_mode(request)) and wo.assigned_tech_id != user.pk:
         messages.error(request, 'You can only complete work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 
@@ -1360,7 +1415,7 @@ def workorder_reopen(request, pk):
 
     if request.method != 'POST':
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
-    if not _can_update_workorder(request.user, wo):
+    if not _can_update_workorder(request.user, wo, _is_tech_mode(request)):
         messages.error(request, 'You can only reopen work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
     if wo.status != WorkOrder.Status.COMPLETE:
@@ -1385,7 +1440,7 @@ def workorder_log_work(request, pk):
     )
     user = request.user
     return_url = _safe_return_url(request, f'/work-orders/{wo.pk}/')
-    if wo.assigned_tech_id and not _user_is_company_admin(request) and wo.assigned_tech_id != user.pk:
+    if wo.assigned_tech_id and (not _user_is_company_admin(request) or _is_tech_mode(request)) and wo.assigned_tech_id != user.pk:
         messages.error(request, 'You can only log work on work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 

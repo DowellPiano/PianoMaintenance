@@ -68,6 +68,54 @@ img { max-width: 100%; display: block; }
 
 .sidebar-brand:hover { color: #fff; text-decoration: none; }
 
+.mode-switch-form {
+  padding: .75rem .9rem .35rem;
+}
+.mode-switch {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 48px 1fr;
+  align-items: center;
+  gap: .45rem;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 999px;
+  padding: .32rem .45rem;
+  background: rgba(255,255,255,.04);
+  color: var(--clr-sidebar-t);
+  font: inherit;
+  cursor: pointer;
+}
+.mode-switch:hover {
+  background: rgba(255,255,255,.08);
+}
+.mode-label {
+  font-size: .76rem;
+  font-weight: 700;
+  text-align: center;
+  color: rgba(196,196,212,.72);
+}
+.mode-label.active {
+  color: #fff;
+}
+.mode-track {
+  position: relative;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.14);
+}
+.mode-thumb {
+  position: absolute;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+  transition: left .15s ease;
+}
+.mode-switch-tech .mode-thumb { left: 4px; }
+.mode-switch-admin .mode-thumb { left: 28px; }
+
 .sidebar-nav { flex: 1; padding: .5rem 0; overflow-y: auto; }
 .sidebar-nav a {
   display: flex;

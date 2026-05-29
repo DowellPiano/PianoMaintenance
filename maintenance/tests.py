@@ -87,6 +87,101 @@ class AuthEntryTests(TestCase):
         self.assertNotContains(response, 'Request an account')
 
 
+@override_settings(
+    EMAIL_NOTIFICATIONS_ENABLED=True,
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    EMAIL_HOST_USER='app@example.com',
+    EMAIL_HOST_PASSWORD='test-password',
+    DEFAULT_FROM_EMAIL='Overtone <app@example.com>',
+)
+class EmailNotificationTests(CompanyScopedTestCase):
+    def setUp(self):
+        super().setUp()
+        mail.outbox = []
+        self.admin = self.create_user(
+            'emailadmin',
+            first_name='Email',
+            last_name='Admin',
+            email='admin@example.com',
+            role_admin=True,
+            role_technician=True,
+        )
+
+    def test_public_maintenance_request_emails_admins_and_requester(self):
+        piano = self.create_piano(
+            name='Email Request Piano',
+            make='Yamaha',
+        )
+
+        response = self.client.post(reverse('maintenance-request-form', args=[piano.qr_code_token]), {
+            'reported_by_name': 'Reporter',
+            'reported_by_email': 'reporter@example.com',
+            'issue_description': 'Sticky key',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'maintenance/maintenance_request_success.html')
+        self.assertContains(response, 'Request received')
+        self.assertContains(response, 'WO-')
+        self.assertContains(response, 'Email Request Piano')
+        self.assertContains(response, 'A confirmation email was sent to reporter@example.com')
+        self.assertEqual(len(mail.outbox), 2)
+        admin_email = mail.outbox[0]
+        requester_email = mail.outbox[1]
+        self.assertEqual(admin_email.to, ['admin@example.com'])
+        self.assertEqual(admin_email.reply_to, ['reporter@example.com'])
+        self.assertIn('New service request', admin_email.subject)
+        self.assertIn('Sticky key', admin_email.body)
+        self.assertIn(self.company.name, admin_email.body)
+        self.assertEqual(requester_email.to, ['reporter@example.com'])
+        self.assertEqual(requester_email.reply_to, ['admin@example.com'])
+        self.assertIn('We received your service request', requester_email.subject)
+        self.assertIn('Sticky key', requester_email.body)
+
+    def test_public_maintenance_request_without_email_only_emails_admins(self):
+        piano = self.create_piano(
+            name='No Reporter Email Piano',
+            make='Yamaha',
+        )
+
+        response = self.client.post(reverse('maintenance-request-form', args=[piano.qr_code_token]), {
+            'reported_by_name': 'Reporter',
+            'reported_by_email': '',
+            'issue_description': 'Pedal squeak',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No email address was included')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['admin@example.com'])
+        self.assertEqual(mail.outbox[0].reply_to, [])
+
+    def test_workorder_assignment_emails_assigned_technician(self):
+        tech = self.create_user(
+            'assignedemailtech',
+            first_name='Assigned',
+            last_name='Tech',
+            email='assigned@example.com',
+        )
+        self.login_user(self.admin)
+
+        response = self.client.post(reverse('workorder_create'), {
+            'piano': '',
+            'order_type': WorkOrder.OrderType.REQUEST,
+            'task_type': 'Other',
+            'priority': WorkOrder.Priority.NORMAL,
+            'assigned_tech': tech.pk,
+            'description': 'Assigned work',
+            'due_date': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['assigned@example.com'])
+        self.assertIn('assigned to you', mail.outbox[0].subject)
+        self.assertIn(self.company.name, mail.outbox[0].body)
+
+
 class QRCodeRoutingTests(CompanyScopedTestCase):
     def setUp(self):
         super().setUp()
@@ -941,6 +1036,156 @@ class WorkOrderAssignmentTests(CompanyScopedTestCase):
         self.assertEqual(wo.assigned_tech, self.other_tech)
 
 
+class WorkOrderListAssignmentTests(CompanyScopedTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin = self.create_user(
+            'assignadmin',
+            first_name='Assign',
+            last_name='Admin',
+            role_admin=True,
+            role_technician=True,
+        )
+        self.tech = self.create_user(
+            'assigntech',
+            first_name='Assign',
+            last_name='Tech',
+        )
+        self.login_user(self.admin)
+
+    def test_workorder_list_assignment_dropdown_includes_company_technicians(self):
+        WorkOrder.objects.create(
+            company=self.company,
+            piano=self.create_piano(name='Dropdown Piano'),
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Needs assignment',
+        )
+
+        response = self.client.get(reverse('workorder_list'))
+
+        self.assertContains(response, '<select name="assigned_tech"', html=False)
+        self.assertContains(response, f'value="{self.admin.pk}"')
+        self.assertContains(response, 'Assign Admin')
+        self.assertContains(response, f'value="{self.tech.pk}"')
+        self.assertContains(response, 'Assign Tech')
+
+
+class TechnicianModeTests(CompanyScopedTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin_tech = self.create_user(
+            'admintech',
+            first_name='Admin',
+            last_name='Tech',
+            role_admin=True,
+            role_technician=True,
+        )
+        self.other_tech = self.create_user(
+            'othermodetech',
+            first_name='Other',
+            last_name='Tech',
+        )
+        self.login_user(self.admin_tech)
+
+    def _enable_tech_mode(self):
+        session = self.client.session
+        session['tech_mode'] = True
+        session.save()
+
+    def test_dual_role_user_can_toggle_tech_mode(self):
+        response = self.client.post(reverse('toggle_tech_mode'), {
+            'tech_mode': 'on',
+            'return_url': reverse('dashboard'),
+        })
+
+        self.assertRedirects(response, reverse('dashboard'))
+        self.assertTrue(self.client.session['tech_mode'])
+
+    def test_tech_mode_uses_technician_dashboard(self):
+        self._enable_tech_mode()
+        mine = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.create_piano(name='Mine Piano'),
+            assigned_tech=self.admin_tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Mine',
+        )
+        theirs = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.create_piano(name='Their Piano'),
+            assigned_tech=self.other_tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Theirs',
+        )
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'My Work')
+        self.assertContains(response, 'My Work Orders')
+        self.assertContains(response, f'WO-{mine.pk}')
+        self.assertNotContains(response, f'WO-{theirs.pk}')
+        self.assertNotContains(response, 'Pending Requests')
+
+    def test_tech_mode_hides_admin_navigation(self):
+        self._enable_tech_mode()
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'mode-switch mode-switch-tech')
+        self.assertContains(response, '<span class="mode-label active">Tech</span>', html=True)
+        self.assertContains(response, '<span class="mode-label">Admin</span>', html=True)
+        self.assertNotContains(response, f'href="{reverse("technician_list")}"')
+        self.assertNotContains(response, f'href="{reverse("reports")}"')
+
+    def test_tech_mode_admin_can_take_unassigned_work_order(self):
+        self._enable_tech_mode()
+        wo = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.create_piano(name='Available Piano'),
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Available',
+        )
+
+        detail_response = self.client.get(reverse('workorder_detail', args=[wo.pk]))
+        self.assertContains(detail_response, 'Take')
+        self.assertNotContains(detail_response, '<select name="assigned_tech"')
+
+        response = self.client.post(reverse('workorder_assign', args=[wo.pk]), {
+            'assign_action': 'assign_self',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        wo.refresh_from_db()
+        self.assertEqual(wo.assigned_tech, self.admin_tech)
+        self.assertEqual(wo.status, WorkOrder.Status.IN_PROGRESS)
+
+    def test_tech_mode_admin_cannot_edit_other_technicians_work_order(self):
+        self._enable_tech_mode()
+        wo = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.create_piano(name='Busy Piano'),
+            assigned_tech=self.other_tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.IN_PROGRESS,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Already assigned',
+        )
+
+        response = self.client.get(reverse('workorder_detail', args=[wo.pk]))
+
+        self.assertNotContains(response, reverse('workorder_edit', args=[wo.pk]))
+        self.assertNotContains(response, reverse('workorder_delete', args=[wo.pk]))
+        self.assertNotContains(response, 'Mark Complete')
+
+
 class TechnicianDashboardTests(TestCase):
     def test_dashboard_shows_only_active_work_orders_assigned_to_technician(self):
         company = Company.objects.create(name='Dashboard Co', slug='dashboard-co')
@@ -1377,23 +1622,51 @@ class CompanyRoleMethodTests(CompanyScopedTestCase):
         self.assertFalse(user.can_be_assigned_in_company(Company.objects.create(name='No Access', slug='no-access')))
 
 
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    DEFAULT_FROM_EMAIL='Overtone <app@example.com>',
+)
 class PasswordResetTests(TestCase):
-    def test_password_reset_sends_email(self):
-        user = Technician.objects.create_user(
+    def setUp(self):
+        mail.outbox = []
+        self.user = Technician.objects.create_user(
             username='resetuser',
-            password='StrongPass123',
+            password='OldStrongPass123',
             email='reset@example.com',
+            is_active=True,
         )
         company = Company.objects.create(name='Reset Co', slug='reset-co')
-        CompanyMembership.objects.create(company=company, user=user, role_admin=False, role_technician=True, is_active=True)
+        CompanyMembership.objects.create(company=company, user=self.user, role_admin=False, role_technician=True, is_active=True)
 
+    def test_password_reset_sends_email_for_active_user(self):
         response = self.client.post(reverse('password_reset'), {
-            'email': user.email,
+            'email': self.user.email,
         })
 
         self.assertRedirects(response, reverse('password_reset_done'))
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn('reset', mail.outbox[0].body.lower())
+        self.assertEqual(mail.outbox[0].to, ['reset@example.com'])
+        self.assertIn('Reset your Overtone password', mail.outbox[0].subject)
+        self.assertIn('/password-reset/', mail.outbox[0].body)
+
+    def test_password_reset_confirm_updates_password(self):
+        self.client.post(reverse('password_reset'), {
+            'email': self.user.email,
+        })
+        reset_url = mail.outbox[0].body.split('Use this link to choose a new password:\n', 1)[1].splitlines()[0]
+        path = '/' + reset_url.split('/', 3)[3]
+        response = self.client.get(path)
+
+        self.assertEqual(response.status_code, 302)
+        set_password_path = response['Location']
+        response = self.client.post(set_password_path, {
+            'new_password1': 'NewStrongPass123',
+            'new_password2': 'NewStrongPass123',
+        })
+
+        self.assertRedirects(response, reverse('password_reset_complete'))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('NewStrongPass123'))
 
 
 class BootstrapCompanyCommandTests(TestCase):
