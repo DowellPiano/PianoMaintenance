@@ -140,10 +140,10 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
     open_statuses = [WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS]
 
     built_in_types = [
-        ('Tuning', 'next_tuning_due', 'tuning_interval_value'),
-        ('Regulation', 'next_regulation_due', 'regulation_interval_value'),
-        ('Voicing', 'next_voicing_due', 'voicing_interval_value'),
-        ('Cleaning', 'next_cleaning_due', 'cleaning_interval_value'),
+        ('Tuning', 'next_tuning_due', 'tuning_interval_value', 'tuning_interval_unit'),
+        ('Regulation', 'next_regulation_due', 'regulation_interval_value', 'regulation_interval_unit'),
+        ('Voicing', 'next_voicing_due', 'voicing_interval_value', 'voicing_interval_unit'),
+        ('Cleaning', 'next_cleaning_due', 'cleaning_interval_value', 'cleaning_interval_unit'),
     ]
 
     piano_qs = Piano.objects.filter(is_active=True)
@@ -152,9 +152,32 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
 
     for piano in piano_qs:
         needs_save = []
-        for task_type, due_field, interval_field in built_in_types:
-            due_date = getattr(piano, due_field)
-            interval_val = getattr(piano, interval_field)
+        for task_type, due_field, interval_value_field, interval_unit_field in built_in_types:
+            stored_due_date = getattr(piano, due_field)
+            due_date = stored_due_date
+            interval_val = getattr(piano, interval_value_field)
+            interval_unit = getattr(piano, interval_unit_field)
+
+            if interval_val:
+                last_completed = WorkOrder.objects.filter(
+                    company=piano.company,
+                    piano=piano,
+                    task_type=task_type,
+                    status=WorkOrder.Status.COMPLETE,
+                    completed_date__isnull=False,
+                ).order_by('-completed_date', '-pk').first()
+                if last_completed:
+                    interval_days = piano._interval_to_days(interval_val, interval_unit)
+                    due_date = last_completed.completed_date + timedelta(days=interval_days)
+
+            if due_date != stored_due_date:
+                if dry_run:
+                    result.messages.append(
+                        f"[DRY RUN] Would update {piano} {task_type} next due to {due_date}"
+                    )
+                else:
+                    setattr(piano, due_field, due_date)
+                    needs_save.append(due_field)
 
             if due_date is None and interval_val:
                 due_date = today

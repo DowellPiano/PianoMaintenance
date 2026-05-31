@@ -632,6 +632,70 @@ class ScheduledWorkOrderGenerationTests(CompanyScopedTestCase):
             status=WorkOrder.Status.OPEN,
         ).exists())
 
+    def test_service_recalculates_built_in_due_from_latest_completed_work(self):
+        self.piano.tuning_interval_value = 30
+        self.piano.tuning_interval_unit = 'days'
+        self.piano.next_tuning_due = self.today - timedelta(days=10)
+        self.piano.save(update_fields=[
+            'tuning_interval_value',
+            'tuning_interval_unit',
+            'next_tuning_due',
+        ])
+        WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            due_date=self.today - timedelta(days=30),
+            completed_date=self.today - timedelta(days=5),
+        )
+
+        generate_scheduled_work_orders(today=self.today)
+
+        self.piano.refresh_from_db()
+        self.assertEqual(self.piano.next_tuning_due, self.today + timedelta(days=25))
+        self.assertFalse(WorkOrder.objects.filter(
+            piano=self.piano,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            due_date=self.today - timedelta(days=10),
+        ).exists())
+
+    def test_service_creates_built_in_work_order_when_recalculated_due_is_past(self):
+        self.piano.tuning_interval_value = 30
+        self.piano.tuning_interval_unit = 'days'
+        self.piano.next_tuning_due = self.today + timedelta(days=60)
+        self.piano.save(update_fields=[
+            'tuning_interval_value',
+            'tuning_interval_unit',
+            'next_tuning_due',
+        ])
+        WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            due_date=self.today - timedelta(days=100),
+            completed_date=self.today - timedelta(days=45),
+        )
+
+        result = generate_scheduled_work_orders(today=self.today)
+
+        self.piano.refresh_from_db()
+        recalculated_due = self.today - timedelta(days=15)
+        self.assertEqual(self.piano.next_tuning_due, recalculated_due)
+        self.assertGreaterEqual(result.created, 1)
+        self.assertTrue(WorkOrder.objects.filter(
+            piano=self.piano,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            due_date=recalculated_due,
+        ).exists())
+
     def test_service_does_not_duplicate_open_work_order(self):
         WorkOrder.objects.create(
             company=self.company,

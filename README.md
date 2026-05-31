@@ -116,6 +116,24 @@ Run it hourly from cron:
 0 * * * * cd /path/to/Overtone && /usr/bin/env python3 manage.py generate_work_orders >> /tmp/overtone_generate_work_orders.log 2>&1
 ```
 
+On Render, create a separate Cron Job service from the same GitHub repo and
+branch as the web service. Use the same environment variables or link the same
+environment group as the web service so the command reaches the production
+database and storage configuration.
+
+Recommended Render Cron Job settings:
+
+```text
+Name: overtone-generate-work-orders
+Branch: SaaS
+Build Command: pip install -r requirements.txt
+Command: python manage.py generate_work_orders
+Schedule: 0 * * * *
+```
+
+Render cron schedules run in UTC. Manually trigger the job once after creation
+and confirm the logs end with the command summary.
+
 ---
 
 ## Data Models
