@@ -430,6 +430,26 @@ table.data-table {
 .btn-success:hover { background: #15803d; }
 .btn-sm { padding: .3rem .7rem; font-size: .8rem; }
 .btn-xs { padding: .2rem .5rem; font-size: .75rem; }
+.btn:disabled,
+.btn[aria-disabled="true"],
+button:disabled,
+input[type="submit"]:disabled,
+input[type="button"]:disabled {
+  cursor: not-allowed;
+  opacity: .68;
+}
+.submit-spinner {
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  flex: none;
+  animation: submit-spinner-rotate .65s linear infinite;
+}
+@keyframes submit-spinner-rotate {
+  to { transform: rotate(360deg); }
+}
 
 /* ----------------------------------------------------------------
    Forms

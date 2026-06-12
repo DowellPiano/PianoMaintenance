@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -41,6 +42,10 @@
     textarea { resize: vertical; min-height: 110px; }
     .optional { font-weight: 400; color: #a1a1aa; font-size: .8rem; }
     button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .4rem;
       width: 100%; padding: .75rem;
       background: #6366f1; color: #fff;
       border: none; border-radius: 8px;
@@ -48,6 +53,19 @@
       transition: background .15s;
     }
     button:hover { background: #4f46e5; }
+    button:disabled { cursor: not-allowed; opacity: .68; }
+    .submit-spinner {
+      width: 1em;
+      height: 1em;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 999px;
+      flex: none;
+      animation: submit-spinner-rotate .65s linear infinite;
+    }
+    @keyframes submit-spinner-rotate {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -73,5 +91,6 @@
       <button type="submit">Submit Request</button>
     </form>
   </div>
+  <script src="{% static 'js/form-submit-lock.js' %}"></script>
 </body>
 </html>

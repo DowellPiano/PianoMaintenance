@@ -141,6 +141,7 @@
 
   <script src="{% static 'js/htmx.min.js' %}"></script>
   <script>document.body.addEventListener('htmx:configRequest', function(e){ e.detail.headers['X-CSRFToken'] = '{{ csrf_token }}'; });</script>
+  <script src="{% static 'js/form-submit-lock.js' %}"></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>
