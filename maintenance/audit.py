@@ -26,6 +26,7 @@ EVENT_LABELS = {
     "invitation.revoked": "Invitation revoked",
     "invitation.resent": "Invitation resent",
     "company_settings.updated": "Settings updated",
+    "platform.company_created": "Platform company created",
     "part.created": "Created",
     "part.updated": "Updated",
     "maintenance_request.approved": "Approved",

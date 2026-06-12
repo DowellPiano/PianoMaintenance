@@ -128,6 +128,7 @@ urlpatterns = [
 
     # Settings
     path('settings/', views.settings_page, name='settings'),
+    path('platform-admin/', views.platform_admin, name='platform_admin'),
 
     # Reports
     path('reports/', views.reports, name='reports'),

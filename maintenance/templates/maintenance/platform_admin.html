@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}Platform Admin — Overtone{% endblock %}
+{% block topbar_title %}Platform Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Platform Admin</h1>
+    <p class="page-subtitle">Superuser-only customer and access management.</p>
+  </div>
+  <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+    <a href="{% url 'admin:index' %}" class="btn btn-secondary">Django Admin</a>
+  </div>
+</div>
+
+<div class="form-row" style="margin-bottom:1.5rem;">
+  <div class="kpi-card" style="flex:1;">
+    <div class="kpi-label">Companies</div>
+    <div class="kpi-value">{{ active_company_count }}</div>
+    <div class="text-muted text-sm">{{ company_count }} total</div>
+  </div>
+  <div class="kpi-card" style="flex:1;">
+    <div class="kpi-label">Users</div>
+    <div class="kpi-value">{{ active_user_count }}</div>
+    <div class="text-muted text-sm">{{ user_count }} total</div>
+  </div>
+  <div class="kpi-card" style="flex:1;">
+    <div class="kpi-label">Pending Invites</div>
+    <div class="kpi-value">{{ pending_invitations|length }}</div>
+    <div class="text-muted text-sm">Latest 25 shown</div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-header">
+    <h2>Add Customer</h2>
+  </div>
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_company_invite">
+
+      {% if invite_form.errors %}
+        <div class="alert alert-error" style="margin-bottom:1rem;">
+          Customer was not created. Please fix the highlighted fields below.
+          {% if invite_form.non_field_errors %}
+            <div style="margin-top:.35rem;">{{ invite_form.non_field_errors.0 }}</div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_company_name">Company Name</label>
+          <input class="form-input" type="text" name="company_name" id="id_company_name" value="{{ invite_form.company_name.value|default:'' }}" required>
+          {% if invite_form.company_name.errors %}<span class="form-error">{{ invite_form.company_name.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_company_slug">Company Slug</label>
+          <input class="form-input" type="text" name="company_slug" id="id_company_slug" value="{{ invite_form.company_slug.value|default:'' }}" placeholder="Auto-generated if blank">
+          {% if invite_form.company_slug.errors %}<span class="form-error">{{ invite_form.company_slug.errors.0 }}</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="id_admin_first_name">Admin First Name</label>
+          <input class="form-input" type="text" name="admin_first_name" id="id_admin_first_name" value="{{ invite_form.admin_first_name.value|default:'' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="id_admin_last_name">Admin Last Name</label>
+          <input class="form-input" type="text" name="admin_last_name" id="id_admin_last_name" value="{{ invite_form.admin_last_name.value|default:'' }}">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label" for="id_admin_email">Admin Email</label>
+          <input class="form-input" type="email" name="admin_email" id="id_admin_email" value="{{ invite_form.admin_email.value|default:'' }}" required>
+          {% if invite_form.admin_email.errors %}<span class="form-error">{{ invite_form.admin_email.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-group" style="justify-content:flex-end;">
+          <label style="display:flex; gap:.6rem; align-items:center; margin-top:2rem;">
+            <input type="checkbox" name="admin_is_technician" id="id_admin_is_technician" {% if invite_form.admin_is_technician.value %}checked{% endif %}>
+            <span>Also technician</span>
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+        <button type="submit" class="btn btn-primary">Create Company and Invite Admin</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-header">
+    <h2>Companies</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Status</th>
+          <th>Users</th>
+          <th>Workers</th>
+          <th>Pianos</th>
+          <th>Open WOs</th>
+          <th>People</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for company in companies %}
+        <tr>
+          <td>
+            <div class="fw-medium">{{ company.name }}</div>
+            <div class="text-muted text-sm">{{ company.slug }}</div>
+          </td>
+          <td class="text-sm">
+            {% if company.is_active %}
+              <span class="badge badge-complete">Active</span>
+            {% else %}
+              <span class="badge badge-overdue">Inactive</span>
+            {% endif %}
+            {% if company.pending_invitation_count %}
+              <div class="text-muted text-sm">{{ company.pending_invitation_count }} pending invite{{ company.pending_invitation_count|pluralize }}</div>
+            {% endif %}
+          </td>
+          <td class="text-sm">
+            {{ company.active_member_count }} active
+            <div class="text-muted text-sm">{{ company.admin_count }} admin{{ company.admin_count|pluralize }}</div>
+          </td>
+          <td class="text-sm">{{ company.technician_count }}</td>
+          <td class="text-sm">{{ company.active_piano_count }}</td>
+          <td class="text-sm">{{ company.open_work_order_count }}</td>
+          <td class="text-sm">
+            {% for membership in company.memberships.all %}
+              <div style="margin-bottom:.35rem;">
+                <span class="fw-medium">{{ membership.user.get_full_name|default:membership.user.username }}</span>
+                {% if membership.role_admin %}<span class="badge badge-high">Admin</span>{% endif %}
+                {% if membership.role_technician %}<span class="badge badge-upcoming">Tech</span>{% endif %}
+                {% if not membership.is_active or not membership.user.is_active %}<span class="badge badge-normal">Inactive</span>{% endif %}
+              </div>
+            {% empty %}
+              <span class="text-muted">No users yet</span>
+            {% endfor %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" style="text-align:center; padding:2rem;">No companies found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-header">
+    <h2>All Users</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Companies</th>
+          <th>Last Login</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user_obj in users %}
+        <tr>
+          <td>
+            <div class="fw-medium">{{ user_obj.get_full_name|default:user_obj.username }}</div>
+            <div class="text-muted text-sm">{{ user_obj.username }}</div>
+          </td>
+          <td class="text-sm">{{ user_obj.email|default:"—" }}</td>
+          <td class="text-sm">
+            {% if user_obj.is_active %}
+              <span class="badge badge-complete">Active</span>
+            {% else %}
+              <span class="badge badge-overdue">Disabled</span>
+            {% endif %}
+            {% if user_obj.is_superuser %}<span class="badge badge-high">Superuser</span>{% endif %}
+          </td>
+          <td class="text-sm">
+            {% for membership in user_obj.company_memberships.all %}
+              <div>
+                {{ membership.company.name }}
+                {% if membership.role_admin %}<span class="badge badge-high">Admin</span>{% endif %}
+                {% if membership.role_technician %}<span class="badge badge-upcoming">Tech</span>{% endif %}
+                {% if not membership.is_active %}<span class="badge badge-normal">Inactive</span>{% endif %}
+              </div>
+            {% empty %}
+              <span class="text-muted">No company access</span>
+            {% endfor %}
+          </td>
+          <td class="text-sm">{{ user_obj.last_login|date:"Y-m-d H:i"|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" style="text-align:center; padding:2rem;">No users found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2>Pending Invitations</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Company</th>
+          <th>Roles</th>
+          <th>Invited By</th>
+          <th>Expires</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for invitation in pending_invitations %}
+        <tr>
+          <td class="fw-medium">{{ invitation.email }}</td>
+          <td class="text-sm">{{ invitation.company.name }}</td>
+          <td class="text-sm">
+            {% if invitation.role_admin %}<span class="badge badge-high">Admin</span>{% endif %}
+            {% if invitation.role_technician %}<span class="badge badge-upcoming">Tech</span>{% endif %}
+          </td>
+          <td class="text-sm">{{ invitation.invited_by.get_full_name|default:invitation.invited_by.username|default:"—" }}</td>
+          <td class="text-sm">{{ invitation.expires_at|date:"Y-m-d H:i" }}</td>
+          <td style="text-align:right;">
+            <form method="post" style="margin:0;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="resend_invitation">
+              <input type="hidden" name="invitation_id" value="{{ invitation.pk }}">
+              <button type="submit" class="btn btn-secondary btn-sm">Resend</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" style="text-align:center; padding:2rem;">No pending invitations.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

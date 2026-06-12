@@ -14,7 +14,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.mail import send_mail
 from django.core.files.storage import FileSystemStorage
-from django.db.models import Q, Count, Sum, Max, DecimalField
+from django.db import transaction
+from django.db.models import Q, Count, Sum, Max, DecimalField, Prefetch
 from django.db.models.functions import Coalesce
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404, redirect
@@ -28,7 +29,7 @@ from .forms import (
     WorkOrderLogWorkForm, ConditionReadingForm, ScheduleTemplateForm, PartForm,
     SignUpForm, CompanySettingsForm, UserProfileForm, TechnicianCreateForm,
     TechnicianUpdateForm, CompanyInvitationForm, CompanySwitcherForm,
-    BulkPianoIntervalForm,
+    BulkPianoIntervalForm, PlatformCompanyInviteForm,
 )
 from .email_notifications import (
     notify_maintenance_request,
@@ -397,6 +398,17 @@ def admin_required(view_func):
     return wrapper
 
 
+def platform_admin_required(view_func):
+    """Decorator: requires login + Django superuser status."""
+    @wraps(view_func)
+    @login_required
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return HttpResponseForbidden("Platform admin access is restricted to superusers.")
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
 def staff_required(view_func):
     """Decorator: requires login + an app role."""
     @wraps(view_func)
@@ -674,11 +686,71 @@ def photo_file(request, photo_pk):
         return HttpResponseForbidden("You do not have access to this photo.")
 
     storage = photo.image.storage
+    storage_name = _resolve_photo_storage_name(storage, photo.image.name, photo.uploaded_at)
     if isinstance(storage, FileSystemStorage):
-        content_type, _ = mimetypes.guess_type(photo.image.name)
-        return FileResponse(photo.image.open("rb"), content_type=content_type or "application/octet-stream")
+        content_type, _ = mimetypes.guess_type(storage_name)
+        return FileResponse(storage.open(storage_name, "rb"), content_type=content_type or "application/octet-stream")
 
-    return redirect(storage.url(photo.image.name, expire=settings.PRIVATE_MEDIA_URL_TTL))
+    return redirect(storage.url(storage_name, expire=settings.PRIVATE_MEDIA_URL_TTL))
+
+
+def _resolve_photo_storage_name(storage, stored_name, uploaded_at=None):
+    if not stored_name:
+        return stored_name
+
+    try:
+        if storage.exists(stored_name):
+            return stored_name
+    except (NotImplementedError, OSError):
+        return stored_name
+
+    basename = stored_name.rsplit('/', 1)[-1]
+    if not basename:
+        return stored_name
+
+    dated_name = _dated_photo_storage_name(stored_name, basename, uploaded_at)
+    if dated_name:
+        try:
+            if storage.exists(dated_name):
+                return dated_name
+        except (NotImplementedError, OSError):
+            return stored_name
+
+    root = stored_name.split('/', 1)[0] if '/' in stored_name else ''
+    resolved_name = _find_unique_storage_name_by_basename(storage, root, basename)
+    return resolved_name or stored_name
+
+
+def _dated_photo_storage_name(stored_name, basename, uploaded_at):
+    if not uploaded_at or '/' not in stored_name:
+        return None
+
+    root = stored_name.split('/', 1)[0]
+    return f"{root}/{uploaded_at:%y/%m/%d}/{basename}"
+
+
+def _find_unique_storage_name_by_basename(storage, root, basename):
+    pending_dirs = [root.strip('/')]
+    matches = []
+
+    while pending_dirs:
+        current_dir = pending_dirs.pop()
+        try:
+            child_dirs, child_files = storage.listdir(current_dir)
+        except (FileNotFoundError, NotImplementedError, OSError):
+            continue
+
+        for child_file in child_files:
+            if child_file == basename:
+                matches.append('/'.join(part for part in [current_dir, child_file] if part))
+                if len(matches) > 1:
+                    return None
+
+        for child_dir in child_dirs:
+            child_dir = child_dir.strip('/')
+            pending_dirs.append('/'.join(part for part in [current_dir, child_dir] if part))
+
+    return matches[0] if matches else None
 
 
 @login_required
@@ -2498,6 +2570,173 @@ def report_export_pianos(request):
 
 
 # ── Settings ──────────────────────────────────────────────────────
+
+@platform_admin_required
+def platform_admin(request):
+    invite_form = PlatformCompanyInviteForm()
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'create_company_invite':
+            invite_form = PlatformCompanyInviteForm(request.POST)
+            if invite_form.is_valid():
+                try:
+                    with transaction.atomic():
+                        company = Company.objects.create(
+                            name=invite_form.cleaned_data['company_name'],
+                            slug=invite_form.cleaned_data['company_slug'],
+                            is_active=True,
+                        )
+                        company_settings = CompanySettings.load_for_company(company)
+                        company_settings.company_name = company.name
+                        company_settings.email = invite_form.cleaned_data['admin_email']
+                        company_settings.save(update_fields=['company_name', 'email'])
+
+                        invitation = CompanyInvitation.objects.create(
+                            company=company,
+                            email=invite_form.cleaned_data['admin_email'],
+                            first_name=invite_form.cleaned_data['admin_first_name'],
+                            last_name=invite_form.cleaned_data['admin_last_name'],
+                            role_admin=True,
+                            role_technician=invite_form.cleaned_data['admin_is_technician'],
+                            invited_by=request.user,
+                            expires_at=timezone.now() + timedelta(days=7),
+                        )
+                        _send_company_invitation_email(request, invitation)
+                        log_audit_event(
+                            company=company,
+                            actor=request.user,
+                            event_type='platform.company_created',
+                            target=company,
+                            message='Platform admin created company and sent initial admin invitation.',
+                            metadata={'invitation_id': invitation.pk},
+                        )
+                except Exception as exc:
+                    invite_form.add_error(
+                        None,
+                        f'Company was not created because the invitation email could not be sent: {exc}',
+                    )
+                else:
+                    messages.success(
+                        request,
+                        f'Created {company.name} and sent an admin invitation to {invitation.email}.',
+                    )
+                    return redirect('platform_admin')
+
+        elif action == 'resend_invitation':
+            invitation = get_object_or_404(
+                CompanyInvitation.objects.select_related('company'),
+                pk=request.POST.get('invitation_id'),
+                status=CompanyInvitation.Status.PENDING,
+            )
+            try:
+                with transaction.atomic():
+                    invitation.token = uuid.uuid4()
+                    invitation.expires_at = timezone.now() + timedelta(days=7)
+                    invitation.save(update_fields=['token', 'expires_at'])
+                    _send_company_invitation_email(request, invitation)
+                    log_audit_event(
+                        company=invitation.company,
+                        actor=request.user,
+                        event_type='invitation.resent',
+                        target=invitation,
+                        message='Platform admin resent invitation.',
+                    )
+            except Exception as exc:
+                messages.error(request, f'Invitation was not resent: {exc}')
+            else:
+                messages.success(request, f'Invitation resent to {invitation.email}.')
+            return redirect('platform_admin')
+
+    companies = (
+        Company.objects
+        .annotate(
+            active_member_count=Count(
+                'memberships',
+                filter=Q(memberships__is_active=True, memberships__user__is_active=True),
+                distinct=True,
+            ),
+            admin_count=Count(
+                'memberships',
+                filter=Q(
+                    memberships__is_active=True,
+                    memberships__user__is_active=True,
+                    memberships__role_admin=True,
+                ),
+                distinct=True,
+            ),
+            technician_count=Count(
+                'memberships',
+                filter=Q(
+                    memberships__is_active=True,
+                    memberships__user__is_active=True,
+                    memberships__role_technician=True,
+                ),
+                distinct=True,
+            ),
+            pending_invitation_count=Count(
+                'invitations',
+                filter=Q(invitations__status=CompanyInvitation.Status.PENDING),
+                distinct=True,
+            ),
+            active_piano_count=Count(
+                'pianos',
+                filter=Q(pianos__is_active=True),
+                distinct=True,
+            ),
+            open_work_order_count=Count(
+                'work_orders',
+                filter=Q(work_orders__status__in=[
+                    WorkOrder.Status.OPEN,
+                    WorkOrder.Status.IN_PROGRESS,
+                ]),
+                distinct=True,
+            ),
+        )
+        .prefetch_related(
+            Prefetch(
+                'memberships',
+                queryset=CompanyMembership.objects.select_related('user').order_by(
+                    '-is_active',
+                    '-role_admin',
+                    '-role_technician',
+                    'user__first_name',
+                    'user__last_name',
+                    'user__username',
+                ),
+            )
+        )
+        .order_by('-is_active', 'name')
+    )
+    users = (
+        Technician.objects
+        .prefetch_related(
+            Prefetch(
+                'company_memberships',
+                queryset=CompanyMembership.objects.select_related('company').order_by('company__name'),
+            )
+        )
+        .order_by('-is_active', 'first_name', 'last_name', 'username')
+    )
+    pending_invitations = (
+        CompanyInvitation.objects
+        .filter(status=CompanyInvitation.Status.PENDING)
+        .select_related('company', 'invited_by')
+        .order_by('-created_at')[:25]
+    )
+
+    return render(request, 'maintenance/platform_admin.html', {
+        'active_nav': 'platform_admin',
+        'invite_form': invite_form,
+        'companies': companies,
+        'users': users,
+        'pending_invitations': pending_invitations,
+        'company_count': Company.objects.count(),
+        'active_company_count': Company.objects.filter(is_active=True).count(),
+        'user_count': Technician.objects.count(),
+        'active_user_count': Technician.objects.filter(is_active=True).count(),
+    })
+
 
 @login_required
 def settings_page(request):

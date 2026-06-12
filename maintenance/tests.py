@@ -1,9 +1,10 @@
 import os
 import tempfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from io import StringIO
 
 from django.core.management import call_command
+from django.core.files.storage import Storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core import mail
 from django.core.exceptions import ValidationError
@@ -27,6 +28,76 @@ from .models import (
 )
 from .audit import log_audit_event
 from .services import generate_scheduled_work_orders
+from .views import _resolve_photo_storage_name
+
+
+class StubPhotoStorage(Storage):
+    def __init__(self, names):
+        self.names = set(names)
+
+    def exists(self, name):
+        return name in self.names
+
+    def listdir(self, path):
+        path = path.strip('/')
+        prefix = f'{path}/' if path else ''
+        child_dirs = set()
+        child_files = set()
+
+        for name in self.names:
+            if prefix and not name.startswith(prefix):
+                continue
+
+            remaining = name[len(prefix):] if prefix else name
+            if not remaining:
+                continue
+
+            if '/' in remaining:
+                child_dirs.add(remaining.split('/', 1)[0])
+            else:
+                child_files.add(remaining)
+
+        return sorted(child_dirs), sorted(child_files)
+
+
+class PhotoStorageNameResolutionTests(TestCase):
+    def test_uses_stored_name_when_it_exists(self):
+        storage = StubPhotoStorage(['photos/26/06/12/photo.jpg'])
+
+        resolved_name = _resolve_photo_storage_name(storage, 'photos/26/06/12/photo.jpg')
+
+        self.assertEqual(resolved_name, 'photos/26/06/12/photo.jpg')
+
+    def test_resolves_single_dated_photo_when_stored_name_is_missing_folders(self):
+        storage = StubPhotoStorage(['photos/26/06/12/photo.jpg'])
+
+        resolved_name = _resolve_photo_storage_name(storage, 'photos/photo.jpg')
+
+        self.assertEqual(resolved_name, 'photos/26/06/12/photo.jpg')
+
+    def test_resolves_expected_dated_photo_from_upload_timestamp(self):
+        storage = StubPhotoStorage([
+            'photos/26/06/12/photo.jpg',
+            'photos/26/06/13/photo.jpg',
+        ])
+
+        resolved_name = _resolve_photo_storage_name(
+            storage,
+            'photos/photo.jpg',
+            datetime(2026, 6, 13),
+        )
+
+        self.assertEqual(resolved_name, 'photos/26/06/13/photo.jpg')
+
+    def test_keeps_stored_name_when_basename_matches_multiple_objects(self):
+        storage = StubPhotoStorage([
+            'photos/26/06/12/photo.jpg',
+            'photos/26/06/13/photo.jpg',
+        ])
+
+        resolved_name = _resolve_photo_storage_name(storage, 'photos/photo.jpg')
+
+        self.assertEqual(resolved_name, 'photos/photo.jpg')
 
 
 class CompanyScopedTestCase(TestCase):
@@ -85,6 +156,108 @@ class AuthEntryTests(TestCase):
         self.assertContains(response, 'Forgot your password?')
         self.assertContains(response, 'Contact your company admin or Overtone support.')
         self.assertNotContains(response, 'Request an account')
+
+
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    DEFAULT_FROM_EMAIL='Overtone <app@example.com>',
+)
+class PlatformAdminTests(CompanyScopedTestCase):
+    def setUp(self):
+        super().setUp()
+        mail.outbox = []
+        self.company_admin = self.create_user(
+            'companyadmin',
+            role_admin=True,
+            role_technician=True,
+        )
+        self.superuser = self.create_user(
+            'platformadmin',
+            email='platform@example.com',
+            role_admin=True,
+            role_technician=True,
+            is_staff=True,
+            is_superuser=True,
+        )
+
+    def test_company_admin_cannot_access_platform_admin(self):
+        self.login_user(self.company_admin)
+
+        response = self.client.get(reverse('platform_admin'))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_superuser_can_access_platform_admin(self):
+        self.login_user(self.superuser)
+
+        response = self.client.get(reverse('platform_admin'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Platform Admin')
+        self.assertContains(response, 'Add Customer')
+
+    def test_superuser_can_create_company_and_send_admin_invitation(self):
+        self.login_user(self.superuser)
+
+        response = self.client.post(reverse('platform_admin'), {
+            'action': 'create_company_invite',
+            'company_name': 'Customer Co',
+            'company_slug': 'customer-co',
+            'admin_first_name': 'Casey',
+            'admin_last_name': 'Customer',
+            'admin_email': 'casey@example.com',
+            'admin_is_technician': 'on',
+        })
+
+        self.assertRedirects(response, reverse('platform_admin'))
+        company = Company.objects.get(slug='customer-co')
+        settings_obj = CompanySettings.objects.get(company=company)
+        invitation = CompanyInvitation.objects.get(company=company, email='casey@example.com')
+        self.assertEqual(settings_obj.company_name, 'Customer Co')
+        self.assertTrue(invitation.role_admin)
+        self.assertTrue(invitation.role_technician)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('casey@example.com', mail.outbox[0].to)
+
+    def test_create_company_rolls_back_if_invitation_email_fails(self):
+        self.login_user(self.superuser)
+
+        with self.settings(EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend', EMAIL_HOST='invalid.local'):
+            response = self.client.post(reverse('platform_admin'), {
+                'action': 'create_company_invite',
+                'company_name': 'Rollback Co',
+                'company_slug': 'rollback-co',
+                'admin_email': 'rollback@example.com',
+                'admin_is_technician': 'on',
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Customer was not created')
+        self.assertFalse(Company.objects.filter(slug='rollback-co').exists())
+        self.assertFalse(CompanyInvitation.objects.filter(email='rollback@example.com').exists())
+
+    def test_superuser_can_resend_pending_invitation(self):
+        self.login_user(self.superuser)
+        invitation = CompanyInvitation.objects.create(
+            company=self.company,
+            email='pending@example.com',
+            role_admin=True,
+            role_technician=True,
+            invited_by=self.superuser,
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+        original_token = invitation.token
+
+        response = self.client.post(reverse('platform_admin'), {
+            'action': 'resend_invitation',
+            'invitation_id': invitation.pk,
+        })
+
+        self.assertRedirects(response, reverse('platform_admin'))
+        invitation.refresh_from_db()
+        self.assertNotEqual(invitation.token, original_token)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('pending@example.com', mail.outbox[0].to)
 
 
 @override_settings(

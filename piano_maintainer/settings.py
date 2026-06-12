@@ -91,6 +91,7 @@ if SUPABASE_S3_ENABLED:
             "region_name": os.environ.get("SUPABASE_REGION", "us-east-1"),
             "endpoint_url": os.environ["SUPABASE_S3_ENDPOINT"],
             "addressing_style": "path",
+            "signature_version": "s3v4",
             "file_overwrite": False,
             "default_acl": None,
             "querystring_auth": True,

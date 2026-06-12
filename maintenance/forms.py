@@ -1,9 +1,10 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
+from django.utils.text import slugify
 from .models import (
     Organization, Venue, Piano, WorkOrder, ConditionReading, ConditionLevel,
     MaintenanceSchedule, ScheduleTemplate, Part, Technician, CompanySettings,
-    CompanyInvitation, CompanyMembership, IntervalUnit,
+    Company, CompanyInvitation, CompanyMembership, IntervalUnit,
 )
 from .tenancy import company_users
 
@@ -340,3 +341,26 @@ class MembershipRoleForm(forms.ModelForm):
     class Meta:
         model = CompanyMembership
         fields = ['role_admin', 'role_technician', 'is_active']
+
+
+class PlatformCompanyInviteForm(forms.Form):
+    company_name = forms.CharField(max_length=200)
+    company_slug = forms.SlugField(
+        max_length=80,
+        required=False,
+        help_text="Optional. Leave blank to generate from the company name.",
+    )
+    admin_first_name = forms.CharField(max_length=150, required=False)
+    admin_last_name = forms.CharField(max_length=150, required=False)
+    admin_email = forms.EmailField()
+    admin_is_technician = forms.BooleanField(required=False, initial=True)
+
+    def clean_company_slug(self):
+        slug = self.cleaned_data.get('company_slug')
+        name = self.cleaned_data.get('company_name', '')
+        slug = slugify(slug or name)
+        if not slug:
+            raise forms.ValidationError('Enter a company name or slug.')
+        if Company.objects.filter(slug=slug).exists():
+            raise forms.ValidationError('A company with this slug already exists.')
+        return slug
