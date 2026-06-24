@@ -204,6 +204,17 @@ def _can_update_workorder(user, wo, tech_mode=False):
     )
 
 
+def _can_work_on_workorder(user, wo, tech_mode=False):
+    return (user.has_company_role(wo.company, admin=True) and not tech_mode) or (
+        user.has_company_role(wo.company, technician=True)
+        and (wo.is_team_job or wo.assigned_tech_id == user.pk or wo.assigned_tech_id is None)
+    )
+
+
+def _technician_workorders_q(user):
+    return Q(assigned_tech=user) | Q(is_team_job=True)
+
+
 def _filtered_workorders(request):
     company = ensure_company_access(request)
     qs = WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue', 'assigned_tech')
@@ -243,7 +254,7 @@ def _filtered_workorders(request):
         sort_dir = 'desc'
 
     if tech_mode:
-        qs = qs.filter(Q(assigned_tech=request.user) | Q(assigned_tech__isnull=True))
+        qs = qs.filter(_technician_workorders_q(request.user) | Q(assigned_tech__isnull=True))
         if not status_filter and not completed_from and not completed_to:
             qs = qs.filter(status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS])
 
@@ -529,8 +540,8 @@ def dashboard(request):
             .order_by('-created_at')[:10]
         )
     else:
-        # Tech-only: show only their own assigned work
-        my_wos = WorkOrder.objects.filter(company=company, assigned_tech=user)
+        # Tech-only: show their own assigned work plus shared team jobs.
+        my_wos = WorkOrder.objects.filter(company=company).filter(_technician_workorders_q(user))
         overdue_count = my_wos.filter(
             status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
             due_date__lt=today,
@@ -1160,6 +1171,7 @@ def workorder_detail(request, pk):
     is_assigned_to_me = wo.assigned_tech_id == user.pk
     tech_mode = _is_tech_mode(request)
     can_edit_wo = _can_update_workorder(user, wo, tech_mode)
+    can_work_wo = _can_work_on_workorder(user, wo, tech_mode)
     return_url = _safe_return_url(request, '/work-orders/')
 
     today = date.today()
@@ -1172,6 +1184,7 @@ def workorder_detail(request, pk):
         'today': today,
         'service_status': _service_status_context(wo, today),
         'can_edit_wo': can_edit_wo,
+        'can_work_wo': can_work_wo,
         'tech_mode': tech_mode,
         'is_assigned_to_me': is_assigned_to_me,
         'return_url': return_url,
@@ -1283,7 +1296,7 @@ def workorder_assign(request, pk):
         elif _user_is_company_technician(request):
             # Tech can only assign self to unassigned WOs
             action = request.POST.get('assign_action')
-            if action == 'assign_self' and wo.assigned_tech is None:
+            if action == 'assign_self' and wo.assigned_tech is None and not wo.is_team_job:
                 wo.assigned_tech = user
 
         if wo.status == WorkOrder.Status.OPEN and wo.assigned_tech_id:
@@ -1325,7 +1338,7 @@ def workorder_complete(request, pk):
     )
     user = request.user
     return_url = _safe_return_url(request, f'/work-orders/{wo.pk}/')
-    if wo.assigned_tech_id and (not _user_is_company_admin(request) or _is_tech_mode(request)) and wo.assigned_tech_id != user.pk:
+    if not _can_work_on_workorder(user, wo, _is_tech_mode(request)):
         messages.error(request, 'You can only complete work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 
@@ -1335,11 +1348,11 @@ def workorder_complete(request, pk):
         form = WorkOrderCompleteForm(request.POST)
         if form.is_valid():
             today_date = date.today()
-            if wo.assigned_tech_id is None:
+            if not wo.is_team_job and wo.assigned_tech_id is None:
                 wo.assigned_tech = user
 
             # Create the maintenance log
-            tech = wo.assigned_tech or request.user
+            tech = request.user if wo.is_team_job else (wo.assigned_tech or request.user)
             log = MaintenanceLog.objects.create(
                 company=company,
                 work_order=wo,
@@ -1487,7 +1500,7 @@ def workorder_reopen(request, pk):
 
     if request.method != 'POST':
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
-    if not _can_update_workorder(request.user, wo, _is_tech_mode(request)):
+    if not _can_work_on_workorder(request.user, wo, _is_tech_mode(request)):
         messages.error(request, 'You can only reopen work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
     if wo.status != WorkOrder.Status.COMPLETE:
@@ -1512,7 +1525,7 @@ def workorder_log_work(request, pk):
     )
     user = request.user
     return_url = _safe_return_url(request, f'/work-orders/{wo.pk}/')
-    if wo.assigned_tech_id and (not _user_is_company_admin(request) or _is_tech_mode(request)) and wo.assigned_tech_id != user.pk:
+    if not _can_work_on_workorder(user, wo, _is_tech_mode(request)):
         messages.error(request, 'You can only log work on work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 
@@ -1521,10 +1534,10 @@ def workorder_log_work(request, pk):
     if request.method == 'POST':
         form = WorkOrderLogWorkForm(request.POST)
         if form.is_valid():
-            if wo.assigned_tech_id is None:
+            if not wo.is_team_job and wo.assigned_tech_id is None:
                 wo.assigned_tech = user
 
-            tech = wo.assigned_tech or request.user
+            tech = request.user if wo.is_team_job else (wo.assigned_tech or request.user)
             log = MaintenanceLog.objects.create(
                 company=company,
                 work_order=wo,
@@ -1565,7 +1578,7 @@ def workorder_log_work(request, pk):
             if wo.status == WorkOrder.Status.OPEN:
                 wo.status = WorkOrder.Status.IN_PROGRESS
                 wo.save(update_fields=['assigned_tech', 'status'])
-            elif wo.assigned_tech_id == user.pk:
+            elif not wo.is_team_job and wo.assigned_tech_id == user.pk:
                 wo.save(update_fields=['assigned_tech'])
 
             log_audit_event(company=company, actor=request.user, event_type='workorder.work_logged', target=wo)

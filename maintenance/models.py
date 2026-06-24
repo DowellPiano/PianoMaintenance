@@ -645,6 +645,7 @@ class WorkOrder(models.Model):
         on_delete=models.SET_NULL,
         related_name="work_orders",
     )
+    is_team_job = models.BooleanField(default=False, db_default=False)
     schedule = models.ForeignKey(
         MaintenanceSchedule,
         null=True,

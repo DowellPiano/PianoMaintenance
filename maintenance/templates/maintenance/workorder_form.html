@@ -71,6 +71,19 @@
       </div>
 
       <div class="form-group">
+        <label style="display:flex; align-items:flex-start; gap:.5rem; cursor:pointer;">
+          <input type="checkbox" name="is_team_job" id="id_is_team_job"
+                 {% if form.is_team_job.value %}checked{% endif %}
+                 style="width:16px; height:16px; margin-top:.15rem;">
+          <span>
+            <span class="form-label" style="display:block;">Team Job</span>
+            <span class="text-dim text-sm">Visible to all technicians; everyone can log work and complete it.</span>
+          </span>
+        </label>
+        {% if form.is_team_job.errors %}<span class="form-error">{{ form.is_team_job.errors.0 }}</span>{% endif %}
+      </div>
+
+      <div class="form-group">
         <label class="form-label" for="id_due_date">Due Date</label>
         <input type="date" name="due_date" id="id_due_date" class="form-input"
                value="{{ form.due_date.value|default:'' }}">

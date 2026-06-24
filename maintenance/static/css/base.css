@@ -394,6 +394,7 @@ table.data-table {
 .badge-overdue   { background: #fee2e2; color: #dc2626; }
 .badge-due-soon  { background: #fef3c7; color: #b45309; }
 .badge-upcoming  { background: #dbeafe; color: #1d4ed8; }
+.badge-team      { background: #ecfdf5; color: #047857; }
 
 .badge-excellent  { background: #d1fae5; color: #065f46; }
 .badge-good       { background: #dbeafe; color: #1d4ed8; }

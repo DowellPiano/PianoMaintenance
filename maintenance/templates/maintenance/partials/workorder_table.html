@@ -28,7 +28,10 @@
             <div class="wo-piano">{{ wo.piano_name }}</div>
             <div class="wo-piano-loc">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
           </td>
-          <td>{{ wo.task_type|default:wo.order_type }}</td>
+          <td>
+            {{ wo.task_type|default:wo.order_type }}
+            {% include "maintenance/partials/team_job_badge.html" %}
+          </td>
           <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
           <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
           <td class="text-sm" onclick="event.stopPropagation();">

@@ -101,7 +101,10 @@
         <tr class="wo-row-link" onclick="window.location='{% url 'workorder_detail' wo.pk %}'">
           <td class="text-muted">WO-{{ wo.pk }}</td>
           <td>{% if wo.piano %}{{ wo.piano.name }}{% else %}<span class="text-dim">{{ wo.piano_name }}</span>{% endif %}</td>
-          <td>{{ wo.order_type }}</td>
+          <td>
+            {{ wo.order_type }}
+            {% include "maintenance/partials/team_job_badge.html" %}
+          </td>
           <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
           <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
           <td class="text-muted text-sm">{{ wo.due_date|default:"—" }}</td>

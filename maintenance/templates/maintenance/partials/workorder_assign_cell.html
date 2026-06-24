@@ -1,15 +1,21 @@
 <div class="assign-cell">
   {% if wo.status == "Complete" or wo.status == "Cancelled" %}
-    <span>{{ wo.assigned_tech.get_full_name|default:"—" }}</span>
+    {% if wo.is_team_job %}
+      <span>{% include "maintenance/partials/team_job_badge.html" %}</span>
+      <span class="text-sm text-muted">{% if wo.assigned_tech %}Lead: {{ wo.assigned_tech.get_full_name|default:wo.assigned_tech.username }}{% else %}No lead{% endif %}</span>
+    {% else %}
+      <span>{{ wo.assigned_tech.get_full_name|default:"—" }}</span>
+    {% endif %}
   {% elif company_access.can_admin and not tech_mode %}
-    {# Admin: full dropdown to assign any technician #}
+    {% if wo.is_team_job %}<div style="margin-bottom:.35rem;">{% include "maintenance/partials/team_job_badge.html" %}</div>{% endif %}
+    {# Admin: full dropdown to assign any technician as owner/lead #}
     <form class="assign-form"
           hx-post="{% url 'workorder_assign' wo.pk %}"
           hx-target="closest .assign-cell"
           hx-swap="outerHTML">
       {% csrf_token %}
       <select name="assigned_tech" onchange="this.form.requestSubmit()">
-        <option value="">Unassigned</option>
+        <option value="">{% if wo.is_team_job %}No lead{% else %}Unassigned{% endif %}</option>
         {% for tech in technicians %}
           <option value="{{ tech.pk }}" {% if wo.assigned_tech_id == tech.pk %}selected{% endif %}>
             {{ tech.get_full_name|default:tech.username }}
@@ -17,6 +23,9 @@
         {% endfor %}
       </select>
     </form>
+  {% elif wo.is_team_job %}
+    <span>{% include "maintenance/partials/team_job_badge.html" %}</span>
+    <span class="text-sm text-muted">{% if wo.assigned_tech %}Lead: {{ wo.assigned_tech.get_full_name|default:wo.assigned_tech.username }}{% else %}No lead{% endif %}</span>
   {% elif wo.assigned_tech is None and company_access.can_technician %}
     {# Tech: unassigned WO — show "Take" button #}
     <form class="assign-form"

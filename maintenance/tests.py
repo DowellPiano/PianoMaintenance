@@ -798,12 +798,13 @@ class ScheduledWorkOrderGenerationTests(CompanyScopedTestCase):
         result = generate_scheduled_work_orders(today=self.today)
 
         self.assertGreaterEqual(result.created, 1)
-        self.assertTrue(WorkOrder.objects.filter(
+        work_order = WorkOrder.objects.get(
             piano=self.piano,
             task_type='Tuning',
             due_date=self.today - timedelta(days=1),
             status=WorkOrder.Status.OPEN,
-        ).exists())
+        )
+        self.assertFalse(work_order.is_team_job)
 
     def test_service_recalculates_built_in_due_from_latest_completed_work(self):
         self.piano.tuning_interval_value = 30
@@ -901,12 +902,13 @@ class ScheduledWorkOrderGenerationTests(CompanyScopedTestCase):
 
         generate_scheduled_work_orders(today=self.today)
 
-        self.assertTrue(WorkOrder.objects.filter(
+        work_order = WorkOrder.objects.get(
             piano=self.piano,
             schedule=schedule,
             task_type='Inspection',
             due_date=self.today + timedelta(days=5),
-        ).exists())
+        )
+        self.assertFalse(work_order.is_team_job)
 
     def test_dry_run_does_not_create_work_orders(self):
         result = generate_scheduled_work_orders(today=self.today, dry_run=True)
@@ -1271,6 +1273,187 @@ class WorkOrderAssignmentTests(CompanyScopedTestCase):
         self.assertEqual(response.status_code, 200)
         wo.refresh_from_db()
         self.assertEqual(wo.assigned_tech, self.other_tech)
+
+
+class TeamJobWorkOrderTests(CompanyScopedTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin = self.create_user(
+            'teamadmin',
+            first_name='Team',
+            last_name='Admin',
+            role_admin=True,
+            role_technician=True,
+        )
+        self.tech = self.create_user(
+            'teamtech',
+            first_name='Team',
+            last_name='Tech',
+        )
+        self.other_tech = self.create_user(
+            'teamlead',
+            first_name='Team',
+            last_name='Lead',
+        )
+        self.piano = self.create_piano(name='Team Piano')
+
+    def _team_job(self, **kwargs):
+        defaults = {
+            'company': self.company,
+            'piano': self.piano,
+            'order_type': WorkOrder.OrderType.REQUEST,
+            'status': WorkOrder.Status.OPEN,
+            'priority': WorkOrder.Priority.NORMAL,
+            'description': 'Shared work',
+            'is_team_job': True,
+        }
+        defaults.update(kwargs)
+        return WorkOrder.objects.create(**defaults)
+
+    def test_work_orders_default_to_non_team_job(self):
+        wo = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        self.assertFalse(wo.is_team_job)
+
+    def test_create_and_edit_forms_save_team_job(self):
+        self.login_user(self.admin)
+
+        response = self.client.post(reverse('workorder_create'), {
+            'piano': self.piano.pk,
+            'order_type': WorkOrder.OrderType.REQUEST,
+            'task_type': '',
+            'priority': WorkOrder.Priority.NORMAL,
+            'assigned_tech': self.other_tech.pk,
+            'is_team_job': 'on',
+            'description': 'Team-created work',
+            'due_date': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        wo = WorkOrder.objects.get(description='Team-created work')
+        self.assertTrue(wo.is_team_job)
+        self.assertEqual(wo.assigned_tech, self.other_tech)
+
+        response = self.client.post(reverse('workorder_edit', args=[wo.pk]), {
+            'piano': self.piano.pk,
+            'order_type': WorkOrder.OrderType.REQUEST,
+            'task_type': '',
+            'priority': WorkOrder.Priority.HIGH,
+            'assigned_tech': '',
+            'description': 'No longer team work',
+            'due_date': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        wo.refresh_from_db()
+        self.assertFalse(wo.is_team_job)
+        self.assertIsNone(wo.assigned_tech)
+        self.assertEqual(wo.priority, WorkOrder.Priority.HIGH)
+
+    def test_team_jobs_are_visible_in_tech_mode_and_technician_dashboard(self):
+        team_job = self._team_job(assigned_tech=self.other_tech, description='Visible team job')
+        private_job = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            assigned_tech=self.other_tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Other private job',
+        )
+
+        self.login_user(self.admin)
+        session = self.client.session
+        session['tech_mode'] = True
+        session.save()
+
+        response = self.client.get(reverse('workorder_list'))
+
+        self.assertContains(response, f'WO-{team_job.pk}')
+        self.assertNotContains(response, f'WO-{private_job.pk}')
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, f'WO-{team_job.pk}')
+        self.assertNotContains(response, f'WO-{private_job.pk}')
+
+        self.login_user(self.tech)
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, f'WO-{team_job.pk}')
+        self.assertNotContains(response, f'WO-{private_job.pk}')
+
+    def test_any_technician_can_log_work_on_team_job_without_changing_lead(self):
+        wo = self._team_job(assigned_tech=self.other_tech)
+        self.login_user(self.tech)
+
+        response = self.client.post(reverse('workorder_log_work', args=[wo.pk]), {
+            'hours_worked': '1.00',
+            'work_performed': 'Worked with the team.',
+            'notes': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        wo.refresh_from_db()
+        log = wo.logs.get()
+        self.assertEqual(wo.assigned_tech, self.other_tech)
+        self.assertEqual(wo.status, WorkOrder.Status.IN_PROGRESS)
+        self.assertEqual(log.technician, self.tech)
+
+    def test_any_technician_can_complete_team_job_without_auto_assignment(self):
+        wo = self._team_job()
+        self.login_user(self.tech)
+
+        response = self.client.post(reverse('workorder_complete', args=[wo.pk]), {
+            'hours_worked': '1.25',
+            'work_performed': 'Completed shared work.',
+            'notes': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        wo.refresh_from_db()
+        log = wo.logs.get()
+        self.assertIsNone(wo.assigned_tech)
+        self.assertEqual(wo.status, WorkOrder.Status.COMPLETE)
+        self.assertEqual(log.technician, self.tech)
+
+    def test_team_job_detail_shows_badge_actions_and_no_take_button(self):
+        wo = self._team_job()
+        self.login_user(self.tech)
+
+        response = self.client.get(reverse('workorder_detail', args=[wo.pk]))
+
+        self.assertContains(response, 'Team Job')
+        self.assertContains(response, 'Log Work')
+        self.assertContains(response, 'Mark Complete')
+        self.assertNotContains(response, '>Take<', html=False)
+
+    def test_technician_cannot_take_team_job(self):
+        wo = self._team_job()
+        self.login_user(self.tech)
+
+        response = self.client.post(reverse('workorder_assign', args=[wo.pk]), {
+            'assign_action': 'assign_self',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        wo.refresh_from_db()
+        self.assertIsNone(wo.assigned_tech)
+
+    def test_team_job_badge_shows_on_piano_work_order_tab(self):
+        wo = self._team_job()
+        self.login_user(self.tech)
+
+        response = self.client.get(reverse('piano_tab', args=[self.piano.pk, 'work-orders']))
+
+        self.assertContains(response, f'WO-{wo.pk}')
+        self.assertContains(response, 'Team Job')
 
 
 class WorkOrderListAssignmentTests(CompanyScopedTestCase):

@@ -198,7 +198,7 @@ class WorkOrderForm(forms.ModelForm):
         model = WorkOrder
         fields = [
             'piano', 'order_type', 'task_type', 'priority',
-            'assigned_tech', 'description', 'due_date',
+            'assigned_tech', 'is_team_job', 'description', 'due_date',
         ]
         widgets = {
             'due_date': forms.DateInput(attrs={'type': 'date'}),

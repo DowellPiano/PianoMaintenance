@@ -26,11 +26,21 @@
         {% for wo in open_work_orders %}
         <tr>
           <td><a href="{% url 'workorder_detail' wo.pk %}?return_url={{ workorder_return_url|urlencode }}">WO-{{ wo.pk }}</a></td>
-          <td>{{ wo.task_type|default:wo.order_type }}</td>
+          <td>
+            {{ wo.task_type|default:wo.order_type }}
+            {% include "maintenance/partials/team_job_badge.html" %}
+          </td>
           <td><span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span></td>
           <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
           <td style="max-width:240px;">{{ wo.description|truncatechars:80 }}</td>
-          <td class="text-sm">{{ wo.assigned_tech.get_full_name|default:"—" }}</td>
+          <td class="text-sm">
+            {% if wo.is_team_job %}
+              {% include "maintenance/partials/team_job_badge.html" %}
+              <span class="text-muted">{% if wo.assigned_tech %}Lead: {{ wo.assigned_tech.get_full_name|default:wo.assigned_tech.username }}{% else %}No lead{% endif %}</span>
+            {% else %}
+              {{ wo.assigned_tech.get_full_name|default:"—" }}
+            {% endif %}
+          </td>
           <td class="text-sm text-muted">{{ wo.due_date|default:"—" }}</td>
           <td class="text-sm text-muted">{{ wo.created_at|date:"M d, Y" }}</td>
         </tr>
@@ -66,10 +76,20 @@
         {% for wo in work_history %}
         <tr>
           <td><a href="{% url 'workorder_detail' wo.pk %}?return_url={{ workorder_return_url|urlencode }}">WO-{{ wo.pk }}</a></td>
-          <td>{{ wo.task_type|default:wo.order_type }}</td>
+          <td>
+            {{ wo.task_type|default:wo.order_type }}
+            {% include "maintenance/partials/team_job_badge.html" %}
+          </td>
           <td><span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span></td>
           <td style="max-width:280px;">{{ wo.description|truncatechars:90 }}</td>
-          <td class="text-sm">{{ wo.assigned_tech.get_full_name|default:"—" }}</td>
+          <td class="text-sm">
+            {% if wo.is_team_job %}
+              {% include "maintenance/partials/team_job_badge.html" %}
+              <span class="text-muted">{% if wo.assigned_tech %}Lead: {{ wo.assigned_tech.get_full_name|default:wo.assigned_tech.username }}{% else %}No lead{% endif %}</span>
+            {% else %}
+              {{ wo.assigned_tech.get_full_name|default:"—" }}
+            {% endif %}
+          </td>
           <td class="text-sm text-muted">{{ wo.completed_date|date:"M d, Y"|default:"—" }}</td>
           <td class="text-sm text-muted">{{ wo.created_at|date:"M d, Y" }}</td>
         </tr>

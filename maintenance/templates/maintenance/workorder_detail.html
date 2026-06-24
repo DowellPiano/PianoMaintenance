@@ -27,6 +27,7 @@
           <span class="badge badge-{{ wo.status|lower|cut:' ' }}">{{ wo.status }}</span>
           <span class="badge badge-{{ wo.priority|lower }}">{{ wo.priority }}</span>
           <span class="badge badge-{{ wo.order_type|lower }}">{{ wo.order_type }}</span>
+          {% include "maintenance/partials/team_job_badge.html" %}
           {% if wo.due_date and wo.due_date < today and wo.status != "Complete" and wo.status != "Cancelled" %}
             <span class="badge badge-overdue">Overdue</span>
           {% endif %}
@@ -36,7 +37,7 @@
         {% if can_edit_wo %}
           <a href="{% url 'workorder_edit' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-sm btn-secondary">Edit</a>
         {% endif %}
-        {% if wo.status == "Complete" and can_edit_wo %}
+        {% if wo.status == "Complete" and can_work_wo %}
           <form method="post" action="{% url 'workorder_reopen' wo.pk %}" style="display:inline;" onsubmit="return confirm('Reopen WO-{{ wo.pk }} and clear its completed date?')">
             {% csrf_token %}
             <input type="hidden" name="return_url" value="{{ return_url }}">
@@ -46,7 +47,7 @@
         {% if company_access.can_admin and not tech_mode %}
           <a href="{% url 'workorder_delete' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-sm btn-danger">Delete</a>
         {% endif %}
-        {% if wo.status != "Complete" and wo.status != "Cancelled" and can_edit_wo %}
+        {% if wo.status != "Complete" and wo.status != "Cancelled" and can_work_wo %}
           <a href="{% url 'workorder_log_work' wo.pk %}?return_url={{ return_url|urlencode }}" class="btn btn-sm btn-primary">
             Log Work
           </a>
@@ -68,6 +69,7 @@
           <tr><td>Piano</td><td>{% if wo.piano %}<a href="{% url 'piano_detail' wo.piano.pk %}">{{ wo.piano.name }}</a>{% else %}<span class="text-dim">{{ wo.piano_name }}</span>{% endif %}</td></tr>
           <tr><td>Venue</td><td>{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% else %}—{% endif %}</td></tr>
           <tr><td>Order Type</td><td>{{ wo.task_type|default:wo.order_type }}</td></tr>
+          {% if wo.is_team_job %}<tr><td>Work Scope</td><td>{% include "maintenance/partials/team_job_badge.html" %}</td></tr>{% endif %}
           {% if service_status %}
           <tr><td>Last {{ service_status.task_type }}</td><td>{{ service_status.last_service_date|date:"M d, Y"|default:"—" }}</td></tr>
           <tr>

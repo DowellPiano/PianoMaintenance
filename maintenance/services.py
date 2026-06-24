@@ -209,6 +209,7 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
                     task_type=task_type,
                     status=WorkOrder.Status.OPEN,
                     priority=WorkOrder.Priority.NORMAL,
+                    is_team_job=False,
                     description=f"Scheduled {task_type.lower()}",
                     due_date=due_date,
                 )
@@ -250,6 +251,7 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
                 task_type=sched.task_type,
                 status=WorkOrder.Status.OPEN,
                 priority=WorkOrder.Priority.NORMAL,
+                is_team_job=False,
                 description=f"Scheduled: {sched.task_name}",
                 due_date=next_due,
                 schedule=sched,

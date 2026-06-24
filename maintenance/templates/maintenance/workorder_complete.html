@@ -14,11 +14,12 @@
     <h2>Complete Work Order</h2>
   </div>
   <div class="card-body">
-    <div style="background:#f9fafb; border-radius:var(--radius-sm); padding:.75rem 1rem; margin-bottom:1.25rem;">
-      <div style="font-weight:600;">WO-{{ wo.pk }} · {{ wo.piano_name }}</div>
-      <div class="text-sm text-muted">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }} · {% endif %}{{ wo.order_type }}{% if wo.task_type %} · {{ wo.task_type }}{% endif %}</div>
-      {% if wo.description %}<div class="text-sm" style="margin-top:.35rem;">{{ wo.description|truncatechars:120 }}</div>{% endif %}
-    </div>
+      <div style="background:#f9fafb; border-radius:var(--radius-sm); padding:.75rem 1rem; margin-bottom:1.25rem;">
+        <div style="font-weight:600;">WO-{{ wo.pk }} · {{ wo.piano_name }}</div>
+        <div class="text-sm text-muted">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }} · {% endif %}{{ wo.order_type }}{% if wo.task_type %} · {{ wo.task_type }}{% endif %}</div>
+        {% include "maintenance/partials/team_job_badge.html" %}
+        {% if wo.description %}<div class="text-sm" style="margin-top:.35rem;">{{ wo.description|truncatechars:120 }}</div>{% endif %}
+      </div>
 
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
