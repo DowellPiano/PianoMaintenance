@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Log Work — WO-{{ wo.pk }} — Overtone{% endblock %}
 {% block topbar_title %}Log Work — WO-{{ wo.pk }}{% endblock %}
@@ -28,11 +29,12 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label" for="id_hours_worked">Hours Worked *</label>
-          <input type="number" step="0.25" min="0" name="hours_worked" id="id_hours_worked"
+          <input type="number" step="0.01" min="0" name="hours_worked" id="id_hours_worked"
                  class="form-input" required value="{{ form.hours_worked.value|default:'' }}"
                  placeholder="0.00">
           {% if form.hours_worked.errors %}<span class="form-error">{{ form.hours_worked.errors.0 }}</span>{% endif %}
         </div>
+        {% include "maintenance/partials/work_timer.html" %}
       </div>
 
       <div class="form-group">
@@ -92,4 +94,8 @@ function addPartRow() {
   container.appendChild(row);
 }
 </script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/work-timer.js' %}"></script>
 {% endblock %}

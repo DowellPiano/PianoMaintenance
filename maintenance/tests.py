@@ -1275,6 +1275,47 @@ class WorkOrderAssignmentTests(CompanyScopedTestCase):
         self.assertEqual(wo.assigned_tech, self.other_tech)
 
 
+class WorkOrderTimerTemplateTests(CompanyScopedTestCase):
+    def setUp(self):
+        super().setUp()
+        self.tech = self.create_user(
+            'timertech',
+            first_name='Timer',
+            last_name='Tech',
+        )
+        self.piano = self.create_piano(name='Timer Piano')
+        self.work_order = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Timed work',
+        )
+        self.login_user(self.tech)
+
+    def test_log_work_form_includes_client_side_timer(self):
+        response = self.client.get(reverse('workorder_log_work', args=[self.work_order.pk]))
+
+        self.assertContains(response, 'data-work-timer')
+        self.assertContains(response, 'data-work-timer-start')
+        self.assertContains(response, 'data-work-timer-end')
+        self.assertContains(response, 'static/js/work-timer.js')
+        self.assertContains(response, 'name="hours_worked" id="id_hours_worked"', html=False)
+        self.assertContains(response, 'step="0.01"', html=False)
+
+    def test_complete_form_includes_client_side_timer(self):
+        response = self.client.get(reverse('workorder_complete', args=[self.work_order.pk]))
+
+        self.assertContains(response, 'data-work-timer')
+        self.assertContains(response, 'data-work-timer-start')
+        self.assertContains(response, 'data-work-timer-end')
+        self.assertContains(response, 'static/js/work-timer.js')
+        self.assertContains(response, 'name="hours_worked" id="id_hours_worked"', html=False)
+        self.assertContains(response, 'step="0.01"', html=False)
+
+
 class TeamJobWorkOrderTests(CompanyScopedTestCase):
     def setUp(self):
         super().setUp()

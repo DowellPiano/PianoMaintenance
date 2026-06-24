@@ -143,6 +143,57 @@
 .parts-row .btn-remove { flex-shrink: 0; padding: .25rem .5rem; font-size: .8rem; }
 
 /* ----------------------------------------------------------------
+   Shared: work timer (work order complete & log work forms)
+   ---------------------------------------------------------------- */
+.work-timer-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-height: 2.55rem;
+  padding: .5rem .6rem;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  background: #f9fafb;
+}
+.work-timer-summary {
+  min-width: 0;
+}
+.work-timer-elapsed {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.work-timer-times {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  color: var(--clr-text-sec);
+  font-size: .75rem;
+}
+.work-timer-times strong {
+  color: var(--clr-text);
+  font-weight: 600;
+}
+.work-timer-actions {
+  display: flex;
+  gap: .4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 520px) {
+  .work-timer-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .work-timer-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* ----------------------------------------------------------------
    Piano detail
    ---------------------------------------------------------------- */
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
