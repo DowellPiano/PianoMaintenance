@@ -74,8 +74,10 @@ jobs:
           python -m venv /tmp/overtone-lock-check
           /tmp/overtone-lock-check/bin/python -m pip install --quiet \
             pip==26.1.2 pip-tools==7.5.3
+          cp requirements.txt /tmp/requirements.txt
           PIP_INDEX_URL=https://pypi.org/simple \
             CUSTOM_COMPILE_COMMAND='python -m piptools compile requirements.in' \
             /tmp/overtone-lock-check/bin/python -m piptools compile \
-            --quiet --output-file=/tmp/requirements.txt requirements.in
+            --quiet --no-upgrade \
+            --output-file=/tmp/requirements.txt requirements.in
           diff --unified requirements.txt /tmp/requirements.txt
