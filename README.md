@@ -283,6 +283,19 @@ For private media, optional production tuning:
 PRIVATE_MEDIA_URL_TTL=900
 ```
 
+### Continuous integration
+
+GitHub Actions runs Django checks, migration-drift detection, and the complete
+test suite for every push to `SaaS`, every pull request targeting `SaaS`, and
+manual workflow dispatches. CI uses Python 3.12, a temporary SQLite database,
+temporary filesystem media storage, Django's in-memory email backend, and no
+Supabase, Backblaze, Resend, or Sentry credentials.
+
+The workflow is defined in `.github/workflows/tests.yml`. Keep the `Django tests
+/ Python 3.12` check green before deploying a commit or merging a pull request.
+In the Render service settings, set **Auto-Deploy** to **After CI Checks Pass**
+so a failing GitHub Actions run cannot be deployed automatically.
+
 Operational commands for the SaaS branch:
 
 ```bash
