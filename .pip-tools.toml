@@ -1,0 +1,5 @@
+[tool.pip-tools]
+generate-hashes = true
+resolver = "backtracking"
+reuse-hashes = true
+strip-extras = false

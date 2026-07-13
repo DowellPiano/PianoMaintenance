@@ -296,6 +296,28 @@ The workflow is defined in `.github/workflows/tests.yml`. Keep the `Django tests
 In the Render service settings, set **Auto-Deploy** to **After CI Checks Pass**
 so a failing GitHub Actions run cannot be deployed automatically.
 
+### Dependency locking
+
+`requirements.in` contains the direct runtime dependencies and compatible
+version ranges. `requirements.txt` is the generated deployment lock: every
+direct and transitive package is pinned and protected with SHA-256 hashes. Both
+Render and CI install only `requirements.txt`; CI also fails if the two files
+are out of sync.
+
+Review dependency release notes and test upgrades before regenerating the lock:
+
+```bash
+python3.12 -m venv /tmp/overtone-lock
+/tmp/overtone-lock/bin/python -m pip install pip==26.1.2 pip-tools==7.5.3
+PIP_INDEX_URL=https://pypi.org/simple \
+  CUSTOM_COMPILE_COMMAND='python -m piptools compile requirements.in' \
+  /tmp/overtone-lock/bin/python -m piptools compile \
+  --upgrade --output-file=requirements.txt requirements.in
+```
+
+Commit `requirements.in` and `requirements.txt` together. Do not hand-edit the
+compiled lockfile.
+
 Operational commands for the SaaS branch:
 
 ```bash
