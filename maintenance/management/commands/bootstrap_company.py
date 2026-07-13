@@ -40,7 +40,7 @@ class Command(BaseCommand):
                 "first_name": options["first_name"],
                 "last_name": options["last_name"],
                 "is_active": True,
-                "is_staff": True,
+                "is_staff": False,
                 "is_superuser": False,
                 "role_admin": False,
                 "role_technician": False,
@@ -54,11 +54,10 @@ class Command(BaseCommand):
             user.first_name = options["first_name"] or user.first_name
             user.last_name = options["last_name"] or user.last_name
             user.is_active = True
-            user.is_staff = True
             user.set_password(options["admin_password"])
             user.save(update_fields=[
                 "email", "first_name", "last_name",
-                "is_active", "is_staff", "password",
+                "is_active", "password",
             ])
 
         membership, membership_created = CompanyMembership.objects.update_or_create(

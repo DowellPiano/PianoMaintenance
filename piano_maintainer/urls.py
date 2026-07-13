@@ -5,6 +5,7 @@ from django.urls import path
 from maintenance import views
 
 urlpatterns = [
+    path('healthz/', views.health_check, name='health_check'),
     path('admin/', admin.site.urls),
 
     # Auth

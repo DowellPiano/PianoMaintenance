@@ -2,8 +2,10 @@ import os
 import tempfile
 from datetime import date, datetime, timedelta
 from io import StringIO
+from unittest.mock import patch
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.core.files.storage import Storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core import mail
@@ -18,10 +20,18 @@ from .models import (
     CompanyInvitation,
     CompanyMembership,
     CompanySettings,
+    ConditionReading,
+    JobRun,
+    MaintenanceLog,
+    MaintenanceRequest,
     MaintenanceSchedule,
     Organization,
+    Part,
+    PartUsed,
     Photo,
     Piano,
+    ScheduleTemplate,
+    Tag,
     Technician,
     Venue,
     WorkOrder,
@@ -29,6 +39,7 @@ from .models import (
 from .audit import log_audit_event
 from .services import generate_scheduled_work_orders
 from .views import _resolve_photo_storage_name
+from piano_maintainer.monitoring import sanitize_sentry_event
 
 
 class StubPhotoStorage(Storage):
@@ -158,6 +169,65 @@ class AuthEntryTests(TestCase):
         self.assertNotContains(response, 'Request an account')
 
 
+class HealthCheckTests(TestCase):
+    def test_health_check_reports_ok_when_database_is_available(self):
+        response = self.client.get(reverse('health_check'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'status': 'ok'})
+
+    @patch('maintenance.views.connection.cursor', side_effect=RuntimeError('database unavailable'))
+    def test_health_check_reports_unhealthy_without_leaking_error(self, mocked_cursor):
+        response = self.client.get(reverse('health_check'))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {'status': 'unhealthy'})
+        self.assertNotContains(
+            response,
+            'database unavailable',
+            status_code=503,
+        )
+
+    def test_health_check_rejects_non_get_requests(self):
+        response = self.client.post(reverse('health_check'))
+
+        self.assertEqual(response.status_code, 405)
+
+
+class SentrySanitizationTests(TestCase):
+    def test_sanitizer_removes_sensitive_request_context(self):
+        event = {
+            'user': {'id': '42', 'email': 'customer@example.com'},
+            'request': {
+                'url': (
+                    'https://app.example.com/invitations/'
+                    '123e4567-e89b-42d3-a456-426614174000/accept/'
+                ),
+                'query_string': 'email=customer@example.com',
+                'data': {'password': 'secret'},
+                'cookies': {'sessionid': 'secret'},
+                'headers': {
+                    'Authorization': 'Bearer secret',
+                    'Cookie': 'sessionid=secret',
+                    'User-Agent': 'Browser',
+                },
+            },
+        }
+
+        sanitized = sanitize_sentry_event(event, {})
+
+        self.assertNotIn('user', sanitized)
+        request = sanitized['request']
+        self.assertNotIn('query_string', request)
+        self.assertNotIn('data', request)
+        self.assertNotIn('cookies', request)
+        self.assertNotIn('Authorization', request['headers'])
+        self.assertNotIn('Cookie', request['headers'])
+        self.assertEqual(request['headers']['User-Agent'], 'Browser')
+        self.assertIn('<redacted-uuid>', request['url'])
+        self.assertNotIn('123e4567-e89b-42d3-a456-426614174000', request['url'])
+
+
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
     DEFAULT_FROM_EMAIL='Overtone <app@example.com>',
@@ -187,6 +257,16 @@ class PlatformAdminTests(CompanyScopedTestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_company_admin_cannot_access_django_admin_even_if_staff(self):
+        self.company_admin.is_staff = True
+        self.company_admin.save(update_fields=['is_staff'])
+        self.login_user(self.company_admin)
+
+        response = self.client.get(reverse('admin:index'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('admin:login'), response['Location'])
+
     def test_superuser_can_access_platform_admin(self):
         self.login_user(self.superuser)
 
@@ -195,6 +275,28 @@ class PlatformAdminTests(CompanyScopedTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Platform Admin')
         self.assertContains(response, 'Add Customer')
+
+    def test_superuser_can_access_django_admin(self):
+        self.login_user(self.superuser)
+
+        response = self.client.get(reverse('admin:index'))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_platform_admin_shows_recent_job_runs(self):
+        JobRun.objects.create(
+            job_name='generate_work_orders',
+            status=JobRun.Status.SUCCESS,
+            result={'created': 3},
+            finished_at=timezone.now(),
+        )
+        self.login_user(self.superuser)
+
+        response = self.client.get(reverse('platform_admin'))
+
+        self.assertContains(response, 'Recent Job Runs')
+        self.assertContains(response, 'generate_work_orders')
+        self.assertContains(response, 'created')
 
     def test_superuser_can_create_company_and_send_admin_invitation(self):
         self.login_user(self.superuser)
@@ -263,8 +365,8 @@ class PlatformAdminTests(CompanyScopedTestCase):
 @override_settings(
     EMAIL_NOTIFICATIONS_ENABLED=True,
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-    EMAIL_HOST_USER='app@example.com',
-    EMAIL_HOST_PASSWORD='test-password',
+    EMAIL_HOST_USER='',
+    EMAIL_HOST_PASSWORD='',
     DEFAULT_FROM_EMAIL='Overtone <app@example.com>',
 )
 class EmailNotificationTests(CompanyScopedTestCase):
@@ -353,6 +455,22 @@ class EmailNotificationTests(CompanyScopedTestCase):
         self.assertEqual(mail.outbox[0].to, ['assigned@example.com'])
         self.assertIn('assigned to you', mail.outbox[0].subject)
         self.assertIn(self.company.name, mail.outbox[0].body)
+
+    @override_settings(EMAIL_NOTIFICATIONS_ENABLED=False)
+    def test_disabled_notifications_do_not_send_email(self):
+        piano = self.create_piano(
+            name='Notifications Disabled Piano',
+            make='Yamaha',
+        )
+
+        response = self.client.post(reverse('maintenance-request-form', args=[piano.qr_code_token]), {
+            'reported_by_name': 'Reporter',
+            'reported_by_email': 'reporter@example.com',
+            'issue_description': 'Sticky key',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
 
 
 class QRCodeRoutingTests(CompanyScopedTestCase):
@@ -480,7 +598,7 @@ class PhotoDeletionTests(CompanyScopedTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'image/jpeg')
 
-    def test_user_from_other_company_cannot_view_photo(self):
+    def test_user_from_other_company_cannot_discover_photo(self):
         other_company = Company.objects.create(name='Other Co', slug='other-co')
         outsider = self.create_user('outsider', company=other_company)
         photo = self._create_photo()
@@ -488,7 +606,7 @@ class PhotoDeletionTests(CompanyScopedTestCase):
 
         response = self.client.get(reverse('photo_file', args=[photo.pk]))
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_anonymous_user_is_redirected_from_photo_endpoint(self):
         photo = self._create_photo()
@@ -923,6 +1041,24 @@ class ScheduledWorkOrderGenerationTests(CompanyScopedTestCase):
 
         self.assertIn('DRY RUN', out.getvalue())
         self.assertIn('Done. Created:', out.getvalue())
+        job_run = JobRun.objects.get(job_name='generate_work_orders')
+        self.assertEqual(job_run.status, JobRun.Status.SUCCESS)
+        self.assertTrue(job_run.metadata['dry_run'])
+        self.assertIn('created', job_run.result)
+        self.assertIsNotNone(job_run.finished_at)
+
+    @patch(
+        'maintenance.management.commands.generate_work_orders.generate_scheduled_work_orders',
+        side_effect=RuntimeError('generation failed'),
+    )
+    def test_management_command_records_failure(self, mocked_generation):
+        with self.assertRaisesMessage(RuntimeError, 'generation failed'):
+            call_command('generate_work_orders')
+
+        job_run = JobRun.objects.get(job_name='generate_work_orders')
+        self.assertEqual(job_run.status, JobRun.Status.FAILED)
+        self.assertIn('generation failed', job_run.error_message)
+        self.assertIsNotNone(job_run.finished_at)
 
     def test_generation_can_be_limited_to_a_single_company(self):
         other_company = Company.objects.create(name='Other Company', slug='other-company')
@@ -1273,6 +1409,75 @@ class WorkOrderAssignmentTests(CompanyScopedTestCase):
         self.assertEqual(response.status_code, 200)
         wo.refresh_from_db()
         self.assertEqual(wo.assigned_tech, self.other_tech)
+
+    def test_admin_cannot_assign_deactivated_technician(self):
+        admin = self.create_user(
+            'assignmentadmin',
+            role_admin=True,
+            role_technician=True,
+        )
+        membership = CompanyMembership.objects.get(
+            company=self.company,
+            user=self.other_tech,
+        )
+        membership.is_active = False
+        membership.save()
+        wo = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.create_piano(name='Inactive Assignment Piano'),
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+        self.login_user(admin)
+
+        response = self.client.post(reverse('workorder_assign', args=[wo.pk]), {
+            'assigned_tech': self.other_tech.pk,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        wo.refresh_from_db()
+        self.assertIsNone(wo.assigned_tech)
+
+    def test_admin_can_edit_work_order_without_removing_historical_assignee(self):
+        admin = self.create_user(
+            'historicaladmin',
+            role_admin=True,
+            role_technician=True,
+        )
+        piano = self.create_piano(name='Historical Assignment Piano')
+        wo = WorkOrder.objects.create(
+            company=self.company,
+            piano=piano,
+            assigned_tech=self.other_tech,
+            order_type=WorkOrder.OrderType.REQUEST,
+            task_type='Other',
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+            description='Original description',
+        )
+        membership = CompanyMembership.objects.get(
+            company=self.company,
+            user=self.other_tech,
+        )
+        membership.is_active = False
+        membership.save()
+        self.login_user(admin)
+
+        response = self.client.post(reverse('workorder_edit', args=[wo.pk]), {
+            'piano': piano.pk,
+            'order_type': WorkOrder.OrderType.REQUEST,
+            'task_type': 'Other',
+            'priority': WorkOrder.Priority.NORMAL,
+            'assigned_tech': self.other_tech.pk,
+            'description': 'Updated description',
+            'due_date': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        wo.refresh_from_db()
+        self.assertEqual(wo.assigned_tech, self.other_tech)
+        self.assertEqual(wo.description, 'Updated description')
 
 
 class WorkOrderTimerTemplateTests(CompanyScopedTestCase):
@@ -1907,6 +2112,16 @@ class CompanySwitchingTests(CompanyScopedTestCase):
         self.assertContains(response, 'Alpha Piano A')
         self.assertNotContains(response, 'Bravo Piano B')
 
+    def test_switch_company_rejects_external_redirect(self):
+        response = self.client.post(reverse('switch_company'), {
+            'company_id': self.company_b.pk,
+            'next': 'https://attacker.example/collect',
+        })
+
+        self.assertRedirects(response, reverse('dashboard'))
+        session = self.client.session
+        self.assertEqual(session['active_company_id'], self.company_b.pk)
+
 
 class InvitationFlowTests(CompanyScopedTestCase):
     def setUp(self):
@@ -1973,6 +2188,60 @@ class InvitationFlowTests(CompanyScopedTestCase):
         )
         self.assertFalse(user.role_admin)
         self.assertTrue(user.role_technician)
+
+    def test_authenticated_invitation_email_match_is_case_insensitive(self):
+        other_company = Company.objects.create(name='Existing Co', slug='existing-co')
+        user = self.create_user(
+            'existinginvitee',
+            company=other_company,
+            email='DowellPiano@gmail.com',
+        )
+        invitation = CompanyInvitation.objects.create(
+            company=self.company,
+            email='dowellpiano@gmail.com',
+            role_admin=False,
+            role_technician=True,
+            invited_by=self.admin,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        self.login_user(user, company=other_company)
+
+        response = self.client.get(
+            reverse('company_invitation_accept', args=[invitation.token])
+        )
+
+        self.assertRedirects(response, reverse('dashboard'))
+        self.assertTrue(CompanyMembership.objects.filter(
+            company=self.company,
+            user=user,
+            role_technician=True,
+            is_active=True,
+        ).exists())
+
+    def test_authenticated_user_with_blank_email_cannot_accept_invitation(self):
+        other_company = Company.objects.create(name='Blank Email Co', slug='blank-email-co')
+        user = self.create_user('blankemailinvitee', company=other_company, email='')
+        invitation = CompanyInvitation.objects.create(
+            company=self.company,
+            email='invitee@example.com',
+            role_admin=False,
+            role_technician=True,
+            invited_by=self.admin,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        self.login_user(user, company=other_company)
+
+        response = self.client.get(
+            reverse('company_invitation_accept', args=[invitation.token])
+        )
+
+        self.assertRedirects(response, reverse('settings'))
+        self.assertFalse(CompanyMembership.objects.filter(
+            company=self.company,
+            user=user,
+        ).exists())
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.status, CompanyInvitation.Status.PENDING)
 
     def test_admin_can_revoke_pending_invitation(self):
         invitation = CompanyInvitation.objects.create(
@@ -2154,6 +2423,7 @@ class BootstrapCompanyCommandTests(TestCase):
         self.assertEqual(user.email, 'bootstrap@example.com')
         self.assertTrue(membership.role_admin)
         self.assertTrue(membership.role_technician)
+        self.assertFalse(user.is_staff)
         self.assertEqual(settings_obj.company_name, 'Bootstrap Co')
         self.assertIn('Bootstrap complete', out.getvalue())
 
@@ -2173,6 +2443,9 @@ class ExpireInvitationsCommandTests(TestCase):
         invitation.refresh_from_db()
         self.assertEqual(invitation.status, CompanyInvitation.Status.EXPIRED)
         self.assertIn('Expired 1 invitation', out.getvalue())
+        job_run = JobRun.objects.get(job_name='expire_invitations')
+        self.assertEqual(job_run.status, JobRun.Status.SUCCESS)
+        self.assertEqual(job_run.result, {'expired': 1})
 
 
 class SaaSReadinessReportCommandTests(TestCase):
@@ -2196,3 +2469,280 @@ class SaaSReadinessReportCommandTests(TestCase):
         self.assertIn('Warnings:', output)
         self.assertIn('console backend', output)
         self.assertIn('SQLite', output)
+
+    @override_settings(
+        DEBUG=False,
+        SECRET_KEY='production-shaped-secret-key',
+        ALLOWED_HOSTS=['app.example.com'],
+        CSRF_TRUSTED_ORIGINS=['https://app.example.com'],
+        DEFAULT_FROM_EMAIL='noreply@example.com',
+        PRIVATE_MEDIA_URL_TTL=900,
+    )
+    def test_report_flags_non_superuser_staff_accounts(self):
+        Technician.objects.create_user(
+            username='legacy-staff',
+            password='StrongPass123',
+            is_staff=True,
+            is_superuser=False,
+        )
+        out = StringIO()
+
+        call_command('saas_readiness_report', stdout=out)
+
+        self.assertIn('non-superuser staff account', out.getvalue())
+
+
+class TenantRelationshipValidationTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name='Tenant A', slug='tenant-a')
+        self.other_company = Company.objects.create(name='Tenant B', slug='tenant-b')
+        self.technician = Technician.objects.create_user(
+            username='tenant-tech',
+            password='StrongPass123',
+        )
+        self.membership = CompanyMembership.objects.create(
+            company=self.company,
+            user=self.technician,
+            role_admin=False,
+            role_technician=True,
+            is_active=True,
+        )
+        self.piano = Piano.objects.create(
+            company=self.company,
+            name='Tenant Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+        self.other_piano = Piano.objects.create(
+            company=self.other_company,
+            name='Other Piano',
+            make='Steinway',
+            piano_type=Piano.PianoType.GRAND,
+        )
+
+    def test_location_and_tag_relationships_reject_other_company(self):
+        other_organization = Organization.objects.create(
+            company=self.other_company,
+            name='Other Organization',
+        )
+        other_venue = Venue.objects.create(
+            company=self.other_company,
+            name='Other Venue',
+        )
+        other_tag = Tag.objects.create(company=self.other_company, name='Other Tag')
+
+        with self.assertRaises(ValidationError):
+            Venue.objects.create(
+                company=self.company,
+                organization=other_organization,
+                name='Invalid Venue',
+            )
+        with self.assertRaises(ValidationError):
+            Piano.objects.create(
+                company=self.company,
+                venue=other_venue,
+                name='Invalid Piano',
+                make='Yamaha',
+                piano_type=Piano.PianoType.UPRIGHT,
+            )
+        with self.assertRaises(ValidationError):
+            self.piano.tags.add(other_tag)
+
+    def test_schedule_relationships_reject_other_company(self):
+        other_template = ScheduleTemplate.objects.create(
+            company=self.other_company,
+            name='Other Template',
+            task_name='Other Task',
+            task_type='Other',
+            interval_days=30,
+        )
+
+        with self.assertRaises(ValidationError):
+            MaintenanceSchedule.objects.create(
+                company=self.company,
+                piano=self.other_piano,
+                task_name='Invalid Piano Schedule',
+                task_type='Other',
+                interval_days=30,
+            )
+        with self.assertRaises(ValidationError):
+            MaintenanceSchedule.objects.create(
+                company=self.company,
+                piano=self.piano,
+                template=other_template,
+                task_name='Invalid Template Schedule',
+                task_type='Other',
+                interval_days=30,
+            )
+
+    def test_work_order_rejects_cross_company_links(self):
+        other_schedule = MaintenanceSchedule.objects.create(
+            company=self.other_company,
+            piano=self.other_piano,
+            task_name='Other Schedule',
+            task_type='Other',
+            interval_days=30,
+        )
+
+        with self.assertRaises(ValidationError):
+            WorkOrder.objects.create(
+                company=self.company,
+                piano=self.other_piano,
+                order_type=WorkOrder.OrderType.REQUEST,
+            )
+        with self.assertRaises(ValidationError):
+            WorkOrder.objects.create(
+                company=self.company,
+                piano=self.piano,
+                schedule=other_schedule,
+                order_type=WorkOrder.OrderType.PREVENTIVE,
+            )
+
+    def test_deactivated_technician_cannot_receive_new_assignment(self):
+        self.membership.is_active = False
+        self.membership.save()
+
+        with self.assertRaises(ValidationError):
+            WorkOrder.objects.create(
+                company=self.company,
+                piano=self.piano,
+                assigned_tech=self.technician,
+                order_type=WorkOrder.OrderType.REQUEST,
+            )
+
+    def test_deactivated_technician_remains_on_existing_work_order(self):
+        work_order = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            assigned_tech=self.technician,
+            order_type=WorkOrder.OrderType.REQUEST,
+        )
+        self.membership.is_active = False
+        self.membership.save()
+
+        work_order.description = 'Historical edit'
+        work_order.save(update_fields=['description'])
+
+        work_order.refresh_from_db()
+        self.assertEqual(work_order.assigned_tech, self.technician)
+        self.assertEqual(work_order.description, 'Historical edit')
+
+    def test_logs_preserve_history_but_reject_new_inactive_technician(self):
+        work_order = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            assigned_tech=self.technician,
+            order_type=WorkOrder.OrderType.REQUEST,
+        )
+        log = MaintenanceLog.objects.create(
+            company=self.company,
+            work_order=work_order,
+            technician=self.technician,
+            piano=self.piano,
+            hours_worked=1,
+            work_performed='Initial work',
+        )
+        self.membership.is_active = False
+        self.membership.save()
+
+        log.notes = 'Historical note'
+        log.save(update_fields=['notes'])
+        self.assertEqual(log.technician, self.technician)
+
+        with self.assertRaises(ValidationError):
+            MaintenanceLog.objects.create(
+                company=self.company,
+                work_order=work_order,
+                technician=self.technician,
+                piano=self.piano,
+                hours_worked=1,
+                work_performed='Invalid new work',
+            )
+
+    def test_log_reading_part_and_request_relationships_are_validated(self):
+        work_order = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            assigned_tech=self.technician,
+            order_type=WorkOrder.OrderType.REQUEST,
+        )
+        log = MaintenanceLog.objects.create(
+            company=self.company,
+            work_order=work_order,
+            technician=self.technician,
+            piano=self.piano,
+            hours_worked=1,
+            work_performed='Work',
+        )
+        other_part = Part.objects.create(company=self.other_company, name='Other Part')
+
+        with self.assertRaises(ValidationError):
+            MaintenanceLog.objects.create(
+                company=self.company,
+                work_order=work_order,
+                technician=self.technician,
+                piano=self.other_piano,
+                hours_worked=1,
+                work_performed='Invalid work',
+            )
+        with self.assertRaises(ValidationError):
+            ConditionReading.objects.create(
+                company=self.company,
+                piano=self.other_piano,
+                log=log,
+            )
+        with self.assertRaises(ValidationError):
+            PartUsed.objects.create(
+                company=self.company,
+                log=log,
+                part=other_part,
+                quantity_used=1,
+            )
+        with self.assertRaises(ValidationError):
+            MaintenanceRequest.objects.create(
+                company=self.company,
+                piano=self.other_piano,
+                work_order=work_order,
+                issue_description='Invalid request',
+            )
+
+
+class TenantIntegrityCommandTests(TestCase):
+    def test_command_passes_for_consistent_relationships(self):
+        company = Company.objects.create(name='Integrity Co', slug='integrity-co')
+        organization = Organization.objects.create(company=company, name='Integrity Org')
+        venue = Venue.objects.create(
+            company=company,
+            organization=organization,
+            name='Integrity Venue',
+        )
+        Piano.objects.create(
+            company=company,
+            venue=venue,
+            name='Integrity Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+        out = StringIO()
+
+        call_command('check_tenant_integrity', stdout=out)
+
+        self.assertIn('All tenant integrity checks passed.', out.getvalue())
+
+    def test_command_fails_for_cross_company_relationship(self):
+        company = Company.objects.create(name='Integrity A', slug='integrity-a')
+        other_company = Company.objects.create(name='Integrity B', slug='integrity-b')
+        other_venue = Venue.objects.create(company=other_company, name='Other Venue')
+        piano = Piano.objects.create(
+            company=company,
+            name='Mismatched Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+        Piano.objects.filter(pk=piano.pk).update(venue=other_venue)
+        out = StringIO()
+
+        with self.assertRaisesMessage(CommandError, '1 violation(s)'):
+            call_command('check_tenant_integrity', stdout=out)
+
+        self.assertIn('[FAIL] piano.venue_company: 1', out.getvalue())

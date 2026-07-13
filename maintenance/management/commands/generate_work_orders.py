@@ -12,6 +12,7 @@ Hourly cron example:
 from django.core.management.base import BaseCommand, CommandError
 
 from maintenance.models import Company
+from maintenance.jobs import tracked_job_run
 from maintenance.services import generate_scheduled_work_orders
 
 
@@ -56,7 +57,17 @@ class Command(BaseCommand):
         if company:
             self.stdout.write(f"Target company: {company.name} ({company.slug})")
 
-        result = generate_scheduled_work_orders(dry_run=dry_run, company=company)
+        with tracked_job_run(
+            "generate_work_orders",
+            company=company,
+            metadata={"dry_run": dry_run},
+        ) as job_run:
+            result = generate_scheduled_work_orders(dry_run=dry_run, company=company)
+            job_run.result = {
+                "created": result.created,
+                "skipped_existing": result.skipped_existing,
+                "skipped_not_due": result.skipped_not_due,
+            }
         for message in result.messages:
             self.stdout.write(message)
 

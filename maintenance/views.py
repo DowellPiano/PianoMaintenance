@@ -14,14 +14,15 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.mail import send_mail
 from django.core.files.storage import FileSystemStorage
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q, Count, Sum, Max, DecimalField, Prefetch
 from django.db.models.functions import Coalesce
-from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
+from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_GET
 
 from .audit import log_audit_event, target_audit_events
 from .forms import (
@@ -40,22 +41,37 @@ from .models import (
     Organization, Venue, Piano, WorkOrder, MaintenanceRequest,
     MaintenanceSchedule, ScheduleTemplate, ConditionReading,
     Technician, Part, PartUsed, MaintenanceLog, TaskType, Photo, Tag,
-    CompanySettings,
+    CompanySettings, JobRun,
 )
 from .tenancy import ACTIVE_COMPANY_SESSION_KEY, company_queryset, company_users, ensure_company_access
 from .services import build_company_setup_progress
 
 
-def _safe_return_url(request, fallback):
-    """Return a same-site URL to preserve list/schedule state between pages."""
-    return_url = request.GET.get('return_url') or request.POST.get('return_url')
-    if return_url and url_has_allowed_host_and_scheme(
-        return_url,
+@require_GET
+def health_check(request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+    except Exception:
+        return JsonResponse({"status": "unhealthy"}, status=503)
+    return JsonResponse({"status": "ok"})
+
+
+def _safe_local_url(request, candidate, fallback):
+    if candidate and url_has_allowed_host_and_scheme(
+        candidate,
         allowed_hosts={request.get_host()},
         require_https=request.is_secure(),
     ):
-        return return_url
+        return candidate
     return fallback
+
+
+def _safe_return_url(request, fallback):
+    """Return a same-site URL to preserve list/schedule state between pages."""
+    return_url = request.GET.get('return_url') or request.POST.get('return_url')
+    return _safe_local_url(request, return_url, fallback)
 
 
 def _workorder_detail_url(wo, return_url=None):
@@ -371,10 +387,6 @@ def _setup_progress_context(company):
     }
 
 
-def _user_can_view_company_media(user, company):
-    return user.is_authenticated and user.membership_for_company(company) is not None
-
-
 def _activity_events(company, target, *, limit=5):
     return target_audit_events(company=company, target=target, limit=limit)
 
@@ -414,7 +426,7 @@ def platform_admin_required(view_func):
     @wraps(view_func)
     @login_required
     def wrapper(request, *args, **kwargs):
-        if not request.user.is_superuser:
+        if not (request.user.is_active and request.user.is_superuser):
             return HttpResponseForbidden("Platform admin access is restricted to superusers.")
         return view_func(request, *args, **kwargs)
     return wrapper
@@ -692,9 +704,13 @@ def piano_detail(request, pk):
 
 @login_required
 def photo_file(request, photo_pk):
-    photo = get_object_or_404(Photo, pk=photo_pk)
-    if not _user_can_view_company_media(request.user, photo.company):
-        return HttpResponseForbidden("You do not have access to this photo.")
+    photo = get_object_or_404(
+        Photo,
+        pk=photo_pk,
+        company__is_active=True,
+        company__memberships__user=request.user,
+        company__memberships__is_active=True,
+    )
 
     storage = photo.image.storage
     storage_name = _resolve_photo_storage_name(storage, photo.image.name, photo.uploaded_at)
@@ -1289,7 +1305,7 @@ def workorder_assign(request, pk):
             if tech_id:
                 try:
                     wo.assigned_tech = company_users(company, technicians_only=True).get(pk=int(tech_id))
-                except (ValueError, TypeError):
+                except (Technician.DoesNotExist, ValueError, TypeError):
                     pass
             else:
                 wo.assigned_tech = None
@@ -2737,6 +2753,7 @@ def platform_admin(request):
         .select_related('company', 'invited_by')
         .order_by('-created_at')[:25]
     )
+    recent_job_runs = JobRun.objects.select_related('company').order_by('-started_at')[:25]
 
     return render(request, 'maintenance/platform_admin.html', {
         'active_nav': 'platform_admin',
@@ -2744,6 +2761,7 @@ def platform_admin(request):
         'companies': companies,
         'users': users,
         'pending_invitations': pending_invitations,
+        'recent_job_runs': recent_job_runs,
         'company_count': Company.objects.count(),
         'active_company_count': Company.objects.filter(is_active=True).count(),
         'user_count': Technician.objects.count(),
@@ -2877,7 +2895,12 @@ def switch_company(request):
         if request.user.membership_for_company(company_id):
             request.session[ACTIVE_COMPANY_SESSION_KEY] = company_id
             messages.success(request, 'Active company updated.')
-    return redirect(request.POST.get('next') or 'dashboard')
+    next_url = _safe_local_url(
+        request,
+        request.POST.get('next'),
+        reverse('dashboard'),
+    )
+    return HttpResponseRedirect(next_url)
 
 
 def company_invitation_accept(request, token):
@@ -2891,7 +2914,9 @@ def company_invitation_accept(request, token):
 
     if request.user.is_authenticated:
         user = request.user
-        if invitation.email and user.email and invitation.email.lower() != user.email.lower():
+        invitation_email = invitation.email.strip().casefold()
+        user_email = (user.email or '').strip().casefold()
+        if not user_email or user_email != invitation_email:
             messages.error(request, 'Please sign in with the invited email address to accept this invitation.')
             return redirect('settings')
         CompanyMembership.objects.update_or_create(

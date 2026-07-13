@@ -7,11 +7,7 @@ from .tenancy import company_users
 
 
 def _notifications_enabled():
-    return (
-        settings.EMAIL_NOTIFICATIONS_ENABLED
-        and settings.EMAIL_HOST_USER
-        and settings.EMAIL_HOST_PASSWORD
-    )
+    return settings.EMAIL_NOTIFICATIONS_ENABLED
 
 
 def _unique_recipients(recipients):

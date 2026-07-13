@@ -192,7 +192,14 @@ class WorkOrderForm(forms.ModelForm):
         self.company = company
         if company:
             self.fields['piano'].queryset = Piano.objects.filter(company=company, is_active=True).select_related('venue')
-            self.fields['assigned_tech'].queryset = company_users(company, technicians_only=True)
+            technicians = company_users(company, technicians_only=True)
+            if self.instance and self.instance.assigned_tech_id:
+                current_assignee = Technician.objects.filter(
+                    pk=self.instance.assigned_tech_id,
+                    company_memberships__company=company,
+                ).distinct()
+                technicians = (technicians | current_assignee).distinct()
+            self.fields['assigned_tech'].queryset = technicians
 
     class Meta:
         model = WorkOrder

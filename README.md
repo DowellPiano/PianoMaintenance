@@ -1,6 +1,6 @@
 # Overtone — CMMS for Pianos
 
-A Computerized Maintenance Management System (CMMS) built for piano technicians and facilities managers. Modeled after [Limble CMMS](https://limblecmms.com), Overtone handles preventive maintenance scheduling, work order management, service visits, condition tracking, and parts inventory — purpose-built for piano fleets in schools, venues, and studios.
+A Computerized Maintenance Management System (CMMS) built for piano technicians and facilities managers. Modeled after [Limble CMMS](https://limblecmms.com), Overtone handles preventive maintenance scheduling, work order management, condition tracking, parts inventory, and public service requests — purpose-built for piano fleets in schools, venues, and studios.
 
 ---
 
@@ -8,10 +8,10 @@ A Computerized Maintenance Management System (CMMS) built for piano technicians 
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.12 · Django 5.2 · Django REST Framework |
+| Backend | Python 3.12 · Django 5.2 |
 | Frontend | Django Templates · HTMX 2.0.4 |
-| Database | SQLite (dev) |
-| Auth | Django session auth · Custom `Technician` user model |
+| Database | SQLite (local development) · PostgreSQL (production) |
+| Auth | Django session auth · Custom `Technician` user model · Company memberships |
 
 ---
 
@@ -20,21 +20,22 @@ A Computerized Maintenance Management System (CMMS) built for piano technicians 
 ### Core Concepts
 
 ```
-Organization → Venue → Piano → MaintenanceSchedule → WorkOrder → MaintenanceLog
-                          ↑                                         ↳ PartUsed
-                         Tag                                        ↳ ConditionReading
-                                  ServiceVisit ──→ WorkOrder(s)
+Company → Organization → Venue → Piano → MaintenanceSchedule → WorkOrder → MaintenanceLog
+                                  ↑                                         ↳ PartUsed
+                                 Tag                                        ↳ ConditionReading
+Company → CompanyMembership → Technician
 ```
 
-1. **Organizations** are the administrative owners (a school district, a church, a concert hall).
-2. **Venues** are the physical locations a technician drives to. Each venue belongs to one organization.
-3. **Pianos** are the assets. Each gets a unique QR code token for public maintenance request submissions.
-4. **Tags** are free-form labels you can attach to any piano for custom grouping and filtering (e.g., "Concert", "Practice Room", "Needs Rebuild").
-5. **Schedule Templates** are reusable task blueprints (e.g., "Annual Tuning — every 365 days"). Apply one template to many pianos in bulk.
-6. **Maintenance Schedules** are the per-piano instances of those templates, defining what recurring task needs to happen and how often.
-7. **Service Visits** represent a single trip to a venue. Multiple work orders can be linked to one visit.
-8. **Work Orders** are generated automatically when a scheduled task is overdue, or created manually, or from a public maintenance request.
-9. **Maintenance Logs** are written when a technician closes a work order — capturing hours worked, parts used, and an optional condition reading.
+1. **Companies** are the tenant boundary. Operational records belong to exactly one company.
+2. **Company Memberships** give users company-specific admin and technician roles.
+3. **Organizations** are the administrative owners or client accounts (a school district, a church, a concert hall).
+4. **Venues** are the physical locations a technician drives to. A venue may belong to an organization.
+5. **Pianos** are the assets. Each gets a unique QR code token for public maintenance request submissions.
+6. **Tags** are free-form labels you can attach to any piano for custom grouping and filtering (e.g., "Concert", "Practice Room", "Needs Rebuild").
+7. **Schedule Templates** are reusable task blueprints (e.g., "Annual Tuning — every 365 days"). Apply one template to many pianos in bulk.
+8. **Maintenance Schedules** are the per-piano instances of those templates, defining what recurring task needs to happen and how often.
+9. **Work Orders** are generated automatically from scheduled maintenance, created manually, or created from a public maintenance request.
+10. **Maintenance Logs** capture technician hours, work performed, parts used, and optional condition readings.
 
 ---
 
@@ -43,11 +44,11 @@ Organization → Venue → Piano → MaintenanceSchedule → WorkOrder → Maint
 ```
 piano_maintainer/              Django project config (settings, URLs)
 maintenance/
-  models.py                    18 domain models
-  views.py                     55 view functions (template-based UI)
-  api.py                       DRF ViewSets (REST API)
-  serializers.py               API serializers
-  urls.py                      API URL routing
+  models.py                    Domain and tenancy models
+  views.py                     Template-based UI and workflow handlers
+  services.py                  Scheduled generation and setup-progress logic
+  tenancy.py                   Active-company access helpers
+  email_notifications.py       Operational email notifications
   admin.py                     Django Admin customizations
   forms.py                     Django forms
   management/commands/
@@ -56,8 +57,8 @@ maintenance/
   templates/
     base.html                  Shared layout with sidebar nav
     maintenance/
-      35 page templates        Full CRUD pages for all entities
-      partials/                HTMX tab partials for piano detail
+      page templates           CRUD and workflow pages
+      partials/                HTMX and reusable UI partials
   static/
     css/base.css               Custom CSS design system
 ```
@@ -69,7 +70,10 @@ maintenance/
 ```bash
 pip3 install -r requirements.txt
 python3 manage.py migrate
-python3 manage.py createsuperuser    # creates your first Technician account
+python3 manage.py bootstrap_company \
+  --company-name "Acme Piano Service" \
+  --admin-username admin \
+  --admin-password "change-me-now"
 python3 manage.py runserver          # http://localhost:8000
 ```
 
@@ -124,15 +128,18 @@ database and storage configuration.
 Recommended Render Cron Job settings:
 
 ```text
-Name: overtone-generate-work-orders
+Name: overtone-daily-operations
 Branch: SaaS
 Build Command: pip install -r requirements.txt
-Command: python manage.py generate_work_orders
-Schedule: 0 * * * *
+Command: python manage.py run_daily_operations
+Schedule: 0 6 * * *
 ```
 
 Render cron schedules run in UTC. Manually trigger the job once after creation
-and confirm the logs end with the command summary.
+and confirm the logs show both a verified backup and the work-order generation
+summary. The two jobs are independent: work-order generation is still attempted
+if the backup fails, but the cron run exits unsuccessfully so Render sends its
+failure notification.
 
 ---
 
@@ -140,24 +147,25 @@ and confirm the logs end with the command summary.
 
 | Model | Purpose |
 |-------|---------|
+| `Company` | Tenant root for company-owned data |
+| `CompanyMembership` | Company-specific admin and technician roles for a user |
+| `CompanyInvitation` | Time-limited invitation to join a company |
+| `AuditLog` | Company-scoped record of important user and system activity |
+| `CompanySettings` | Company profile, contact information, and labor defaults |
 | `Tag` | Free-form label for custom piano grouping and filtering |
 | `Organization` | Administrative owner (school, church, concert hall) |
-| `Venue` | Physical location a technician drives to; belongs to an Organization |
+| `Venue` | Physical location a technician drives to; may belong to an Organization |
 | `Piano` | Asset record — make, model, type, serial #, QR token, tags, condition state |
 | `Technician` | Custom user — extends Django's AbstractUser |
-| `Team` | Group of technicians with a manager |
 | `ScheduleTemplate` | Reusable task blueprint (task type, interval, warning window) |
 | `MaintenanceSchedule` | Per-piano recurring task (linked to a template or manual) |
-| `ServiceVisit` | A single trip to a venue; links multiple work orders |
 | `WorkOrder` | Job ticket — status, priority, type, assigned tech, due date |
-| `MaintenanceLog` | Completed work record — hours, notes, linked to work order |
+| `MaintenanceLog` | Technician work record — hours, notes, linked to work order |
 | `ConditionReading` | Snapshot of piano health (10 component ratings, pitch, humidity, temp) |
 | `Part` | Inventory item — cost, stock qty, reorder threshold |
 | `PartUsed` | Parts consumed on a specific log entry |
 | `MaintenanceRequest` | Public submission via QR code — no login required |
 | `Photo` | Image attached to a piano or work order |
-| `Alert` | In-app notification for overdue/due-soon work orders |
-| `Attachment` | File attachment on a work order |
 
 ---
 
@@ -182,19 +190,13 @@ and confirm the logs end with the command summary.
 ### Organizations
 - Card grid with venue counts
 - Full CRUD (create, edit, hard delete)
-- Delete blocked if venues still exist (PROTECT FK safety)
+- Deleting an organization preserves its venues and clears their organization association
 - Detail page shows linked venues
 
 ### Venues
 - List with organization grouping and piano counts
 - Full CRUD
-- Detail page shows linked pianos and service visits
-
-### Service Visits
-- Represents one trip to a venue
-- Link multiple work orders to a single visit
-- Completion flow: time in/out, miles driven, notes
-- Filter by venue, technician, date range
+- Detail page shows linked pianos and open work-order counts
 
 ### Work Orders
 - List with status/priority/type filters and search
@@ -216,7 +218,7 @@ and confirm the logs end with the command summary.
 - CSV export
 
 ### Parts Inventory
-- CRUD for parts with cost, stock, and reorder threshold
+- Create and edit parts with cost, stock, and reorder threshold
 - Parts attached to maintenance logs on work order completion
 
 ### Reports
@@ -230,24 +232,9 @@ and confirm the logs end with the command summary.
 
 ---
 
-## API
+## Application Interface
 
-A full REST API coexists with the template UI under `/api/`, powered by Django REST Framework. Key endpoints:
-
-| Area | Endpoints |
-|------|-----------|
-| Auth | Login, logout, current user |
-| Dashboard | KPI counts + urgent work orders |
-| Organizations | CRUD |
-| Venues | CRUD |
-| Pianos | CRUD, profile (detail + history), CSV export |
-| Work Orders | CRUD, status transitions (start, complete) |
-| Schedules | CRUD for schedules and templates, bulk apply |
-| Maintenance Logs | List and create |
-| Technicians | List, stats, CSV export |
-| Service Visits | CRUD |
-| Reports | Technician stats, piano export, work order export |
-| Calendar | Unified WO + schedule events by date range |
+The current application is a server-rendered Django and HTMX UI. It does not expose a Django REST Framework API or an `/api/` route. CSV imports and exports are provided through authenticated UI endpoints. Supabase's client-side database API is intentionally locked down; Django accesses PostgreSQL from the server.
 
 ---
 
@@ -272,15 +259,24 @@ The `SaaS` branch is now the clean multi-company product track. It should be tre
 - no default-company autofill or silent tenant fallback in the runtime model layer
 - authenticated photo delivery for company media, with local file streaming in dev and short-lived signed URLs in object storage
 - tenant-admin setup progress, invitation resend/revoke history, and company-scoped member activation controls in the settings and users flows
+- a superuser-only platform boundary for both Django admin and the product platform console; company admins are not Django staff
 
 Use local SQLite while validating these changes:
 
 ```bash
 env SECRET_KEY='dev-secret-key' DEBUG=True DATABASE_URL='sqlite:////tmp/piano_saas.sqlite3' python3 manage.py migrate
-env SECRET_KEY='dev-secret-key' DEBUG=True DATABASE_URL='sqlite:////tmp/piano_saas_test.sqlite3' python3 manage.py test maintenance
+env SECRET_KEY='dev-secret-key' \
+  DEBUG=True \
+  DATABASE_URL='sqlite:////tmp/piano_saas_test.sqlite3' \
+  SUPABASE_S3_REQUIRED=False \
+  SUPABASE_S3_ACCESS_KEY_ID='' \
+  SUPABASE_S3_SECRET_ACCESS_KEY='' \
+  SUPABASE_S3_BUCKET='' \
+  SUPABASE_S3_ENDPOINT='' \
+  python3 manage.py test maintenance
 ```
 
-This branch should be verified locally before any production Postgres deployment is considered.
+Run the isolated local checks before deploying changes to production PostgreSQL.
 For private media, optional production tuning:
 
 ```bash
@@ -307,6 +303,10 @@ python3 manage.py saas_readiness_report
 python3 manage.py check --deploy
 ```
 
+The public `/healthz/` endpoint returns only `{"status": "ok"}` when Django can
+query the database and returns HTTP 503 otherwise. It is safe to use as the
+Render web-service health-check path.
+
 Recommended production env vars for the SaaS branch:
 
 ```bash
@@ -322,6 +322,16 @@ EMAIL_NOTIFICATIONS_ENABLED=True
 EMAIL_BACKEND=anymail.backends.resend.EmailBackend
 RESEND_API_KEY=...
 EMAIL_TIMEOUT=10
+SENTRY_ENABLED=True
+SENTRY_DSN=...
+SENTRY_ENVIRONMENT=production
+BACKUP_S3_ENDPOINT=https://s3.us-east-005.backblazeb2.com
+BACKUP_S3_REGION=us-east-005
+BACKUP_S3_BUCKET=overtone-backup-unique-suffix
+BACKUP_S3_ACCESS_KEY_ID=...
+BACKUP_S3_SECRET_ACCESS_KEY=...
+BACKUP_S3_PREFIX=overtone
+BACKUP_OBJECT_LOCK_DAYS=30
 PRIVATE_MEDIA_URL_TTL=900
 SUPABASE_S3_REQUIRED=True
 SUPABASE_S3_ACCESS_KEY_ID=...
@@ -337,7 +347,7 @@ SECURE_HSTS_PRELOAD=True
 ```
 
 Before launch, validate the production environment with a real Postgres database,
-real SMTP credentials, and real Supabase/S3-compatible storage credentials:
+a real Resend API key, and real Supabase/S3-compatible storage credentials:
 
 For Supabase Postgres, use the direct or pooler connection string supplied by
 Supabase and append `?sslmode=require` if the URL does not already include SSL
@@ -356,6 +366,84 @@ Resend, and set `EMAIL_BACKEND=anymail.backends.resend.EmailBackend` with
 `RESEND_API_KEY` in the deployment environment. Keep `DEFAULT_FROM_EMAIL` aligned
 with the verified Resend sender.
 
+For error monitoring, create a Sentry Django project and set `SENTRY_DSN` in the
+production environment. Sentry is disabled in debug mode by default. Production
+events omit default PII, request bodies, local variables, query strings, user
+context, sensitive headers, and UUID tokens embedded in URLs.
+
+### Off-site backups and restore drills
+
+Supabase Free does not provide automatic database backups, and a database dump
+does not contain the actual objects stored through Supabase Storage. Overtone
+therefore backs up both sources to a separate private Backblaze B2 bucket:
+
+- `database.dump` is a PostgreSQL custom-format dump of the Django-owned
+  `public` schema made with `pg_dump`. Supabase platform schemas and extensions
+  are deliberately excluded so the dump restores into standard PostgreSQL.
+- `media.tar.gz` contains every object in Django's configured private-media
+  storage plus a per-object SHA-256 manifest.
+- `manifest.json` is uploaded last and marks a backup as complete.
+- every object requests AES-256 server-side encryption, 30-day governance-mode
+  Object Lock, and is verified by stored size and SHA-256 metadata after upload.
+- one backup is written under `overtone/daily/` each run. The first successful
+  run in each calendar month also writes a copy under `overtone/monthly/`.
+
+Use a bucket-specific B2 application key. It needs list, read, write, and file
+retention permissions for this bucket, but it should not have account or key
+administration permissions. Do not put client names, email addresses, or other
+PII in bucket names or backup object keys. The bucket must use a lowercase
+S3-compatible name. `BACKUP_S3_REGION` must be the full region token embedded in
+the endpoint hostname, such as `us-east-005`, rather than the `US East` account
+display label.
+
+Configure these custom B2 lifecycle rules after Object Lock is enabled:
+
+| Prefix | Hide after upload | Delete after hiding | Result |
+|---|---:|---:|---|
+| `overtone/daily/` | 31 days | 1 day | About 30 daily restore points |
+| `overtone/monthly/` | 366 days | 1 day | About 12 monthly restore points |
+
+Object Lock prevents a lifecycle rule from deleting a still-locked object. The
+one-day margin means daily objects are not hidden until their 30-day lock has
+expired.
+
+Before changing the scheduled Render command, manually trigger and verify the
+backup from the Render cron environment:
+
+```bash
+python manage.py backup_to_b2
+python manage.py verify_backup
+```
+
+Both commands create `JobRun` history visible to a platform superuser. A backup
+failure exits nonzero and therefore triggers Render's cron failure notification.
+`BACKUP_DATABASE_URL` is optional; set it to a dedicated Supabase direct or
+session-pooler connection if the normal application `DATABASE_URL` is unsuitable
+for `pg_dump`.
+
+Perform a restore drill at least quarterly. The restore command refuses to use
+the configured application database, requires a separate `RESTORE_DATABASE_URL`,
+and requires an explicit confirmation flag. The target database must already
+exist and the media output directory must be empty:
+
+```bash
+createdb overtone_restore_drill
+mkdir /tmp/overtone-restore-media
+RESTORE_DATABASE_URL=postgresql:///overtone_restore_drill \
+  python manage.py restore_backup \
+  --confirm-isolated-target \
+  --media-output-dir=/tmp/overtone-restore-media
+
+DATABASE_URL=postgresql:///overtone_restore_drill DATABASE_SSL_REQUIRE=False \
+  python manage.py check_tenant_integrity
+DATABASE_URL=postgresql:///overtone_restore_drill DATABASE_SSL_REQUIRE=False \
+  python manage.py check
+```
+
+Record the restore date, backup prefix, integrity result, media file count, and
+any remediation. Only after the isolated database and media are validated should
+they be promoted or copied into replacement production services.
+
 ```bash
 python3 manage.py migrate
 python3 manage.py bootstrap_company \
@@ -373,7 +461,7 @@ created. If Django is behind a proxy or load balancer, set
 `USE_X_FORWARDED_PROTO=True` only when the proxy reliably sends
 `X-Forwarded-Proto: https`.
 - `Piano.tags` is a M2M to `Tag` — use tags for any custom grouping (building wing, priority tier, client name, etc.).
-- `Organization` uses `PROTECT` on its venue FK — you must remove all venues before deleting an organization.
+- `Venue.organization` uses `SET_NULL`, so deleting an organization preserves its venues and clears their organization association.
 - `ConditionReading.update_piano_current_state()` copies readings to denormalized fields on Piano for fast display.
 - `Piano.advance_schedule(task_type, completed_date)` computes the next due date when a work order is completed.
 
@@ -387,10 +475,10 @@ use Supabase's client-side database API; it talks to Postgres from the server.
 
 Migration `maintenance.0013_lock_down_supabase_public_api` enables row-level
 security on public tables and revokes default table, sequence, and function
-access from Supabase API roles. Run it in production after deploying:
+access from Supabase API roles. It is applied by the normal migration command:
 
 ```bash
-python manage.py migrate maintenance 0013
+python manage.py migrate
 ```
 
 If you later add a deliberate Supabase REST/client feature, create narrow RLS

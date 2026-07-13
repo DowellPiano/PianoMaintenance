@@ -2,6 +2,7 @@ import os
 from importlib.util import find_spec
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import connection
 
@@ -78,6 +79,39 @@ class Command(BaseCommand):
             warnings.append("CSRF_COOKIE_SECURE is not enabled.")
         if getattr(settings, "SECURE_HSTS_SECONDS", 0) <= 0:
             warnings.append("SECURE_HSTS_SECONDS is not enabled.")
+
+        if not settings.DEBUG:
+            if not getattr(settings, "SENTRY_DSN", ""):
+                warnings.append("SENTRY_DSN is not configured for production error monitoring.")
+            elif not getattr(settings, "SENTRY_ENABLED", False):
+                warnings.append("SENTRY_ENABLED is False in production.")
+
+            backup_settings = {
+                "BACKUP_S3_ENDPOINT": getattr(settings, "BACKUP_S3_ENDPOINT", ""),
+                "BACKUP_S3_REGION": getattr(settings, "BACKUP_S3_REGION", ""),
+                "BACKUP_S3_BUCKET": getattr(settings, "BACKUP_S3_BUCKET", ""),
+                "BACKUP_S3_ACCESS_KEY_ID": getattr(settings, "BACKUP_S3_ACCESS_KEY_ID", ""),
+                "BACKUP_S3_SECRET_ACCESS_KEY": getattr(settings, "BACKUP_S3_SECRET_ACCESS_KEY", ""),
+            }
+            missing_backup_settings = [
+                name for name, value in backup_settings.items() if not value
+            ]
+            if missing_backup_settings:
+                warnings.append(
+                    "Off-site backup configuration is incomplete: "
+                    + ", ".join(missing_backup_settings)
+                    + "."
+                )
+
+        non_superuser_staff_count = get_user_model().objects.filter(
+            is_staff=True,
+            is_superuser=False,
+        ).count()
+        if non_superuser_staff_count:
+            warnings.append(
+                f"{non_superuser_staff_count} non-superuser staff account(s) can no longer "
+                "access the superuser-only platform admin."
+            )
 
         self.stdout.write("SaaS readiness report")
         self.stdout.write(f"DEBUG={settings.DEBUG}")

@@ -1,6 +1,8 @@
 import uuid
 from datetime import date, timedelta
 from django.db import models
+from django.db.models.signals import m2m_changed
+from django.dispatch import receiver
 from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -17,6 +19,42 @@ def validate_image_file(value):
         raise ValidationError('Only JPEG, PNG, GIF, and WebP images are allowed.')
 
 YEAR_VALIDATORS = [MinValueValidator(1700), MaxValueValidator(2100)]
+
+
+class TenantValidatedModel(models.Model):
+    """Run relationship validation for normal Django ORM writes."""
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        return super().save(*args, **kwargs)
+
+
+def _validate_related_companies(instance, *field_names):
+    errors = {}
+    if not getattr(instance, "company_id", None):
+        return errors
+    for field_name in field_names:
+        if not getattr(instance, f"{field_name}_id", None):
+            continue
+        related = getattr(instance, field_name)
+        if related.company_id != instance.company_id:
+            errors[field_name] = (
+                f"{field_name.replace('_', ' ').title()} must belong to the same company."
+            )
+    return errors
+
+
+def _stored_fields_differ(instance, *field_names):
+    if instance._state.adding or not instance.pk:
+        return True
+    stored = type(instance).objects.filter(pk=instance.pk).values_list(
+        *field_names
+    ).first()
+    current = tuple(getattr(instance, field_name) for field_name in field_names)
+    return stored is None or stored != current
 
 
 class ConditionLevel(models.TextChoices):
@@ -222,7 +260,7 @@ class Organization(models.Model):
 # ---------------------------------------------------------------------------
 # Venue  (physical location a technician drives to)
 # ---------------------------------------------------------------------------
-class Venue(models.Model):
+class Venue(TenantValidatedModel):
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -247,6 +285,12 @@ class Venue(models.Model):
     def __str__(self):
         return self.name
 
+    def clean(self):
+        super().clean()
+        errors = _validate_related_companies(self, "organization")
+        if errors:
+            raise ValidationError(errors)
+
     def delete(self, *args, **kwargs):
         """Stamp display name into pianos before deletion."""
         self.pianos.update(venue_display=self.name)
@@ -256,7 +300,7 @@ class Venue(models.Model):
 # ---------------------------------------------------------------------------
 # Piano
 # ---------------------------------------------------------------------------
-class Piano(models.Model):
+class Piano(TenantValidatedModel):
     class PianoType(models.TextChoices):
         GRAND = "Grand", "Grand"
         UPRIGHT = "Upright", "Upright"
@@ -374,6 +418,12 @@ class Piano(models.Model):
 
     def __str__(self):
         return f"{self.make} {self.model} — {self.name}".strip(" —")
+
+    def clean(self):
+        super().clean()
+        errors = _validate_related_companies(self, "venue")
+        if errors:
+            raise ValidationError(errors)
 
     @property
     def venue_name(self):
@@ -556,7 +606,7 @@ class ScheduleTemplate(models.Model):
 # ---------------------------------------------------------------------------
 # MaintenanceSchedule
 # ---------------------------------------------------------------------------
-class MaintenanceSchedule(models.Model):
+class MaintenanceSchedule(TenantValidatedModel):
     TaskType = TaskType  # keep existing references working
 
     company = models.ForeignKey(
@@ -587,6 +637,12 @@ class MaintenanceSchedule(models.Model):
     def __str__(self):
         return f"{self.task_name} — every {self.interval_days}d"
 
+    def clean(self):
+        super().clean()
+        errors = _validate_related_companies(self, "piano", "template")
+        if errors:
+            raise ValidationError(errors)
+
     @property
     def next_due(self):
         if self.last_service_date:
@@ -610,7 +666,7 @@ class MaintenanceSchedule(models.Model):
 # ---------------------------------------------------------------------------
 # WorkOrder
 # ---------------------------------------------------------------------------
-class WorkOrder(models.Model):
+class WorkOrder(TenantValidatedModel):
     class OrderType(models.TextChoices):
         PREVENTIVE = "Preventive", "Preventive"
         REQUEST = "Request", "Request"
@@ -675,6 +731,34 @@ class WorkOrder(models.Model):
     def __str__(self):
         return f"WO-{self.pk} · {self.order_type} · {self.status}"
 
+    def clean(self):
+        super().clean()
+        errors = _validate_related_companies(self, "piano", "schedule")
+
+        if self.schedule_id and self.piano_id != self.schedule.piano_id:
+            errors["schedule"] = "Schedule must belong to the selected piano."
+
+        assignment_changed = _stored_fields_differ(
+            self,
+            "company_id",
+            "assigned_tech_id",
+        )
+        if self.company_id and self.assigned_tech_id and assignment_changed:
+            can_assign = CompanyMembership.objects.filter(
+                company_id=self.company_id,
+                user_id=self.assigned_tech_id,
+                is_active=True,
+                role_technician=True,
+                user__is_active=True,
+            ).exists()
+            if not can_assign:
+                errors["assigned_tech"] = (
+                    "Assigned technician must be an active technician in this company."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
     @property
     def piano_name(self):
         if self.piano:
@@ -685,7 +769,7 @@ class WorkOrder(models.Model):
 # ---------------------------------------------------------------------------
 # MaintenanceLog
 # ---------------------------------------------------------------------------
-class MaintenanceLog(models.Model):
+class MaintenanceLog(TenantValidatedModel):
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -713,10 +797,37 @@ class MaintenanceLog(models.Model):
     def __str__(self):
         return f"Log #{self.pk} ({self.logged_at:%Y-%m-%d})"
 
+    def clean(self):
+        super().clean()
+        errors = _validate_related_companies(self, "work_order", "piano")
+
+        if self.work_order_id and self.piano_id != self.work_order.piano_id:
+            errors["piano"] = "Piano must match the work order piano."
+
+        technician_changed = _stored_fields_differ(
+            self,
+            "company_id",
+            "technician_id",
+        )
+        if self.company_id and self.technician_id and technician_changed:
+            active_membership = CompanyMembership.objects.filter(
+                company_id=self.company_id,
+                user_id=self.technician_id,
+                is_active=True,
+                user__is_active=True,
+            ).exists()
+            if not active_membership:
+                errors["technician"] = (
+                    "Technician must have an active membership in this company."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
 # ---------------------------------------------------------------------------
 # ConditionReading
 # ---------------------------------------------------------------------------
-class ConditionReading(models.Model):
+class ConditionReading(TenantValidatedModel):
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -806,6 +917,14 @@ class ConditionReading(models.Model):
     def __str__(self):
         return f"Reading #{self.pk} ({self.recorded_at:%Y-%m-%d})"
 
+    def clean(self):
+        super().clean()
+        errors = _validate_related_companies(self, "piano", "log")
+        if self.log_id and self.piano_id != self.log.piano_id:
+            errors["piano"] = "Piano must match the maintenance log piano."
+        if errors:
+            raise ValidationError(errors)
+
     def update_piano_current_state(self):
         piano = self.piano
         for field in self.CONDITION_FIELDS:
@@ -851,7 +970,7 @@ class Part(models.Model):
 # ---------------------------------------------------------------------------
 # PartUsed
 # ---------------------------------------------------------------------------
-class PartUsed(models.Model):
+class PartUsed(TenantValidatedModel):
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -875,10 +994,16 @@ class PartUsed(models.Model):
     def __str__(self):
         return f"{self.quantity_used}× Part #{self.part_id} (Log #{self.log_id})"
 
+    def clean(self):
+        super().clean()
+        errors = _validate_related_companies(self, "log", "part")
+        if errors:
+            raise ValidationError(errors)
+
 # ---------------------------------------------------------------------------
 # MaintenanceRequest
 # ---------------------------------------------------------------------------
-class MaintenanceRequest(models.Model):
+class MaintenanceRequest(TenantValidatedModel):
     class RequestStatus(models.TextChoices):
         NEW = "New", "New"
         ASSIGNED = "Assigned", "Assigned"
@@ -916,6 +1041,14 @@ class MaintenanceRequest(models.Model):
 
     def __str__(self):
         return f"Request #{self.pk} · {self.status}"
+
+    def clean(self):
+        super().clean()
+        errors = _validate_related_companies(self, "piano", "work_order")
+        if self.work_order_id and self.piano_id != self.work_order.piano_id:
+            errors["piano"] = "Piano must match the work order piano."
+        if errors:
+            raise ValidationError(errors)
 
 # ---------------------------------------------------------------------------
 # Photo
@@ -958,6 +1091,24 @@ class Photo(models.Model):
             return f"Photo #{self.pk} (WO #{self.work_order_id})"
         return f"Photo #{self.pk}"
 
+
+@receiver(m2m_changed, sender=Piano.tags.through)
+def validate_piano_tag_company(sender, instance, action, reverse, pk_set, **kwargs):
+    if action != "pre_add" or not pk_set:
+        return
+
+    if reverse:
+        has_mismatch = Piano.objects.filter(pk__in=pk_set).exclude(
+            company_id=instance.company_id
+        ).exists()
+    else:
+        has_mismatch = Tag.objects.filter(pk__in=pk_set).exclude(
+            company_id=instance.company_id
+        ).exists()
+
+    if has_mismatch:
+        raise ValidationError("Pianos and tags must belong to the same company.")
+
 # ---------------------------------------------------------------------------
 # Company Settings (singleton)
 # ---------------------------------------------------------------------------
@@ -987,3 +1138,42 @@ class CompanySettings(models.Model):
     def load_for_company(cls, company):
         obj, _ = cls.objects.get_or_create(company=company)
         return obj
+
+
+class JobRun(models.Model):
+    class Status(models.TextChoices):
+        RUNNING = "running", "Running"
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
+
+    company = models.ForeignKey(
+        Company,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="job_runs",
+    )
+    job_name = models.CharField(max_length=100, db_index=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.RUNNING,
+        db_index=True,
+    )
+    started_at = models.DateTimeField(default=timezone.now)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"{self.job_name} · {self.get_status_display()}"
+
+    @property
+    def duration_seconds(self):
+        if not self.finished_at:
+            return None
+        return max(0, round((self.finished_at - self.started_at).total_seconds(), 2))

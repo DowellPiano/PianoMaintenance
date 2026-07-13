@@ -17,6 +17,7 @@ from .models import (
     PartUsed,
     MaintenanceRequest,
     CompanySettings,
+    JobRun,
 )
 
 
@@ -322,4 +323,32 @@ class CompanySettingsAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+
+@admin.register(JobRun)
+class JobRunAdmin(admin.ModelAdmin):
+    list_display = (
+        "job_name",
+        "company",
+        "status",
+        "started_at",
+        "finished_at",
+        "duration_seconds",
+    )
+    list_filter = ("status", "job_name")
+    readonly_fields = (
+        "company",
+        "job_name",
+        "status",
+        "started_at",
+        "finished_at",
+        "metadata",
+        "result",
+        "error_message",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 

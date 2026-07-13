@@ -34,6 +34,56 @@
 
 <div class="card" style="margin-bottom:1.5rem;">
   <div class="card-header">
+    <h2>Recent Job Runs</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Job</th>
+          <th>Company</th>
+          <th>Status</th>
+          <th>Started</th>
+          <th>Duration</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in recent_job_runs %}
+        <tr>
+          <td class="fw-medium">{{ job.job_name }}</td>
+          <td class="text-sm">{{ job.company.name|default:"All companies" }}</td>
+          <td class="text-sm">
+            {% if job.status == "success" %}
+              <span class="badge badge-complete">Success</span>
+            {% elif job.status == "failed" %}
+              <span class="badge badge-overdue">Failed</span>
+            {% else %}
+              <span class="badge badge-upcoming">Running</span>
+            {% endif %}
+          </td>
+          <td class="text-sm">{{ job.started_at|date:"Y-m-d H:i:s" }}</td>
+          <td class="text-sm">{% if job.duration_seconds != None %}{{ job.duration_seconds }}s{% else %}—{% endif %}</td>
+          <td class="text-sm">
+            {% if job.error_message %}
+              <span class="text-danger">{{ job.error_message }}</span>
+            {% elif job.result %}
+              <code>{{ job.result }}</code>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" style="text-align:center; padding:2rem;">No recorded job runs yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-header">
     <h2>Add Customer</h2>
   </div>
   <div class="card-body">

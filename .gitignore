@@ -41,6 +41,7 @@ staticfiles/
 media/
 
 # ── Database dumps ─────────────────────────────────────────────────────────────
+*.sqlite3.backup
 *.dump
 *.sql
 

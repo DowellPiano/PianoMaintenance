@@ -8,6 +8,10 @@ from decouple import config, Csv
 from django.core.exceptions import ImproperlyConfigured
 import dj_database_url, os
 from dotenv import load_dotenv
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+
+from .monitoring import sanitize_sentry_event
 
 load_dotenv()
 
@@ -17,6 +21,49 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
+
+SENTRY_DSN = config("SENTRY_DSN", default="")
+SENTRY_ENABLED = config(
+    "SENTRY_ENABLED",
+    default=bool(SENTRY_DSN) and not DEBUG,
+    cast=bool,
+)
+SENTRY_ENVIRONMENT = config(
+    "SENTRY_ENVIRONMENT",
+    default="development" if DEBUG else "production",
+)
+SENTRY_RELEASE = config(
+    "SENTRY_RELEASE",
+    default=os.getenv("RENDER_GIT_COMMIT", ""),
+)
+
+if SENTRY_ENABLED:
+    if not SENTRY_DSN:
+        raise ImproperlyConfigured("SENTRY_ENABLED=True requires SENTRY_DSN.")
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=SENTRY_ENVIRONMENT,
+        release=SENTRY_RELEASE or None,
+        integrations=[DjangoIntegration()],
+        send_default_pii=False,
+        max_request_body_size="never",
+        include_local_variables=False,
+        traces_sample_rate=0.0,
+        before_send=sanitize_sentry_event,
+    )
+
+BACKUP_DATABASE_URL = config("BACKUP_DATABASE_URL", default="")
+BACKUP_S3_ENDPOINT = config("BACKUP_S3_ENDPOINT", default="")
+BACKUP_S3_REGION = config("BACKUP_S3_REGION", default="")
+BACKUP_S3_BUCKET = config("BACKUP_S3_BUCKET", default="")
+BACKUP_S3_ACCESS_KEY_ID = config("BACKUP_S3_ACCESS_KEY_ID", default="")
+BACKUP_S3_SECRET_ACCESS_KEY = config("BACKUP_S3_SECRET_ACCESS_KEY", default="")
+BACKUP_S3_PREFIX = config("BACKUP_S3_PREFIX", default="overtone")
+BACKUP_OBJECT_LOCK_DAYS = config(
+    "BACKUP_OBJECT_LOCK_DAYS",
+    default=30,
+    cast=int,
+)
 
 # Comma-separated in .env, e.g. ALLOWED_HOSTS=localhost,127.0.0.1,myapp.com
 ALLOWED_HOSTS = config(
@@ -33,7 +80,7 @@ CSRF_TRUSTED_ORIGINS = config(
 
 # APPLICATIONS
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "piano_maintainer.admin.PlatformAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

@@ -10,3 +10,4 @@ dotenv
 django-storages[s3]
 boto3
 django-anymail
+sentry-sdk[django]>=2.64,<3.0
