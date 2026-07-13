@@ -318,6 +318,23 @@ PIP_INDEX_URL=https://pypi.org/simple \
 Commit `requirements.in` and `requirements.txt` together. Do not hand-edit the
 compiled lockfile.
 
+### Render deployment configuration
+
+`render.yaml` codifies the existing `PianoMaintenance` web service and
+`Overtone-Generate-Work-Orders` cron job in the `Overtone-Saas` environment.
+Both services deploy from `SaaS` only after GitHub CI passes and install the
+hash-locked dependency set with the pinned pip version.
+
+The web service runs migrations as its pre-deploy command, collects static
+files during the build, starts Gunicorn, and uses `/healthz/` as its deployment
+health check. The cron job runs `run_daily_operations` each day at 06:00 UTC.
+Secret values remain in Render; the Blueprint declares only their variable
+names with `sync: false`.
+
+Before linking or syncing the Blueprint, validate it and review Render's change
+preview. Never approve a Blueprint change that proposes creating duplicate
+services or clearing environment-variable values.
+
 Operational commands for the SaaS branch:
 
 ```bash

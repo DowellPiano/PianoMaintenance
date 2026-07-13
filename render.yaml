@@ -1,0 +1,154 @@
+# Generated from the existing Render services on 2026-07-13 and maintained as
+# the deployment source of truth. Secret values remain configured in Render.
+version: "1"
+projects:
+  - name: Overtone
+    environments:
+      - name: Overtone-Saas
+        services:
+          - type: web
+            name: PianoMaintenance
+            runtime: python
+            repo: https://github.com/DowellPiano/PianoMaintenance
+            branch: SaaS
+            plan: starter
+            envVars:
+              - key: SENTRY_ENVIRONMENT
+                sync: false
+              - key: SENTRY_ENABLED
+                sync: false
+              - key: SENTRY_DSN
+                sync: false
+              - key: BACKUP_S3_SECRET_ACCESS_KEY
+                sync: false
+              - key: BACKUP_S3_REGION
+                sync: false
+              - key: BACKUP_S3_ENDPOINT
+                sync: false
+              - key: BACKUP_S3_BUCKET
+                sync: false
+              - key: BACKUP_S3_ACCESS_KEY_ID
+                sync: false
+              - key: USE_X_FORWARDED_PROTO
+                sync: false
+              - key: SUPABASE_S3_SECRET_ACCESS_KEY
+                sync: false
+              - key: SUPABASE_S3_REQUIRED
+                sync: false
+              - key: SUPABASE_S3_ENDPOINT
+                sync: false
+              - key: SUPABASE_S3_BUCKET
+                sync: false
+              - key: SUPABASE_S3_ACCESS_KEY_ID
+                sync: false
+              - key: SUPABASE_REGION
+                sync: false
+              - key: PRIVATE_MEDIA_URL_TTL
+                sync: false
+              - key: DATABASE_URL
+                sync: false
+              - key: RESEND_API_KEY
+                sync: false
+              - key: EMAIL_TIMEOUT
+                sync: false
+              - key: CSRF_TRUSTED_ORIGINS
+                sync: false
+              - key: ALLOWED_HOSTS
+                sync: false
+              - key: DATABASE_SSL_REQUIRE
+                sync: false
+              - key: DATABASE_CONN_MAX_AGE
+                sync: false
+              - key: EMAIL_BACKEND
+                sync: false
+              - key: EMAIL_NOTIFICATIONS_ENABLED
+                sync: false
+              - key: DEFAULT_FROM_EMAIL
+                sync: false
+              - key: DEBUG
+                sync: false
+              - key: SECRET_KEY
+                sync: false
+            region: ohio
+            buildCommand: >-
+              python -m pip install --upgrade pip==26.1.2 &&
+              python -m pip install --require-hashes -r requirements.txt &&
+              python manage.py collectstatic --noinput
+            preDeployCommand: python manage.py migrate --noinput
+            startCommand: gunicorn piano_maintainer.wsgi:application
+            healthCheckPath: /healthz/
+            domains:
+              - overtone-maintenance.com
+              - www.overtone-maintenance.com
+            autoDeployTrigger: checksPass
+
+          - type: cron
+            name: Overtone-Generate-Work-Orders
+            runtime: python
+            repo: https://github.com/DowellPiano/PianoMaintenance
+            branch: SaaS
+            plan: starter
+            envVars:
+              - key: SENTRY_ENVIRONMENT
+                sync: false
+              - key: SENTRY_ENABLED
+                sync: false
+              - key: SENTRY_DSN
+                sync: false
+              - key: BACKUP_S3_SECRET_ACCESS_KEY
+                sync: false
+              - key: BACKUP_S3_BUCKET
+                sync: false
+              - key: BACKUP_S3_ACCESS_KEY_ID
+                sync: false
+              - key: BACKUP_OBJECT_LOCK_DAYS
+                sync: false
+              - key: BACKUP_S3_REGION
+                sync: false
+              - key: BACKUP_S3_ENDPOINT
+                sync: false
+              - key: SUPABASE_S3_SECRET_ACCESS_KEY
+                sync: false
+              - key: SUPABASE_S3_ACCESS_KEY_ID
+                sync: false
+              - key: SUPABASE_S3_BUCKET
+                sync: false
+              - key: SUPABASE_S3_REQUIRED
+                sync: false
+              - key: SUPABASE_REGION
+                sync: false
+              - key: SUPABASE_S3_ENDPOINT
+                sync: false
+              - key: PRIVATE_MEDIA_URL_TTL
+                sync: false
+              - key: DATABASE_SSL_REQUIRE
+                sync: false
+              - key: DATABASE_CONN_MAX_AGE
+                sync: false
+              - key: DATABASE_URL
+                sync: false
+              - key: CSRF_TRUSTED_ORIGINS
+                sync: false
+              - key: ALLOWED_HOSTS
+                sync: false
+              - key: EMAIL_TIMEOUT
+                sync: false
+              - key: RESEND_API_KEY
+                sync: false
+              - key: EMAIL_BACKEND
+                sync: false
+              - key: EMAIL_NOTIFICATIONS_ENABLED
+                sync: false
+              - key: DEFAULT_FROM_EMAIL
+                sync: false
+              - key: DEBUG
+                sync: false
+              - key: SECRET_KEY
+                sync: false
+            region: ohio
+            buildCommand: >-
+              python -m pip install --upgrade pip==26.1.2 &&
+              python -m pip install --require-hashes -r requirements.txt
+            startCommand: python manage.py run_daily_operations
+            schedule: 0 6 * * *
+            autoDeployTrigger: checksPass
