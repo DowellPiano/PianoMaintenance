@@ -116,7 +116,6 @@ urlpatterns = [
 
     # Technicians
     path('technicians/', views.technician_list, name='technician_list'),
-    path('technicians/new/', views.technician_create, name='technician_create'),
     path('technicians/<int:pk>/edit/', views.technician_edit, name='technician_edit'),
     path('technicians/<int:pk>/toggle-membership/', views.technician_toggle_membership, name='technician_toggle_membership'),
     path('technicians/report/', views.technician_report, name='technician_report'),

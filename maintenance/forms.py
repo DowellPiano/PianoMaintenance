@@ -9,6 +9,18 @@ from .models import (
 from .tenancy import company_users
 
 
+def _clean_unique_user_email(email, *, instance=None):
+    normalized = (email or '').strip().casefold()
+    if not normalized:
+        return ''
+    duplicates = Technician.objects.filter(email__iexact=normalized)
+    if instance and instance.pk:
+        duplicates = duplicates.exclude(pk=instance.pk)
+    if duplicates.exists():
+        raise forms.ValidationError('A user with this email address already exists.')
+    return normalized
+
+
 class SignUpForm(UserCreationForm):
     first_name = forms.CharField(max_length=150)
     last_name = forms.CharField(max_length=150)
@@ -18,6 +30,18 @@ class SignUpForm(UserCreationForm):
         model = Technician
         fields = ['username', 'first_name', 'last_name', 'email', 'password1', 'password2']
 
+    def __init__(self, *args, invited_email=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.invited_email = (invited_email or '').strip().casefold()
+        if self.invited_email:
+            self.fields['email'].initial = self.invited_email
+
+    def clean_email(self):
+        email = _clean_unique_user_email(self.cleaned_data.get('email'))
+        if self.invited_email and email != self.invited_email:
+            raise forms.ValidationError('Use the email address that received this invitation.')
+        return email
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.is_active = False
@@ -26,21 +50,6 @@ class SignUpForm(UserCreationForm):
         if commit:
             user.save()
         return user
-
-
-class TechnicianCreateForm(UserCreationForm):
-    first_name = forms.CharField(max_length=150)
-    last_name = forms.CharField(max_length=150)
-    email = forms.EmailField(required=False)
-    role_admin = forms.BooleanField(required=False)
-    role_technician = forms.BooleanField(required=False, initial=True)
-
-    class Meta:
-        model = Technician
-        fields = [
-            'username', 'first_name', 'last_name', 'email', 'is_active',
-            'password1', 'password2',
-        ]
 
 
 class TechnicianUpdateForm(forms.ModelForm):
@@ -55,6 +64,12 @@ class TechnicianUpdateForm(forms.ModelForm):
         fields = [
             'username', 'first_name', 'last_name', 'email', 'is_active',
         ]
+
+    def clean_email(self):
+        return _clean_unique_user_email(
+            self.cleaned_data.get('email'),
+            instance=self.instance,
+        )
 
 
 class OrganizationForm(forms.ModelForm):
@@ -330,8 +345,28 @@ class UserProfileForm(forms.ModelForm):
         model = Technician
         fields = ['first_name', 'last_name', 'email']
 
+    def clean_email(self):
+        return _clean_unique_user_email(
+            self.cleaned_data.get('email'),
+            instance=self.instance,
+        )
+
 
 class CompanyInvitationForm(forms.ModelForm):
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip().casefold()
+        if self.company and CompanyInvitation.objects.filter(
+            company=self.company,
+            email__iexact=email,
+            status=CompanyInvitation.Status.PENDING,
+        ).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError('A pending invitation already exists for this email address.')
+        return email
+
     class Meta:
         model = CompanyInvitation
         fields = [
@@ -361,6 +396,9 @@ class PlatformCompanyInviteForm(forms.Form):
     admin_last_name = forms.CharField(max_length=150, required=False)
     admin_email = forms.EmailField()
     admin_is_technician = forms.BooleanField(required=False, initial=True)
+
+    def clean_admin_email(self):
+        return self.cleaned_data['admin_email'].strip().casefold()
 
     def clean_company_slug(self):
         slug = self.cleaned_data.get('company_slug')

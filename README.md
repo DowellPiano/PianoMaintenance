@@ -54,6 +54,7 @@ maintenance/
   management/commands/
     generate_work_orders.py    CLI command: auto-create overdue work orders
     bootstrap_company.py       CLI command: create a company + initial admin
+    seed_demo_data.py          Local-only deterministic demo dataset
   templates/
     base.html                  Shared layout with sidebar nav
     maintenance/
@@ -104,6 +105,31 @@ This creates:
 - an initial active admin + technician membership for the chosen user
 
 On the `SaaS` branch, this is the intended first-account path. Public self-service signup is disabled; additional users should join by company invitation after the initial admin is bootstrapped.
+
+### Local demo data
+
+Create a deterministic fictional company for local demonstrations and development:
+
+```bash
+python3 manage.py seed_demo_data
+```
+
+The command creates two local accounts, representative organizations, venues,
+pianos, parts, work orders, a maintenance log, a condition reading, a schedule,
+and a pending invitation. The default usernames are `demo_admin` and
+`demo_technician`; both use `OvertoneDemo123!` unless `--password` is supplied.
+Running the command again updates the same records without duplicating them.
+
+To remove and recreate only the reserved demo company and its reserved users:
+
+```bash
+python3 manage.py seed_demo_data --reset
+```
+
+This command refuses to run when `DEBUG=False`, when
+`SENTRY_ENVIRONMENT=production`, or when a deployed release identifier is
+present. It has no production override. It also refuses to modify a company or
+user when a reserved demo identifier is already attached to non-demo data.
 
 ### Automated work order generation
 
@@ -254,12 +280,13 @@ The `SaaS` branch is now the clean multi-company product track. It should be tre
 - active-company request/session context and a company switcher
 - required company ownership fields on the core operational models
 - local password reset views/templates
-- invitation acceptance flow for adding users to a company
+- invitation-only account onboarding with case-insensitive unique email identity
 - company-scoped query enforcement across the main UI flows
 - no default-company autofill or silent tenant fallback in the runtime model layer
 - authenticated photo delivery for company media, with local file streaming in dev and short-lived signed URLs in object storage
 - tenant-admin setup progress, invitation resend/revoke history, and company-scoped member activation controls in the settings and users flows
 - a superuser-only platform boundary for both Django admin and the product platform console; company admins are not Django staff
+- platform support controls for company and user suspension/reactivation, invitation resend/revoke, membership inspection, safe company-admin reassignment, and new-customer onboarding
 
 Use local SQLite while validating these changes:
 

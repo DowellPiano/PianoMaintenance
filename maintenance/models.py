@@ -1,6 +1,7 @@
 import uuid
 from datetime import date, timedelta
 from django.db import models
+from django.db.models.functions import Lower
 from django.db.models.signals import m2m_changed
 from django.dispatch import receiver
 from django.utils import timezone
@@ -170,14 +171,20 @@ class CompanyInvitation(models.Model):
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["company", "email", "status"],
+                "company",
+                Lower("email"),
                 condition=models.Q(status="pending"),
-                name="unique_pending_invitation_per_company_email",
+                name="unique_pending_invitation_company_email_ci",
             ),
         ]
 
     def __str__(self):
         return f"Invite {self.email} to {self.company}"
+
+    def save(self, *args, **kwargs):
+        if self.email:
+            self.email = self.email.strip().casefold()
+        return super().save(*args, **kwargs)
 
     @property
     def is_expired(self):
@@ -515,10 +522,32 @@ class Technician(AbstractUser):
     class Meta:
         verbose_name = "Technician"
         verbose_name_plural = "Technicians"
+        constraints = [
+            models.UniqueConstraint(
+                Lower("email"),
+                condition=~models.Q(email=""),
+                name="unique_technician_email_ci",
+            ),
+        ]
 
     def __str__(self):
         full = self.get_full_name()
         return full if full else self.username
+
+    def clean(self):
+        super().clean()
+        if self.email:
+            self.email = self.email.strip().casefold()
+            duplicate = type(self).objects.filter(email__iexact=self.email)
+            if self.pk:
+                duplicate = duplicate.exclude(pk=self.pk)
+            if duplicate.exists():
+                raise ValidationError({"email": "A user with this email address already exists."})
+
+    def save(self, *args, **kwargs):
+        if self.email:
+            self.email = self.email.strip().casefold()
+        return super().save(*args, **kwargs)
 
     def sync_role_flags(self, save=True):
         memberships = self.company_memberships.filter(is_active=True)

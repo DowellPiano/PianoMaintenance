@@ -56,7 +56,7 @@
         <div class="form-group">
           <label class="form-label" for="id_email">Email *</label>
           <input class="form-input" type="email" name="email" id="id_email" required
-                 value="{{ form.email.value|default:'' }}">
+                 value="{{ form.email.value|default:'' }}" {% if invitation %}readonly{% endif %}>
         </div>
         <div class="form-group">
           <label class="form-label" for="id_password1">Password *</label>
@@ -71,7 +71,7 @@
       </form>
 
       <p style="text-align:center; margin-top:1rem; font-size:.88rem;">
-        Already have an account? <a href="{% url 'login' %}">Sign in</a>
+        Already have an account? <a href="{% url 'login' %}?next={{ request.path|urlencode }}">Sign in</a>
       </p>
     </div>
   </div>

@@ -2,6 +2,7 @@ import os
 import tempfile
 from datetime import date, datetime, timedelta
 from io import StringIO
+from urllib.parse import urlencode
 from unittest.mock import patch
 
 from django.core.management import call_command
@@ -10,12 +11,14 @@ from django.core.files.storage import Storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core import mail
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
+    AuditLog,
     Company,
     CompanyInvitation,
     CompanyMembership,
@@ -194,6 +197,69 @@ class HealthCheckTests(TestCase):
         self.assertEqual(response.status_code, 405)
 
 
+class DemoDataCommandTests(TestCase):
+    @override_settings(DEBUG=False)
+    def test_demo_data_command_refuses_to_run_outside_debug(self):
+        with self.assertRaisesMessage(CommandError, 'must never run in production'):
+            call_command('seed_demo_data')
+
+        self.assertFalse(Company.objects.filter(slug='overtone-demo').exists())
+
+    @override_settings(DEBUG=True, SENTRY_ENVIRONMENT='production')
+    def test_demo_data_command_refuses_production_environment_even_with_debug(self):
+        with self.assertRaisesMessage(CommandError, 'must never run in production'):
+            call_command('seed_demo_data')
+
+        self.assertFalse(Company.objects.filter(slug='overtone-demo').exists())
+
+    @override_settings(DEBUG=True, SENTRY_ENVIRONMENT='development', SENTRY_RELEASE='render-sha')
+    def test_demo_data_command_refuses_deployed_release(self):
+        with self.assertRaisesMessage(CommandError, 'must never run in production'):
+            call_command('seed_demo_data')
+
+        self.assertFalse(Company.objects.filter(slug='overtone-demo').exists())
+
+    @override_settings(DEBUG=True)
+    def test_demo_data_command_is_idempotent(self):
+        call_command('seed_demo_data', stdout=StringIO())
+        call_command('seed_demo_data', stdout=StringIO())
+
+        company = Company.objects.get(slug='overtone-demo')
+        self.assertEqual(company.name, 'Overtone Demo Company')
+        self.assertEqual(company.memberships.count(), 2)
+        self.assertEqual(company.organizations.count(), 2)
+        self.assertEqual(company.venues.count(), 3)
+        self.assertEqual(company.pianos.count(), 5)
+        self.assertEqual(company.parts.count(), 4)
+        self.assertEqual(company.work_orders.count(), 4)
+        self.assertEqual(company.maintenance_logs.count(), 1)
+        self.assertEqual(company.condition_readings.count(), 1)
+        self.assertEqual(company.invitations.filter(status='pending').count(), 1)
+
+    @override_settings(DEBUG=True)
+    def test_demo_data_reset_replaces_only_reserved_demo_records(self):
+        real_company = Company.objects.create(name='Real Company', slug='real-company')
+        call_command('seed_demo_data', stdout=StringIO())
+        demo_company = Company.objects.get(slug='overtone-demo')
+        Organization.objects.create(company=demo_company, name='Temporary Demo Record')
+
+        call_command('seed_demo_data', reset=True, stdout=StringIO())
+
+        self.assertTrue(Company.objects.filter(pk=real_company.pk).exists())
+        reset_company = Company.objects.get(slug='overtone-demo')
+        self.assertFalse(reset_company.organizations.filter(name='Temporary Demo Record').exists())
+        self.assertEqual(reset_company.organizations.count(), 2)
+
+    @override_settings(DEBUG=True)
+    def test_demo_data_command_refuses_reserved_slug_collision(self):
+        Company.objects.create(name='Real Customer', slug='overtone-demo')
+
+        with self.assertRaisesMessage(CommandError, 'belongs to a different company'):
+            call_command('seed_demo_data')
+
+        self.assertEqual(Company.objects.get(slug='overtone-demo').name, 'Real Customer')
+
+
 class SentrySanitizationTests(TestCase):
     def test_sanitizer_removes_sensitive_request_context(self):
         event = {
@@ -275,6 +341,9 @@ class PlatformAdminTests(CompanyScopedTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Platform Admin')
         self.assertContains(response, 'Add Customer')
+        self.assertContains(response, 'Memberships')
+        self.assertContains(response, self.company_admin.username)
+        self.assertContains(response, 'Remove Admin')
 
     def test_superuser_can_access_django_admin(self):
         self.login_user(self.superuser)
@@ -360,6 +429,152 @@ class PlatformAdminTests(CompanyScopedTestCase):
         self.assertNotEqual(invitation.token, original_token)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('pending@example.com', mail.outbox[0].to)
+
+    def test_superuser_can_suspend_and_reactivate_company(self):
+        self.login_user(self.superuser)
+
+        response = self.client.post(reverse('platform_admin'), {
+            'action': 'suspend_company',
+            'company_id': self.company.pk,
+        })
+
+        self.assertRedirects(response, reverse('platform_admin'))
+        self.company.refresh_from_db()
+        self.assertFalse(self.company.is_active)
+        self.assertTrue(AuditLog.objects.filter(
+            company=self.company,
+            event_type='platform.company_suspended',
+        ).exists())
+
+        self.client.post(reverse('platform_admin'), {
+            'action': 'reactivate_company',
+            'company_id': self.company.pk,
+        })
+        self.company.refresh_from_db()
+        self.assertTrue(self.company.is_active)
+        self.assertTrue(AuditLog.objects.filter(
+            company=self.company,
+            event_type='platform.company_reactivated',
+        ).exists())
+
+    def test_superuser_can_suspend_and_reactivate_non_admin_user(self):
+        technician = self.create_user('supporttech')
+        self.login_user(self.superuser)
+
+        self.client.post(reverse('platform_admin'), {
+            'action': 'suspend_user',
+            'user_id': technician.pk,
+        })
+
+        technician.refresh_from_db()
+        self.assertFalse(technician.is_active)
+        self.assertTrue(AuditLog.objects.filter(
+            company=self.company,
+            event_type='platform.user_suspended',
+            target_id=str(technician.pk),
+        ).exists())
+
+        self.client.post(reverse('platform_admin'), {
+            'action': 'reactivate_user',
+            'user_id': technician.pk,
+        })
+        technician.refresh_from_db()
+        self.assertTrue(technician.is_active)
+
+    def test_platform_console_does_not_suspend_superusers(self):
+        self.login_user(self.superuser)
+
+        self.client.post(reverse('platform_admin'), {
+            'action': 'suspend_user',
+            'user_id': self.superuser.pk,
+        })
+
+        self.superuser.refresh_from_db()
+        self.assertTrue(self.superuser.is_active)
+
+    def test_platform_console_refuses_to_suspend_a_companys_only_admin(self):
+        orphaned_company = Company.objects.create(name='Only Admin Co', slug='only-admin-co')
+        only_admin = self.create_user(
+            'onlyadmin',
+            company=orphaned_company,
+            role_admin=True,
+            role_technician=True,
+        )
+        self.login_user(self.superuser)
+
+        response = self.client.post(reverse('platform_admin'), {
+            'action': 'suspend_user',
+            'user_id': only_admin.pk,
+        }, follow=True)
+
+        only_admin.refresh_from_db()
+        self.assertTrue(only_admin.is_active)
+        self.assertContains(response, 'Assign another active admin before disabling this user')
+
+    def test_superuser_can_reassign_company_admin_role(self):
+        replacement = self.create_user('replacementadmin')
+        membership = CompanyMembership.objects.get(company=self.company, user=replacement)
+        membership.is_active = False
+        membership.save()
+        self.login_user(self.superuser)
+
+        self.client.post(reverse('platform_admin'), {
+            'action': 'grant_company_admin',
+            'membership_id': membership.pk,
+        })
+
+        membership.refresh_from_db()
+        self.assertTrue(membership.is_active)
+        self.assertTrue(membership.role_admin)
+        self.assertTrue(AuditLog.objects.filter(
+            company=self.company,
+            event_type='platform.membership_admin_granted',
+            target_id=str(replacement.pk),
+        ).exists())
+
+        self.client.post(reverse('platform_admin'), {
+            'action': 'remove_company_admin',
+            'membership_id': membership.pk,
+        })
+        membership.refresh_from_db()
+        self.assertFalse(membership.role_admin)
+
+    def test_platform_console_refuses_to_remove_last_active_admin(self):
+        only_admin_company = Company.objects.create(name='Protected Co', slug='protected-co')
+        only_admin = self.create_user(
+            'protectedadmin',
+            company=only_admin_company,
+            role_admin=True,
+        )
+        membership = CompanyMembership.objects.get(company=only_admin_company, user=only_admin)
+        self.login_user(self.superuser)
+
+        response = self.client.post(reverse('platform_admin'), {
+            'action': 'remove_company_admin',
+            'membership_id': membership.pk,
+        }, follow=True)
+
+        membership.refresh_from_db()
+        self.assertTrue(membership.role_admin)
+        self.assertContains(response, 'Assign another active admin before removing this admin role')
+
+    def test_superuser_can_revoke_pending_invitation(self):
+        invitation = CompanyInvitation.objects.create(
+            company=self.company,
+            email='platform-revoke@example.com',
+            invited_by=self.superuser,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        self.login_user(self.superuser)
+
+        response = self.client.post(reverse('platform_admin'), {
+            'action': 'revoke_invitation',
+            'invitation_id': invitation.pk,
+        })
+
+        self.assertRedirects(response, reverse('platform_admin'))
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.status, CompanyInvitation.Status.REVOKED)
 
 
 @override_settings(
@@ -1232,24 +1447,12 @@ class TechnicianManagementTests(CompanyScopedTestCase):
         )
         self.login_user(self.admin)
 
-    def test_admin_can_create_active_user_with_roles(self):
-        response = self.client.post(reverse('technician_create'), {
-            'username': 'newtech',
-            'first_name': 'New',
-            'last_name': 'Tech',
-            'email': 'newtech@example.com',
-            'is_active': 'on',
-            'role_technician': 'on',
-            'role_admin': 'on',
-            'password1': 'StrongPass123',
-            'password2': 'StrongPass123',
-        })
+    def test_user_onboarding_is_invitation_only(self):
+        response = self.client.get(reverse('technician_list'))
 
-        self.assertRedirects(response, reverse('technician_list'))
-        user = Technician.objects.get(username='newtech')
-        self.assertTrue(user.is_active)
-        self.assertTrue(user.role_admin)
-        self.assertTrue(user.role_technician)
+        self.assertContains(response, 'Invite User')
+        self.assertContains(response, f'{reverse("settings")}#team-invitations')
+        self.assertEqual(self.client.get('/technicians/new/').status_code, 404)
 
     def test_admin_cannot_remove_own_admin_access(self):
         response = self.client.post(reverse('technician_edit', args=[self.admin.pk]), {
@@ -2123,6 +2326,36 @@ class CompanySwitchingTests(CompanyScopedTestCase):
         self.assertEqual(session['active_company_id'], self.company_b.pk)
 
 
+class IdentityEmailTests(CompanyScopedTestCase):
+    def test_user_email_is_normalized_and_case_insensitively_unique(self):
+        user = self.create_user('normalized', email='  DowellPiano@Gmail.com ')
+
+        user.refresh_from_db()
+        self.assertEqual(user.email, 'dowellpiano@gmail.com')
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Technician.objects.create_user(
+                username='duplicate-email',
+                password='StrongPass123',
+                email='DOWELLPIANO@gmail.com',
+            )
+
+    def test_pending_invitation_email_is_normalized_and_case_insensitively_unique(self):
+        CompanyInvitation.objects.create(
+            company=self.company,
+            email='  NewTech@Example.com ',
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+
+        invitation = CompanyInvitation.objects.get(company=self.company)
+        self.assertEqual(invitation.email, 'newtech@example.com')
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            CompanyInvitation.objects.create(
+                company=self.company,
+                email='NEWTECH@example.com',
+                expires_at=timezone.now() + timedelta(days=7),
+            )
+
+
 class InvitationFlowTests(CompanyScopedTestCase):
     def setUp(self):
         self.company_name = 'Invite Co'
@@ -2151,6 +2384,28 @@ class InvitationFlowTests(CompanyScopedTestCase):
         self.assertEqual(invitation.company, self.company)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(str(invitation.token), mail.outbox[0].body)
+
+    def test_admin_gets_friendly_error_for_duplicate_pending_invitation(self):
+        CompanyInvitation.objects.create(
+            company=self.company,
+            email='pending@example.com',
+            invited_by=self.admin,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        mail.outbox = []
+
+        response = self.client.post(reverse('settings'), {
+            'action': 'invite',
+            'invite-email': 'PENDING@example.com',
+            'invite-first_name': 'Pending',
+            'invite-last_name': 'User',
+            'invite-role_technician': 'on',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'A pending invitation already exists for this email address.')
+        self.assertEqual(CompanyInvitation.objects.filter(company=self.company).count(), 1)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_anonymous_user_can_accept_invitation_and_create_account(self):
         invitation = CompanyInvitation.objects.create(
@@ -2217,6 +2472,55 @@ class InvitationFlowTests(CompanyScopedTestCase):
             role_technician=True,
             is_active=True,
         ).exists())
+
+    def test_anonymous_existing_user_is_sent_to_login_then_back_to_invitation(self):
+        existing_company = Company.objects.create(name='Existing User Co', slug='existing-user-co')
+        self.create_user(
+            'existing-account',
+            company=existing_company,
+            email='existing@example.com',
+        )
+        invitation = CompanyInvitation.objects.create(
+            company=self.company,
+            email='EXISTING@example.com',
+            role_technician=True,
+            invited_by=self.admin,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        self.client.logout()
+
+        response = self.client.get(reverse('company_invitation_accept', args=[invitation.token]))
+
+        expected_next = reverse('company_invitation_accept', args=[invitation.token])
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith(reverse('login')))
+        self.assertIn(urlencode({'next': expected_next}), response.url)
+
+    def test_anonymous_signup_must_use_invited_email(self):
+        invitation = CompanyInvitation.objects.create(
+            company=self.company,
+            email='correct@example.com',
+            role_technician=True,
+            invited_by=self.admin,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        self.client.logout()
+
+        response = self.client.post(
+            reverse('company_invitation_accept', args=[invitation.token]),
+            {
+                'username': 'wrong-email',
+                'first_name': 'Wrong',
+                'last_name': 'Email',
+                'email': 'different@example.com',
+                'password1': 'StrongPass123',
+                'password2': 'StrongPass123',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Use the email address that received this invitation.')
+        self.assertFalse(Technician.objects.filter(username='wrong-email').exists())
 
     def test_authenticated_user_with_blank_email_cannot_accept_invitation(self):
         other_company = Company.objects.create(name='Blank Email Co', slug='blank-email-co')

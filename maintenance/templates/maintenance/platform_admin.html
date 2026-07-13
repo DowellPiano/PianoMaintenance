@@ -159,7 +159,8 @@
           <th>Workers</th>
           <th>Pianos</th>
           <th>Open WOs</th>
-          <th>People</th>
+          <th>Memberships</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -188,19 +189,41 @@
           <td class="text-sm">{{ company.open_work_order_count }}</td>
           <td class="text-sm">
             {% for membership in company.memberships.all %}
-              <div style="margin-bottom:.35rem;">
+              <div style="margin-bottom:.55rem; display:flex; align-items:center; gap:.35rem; flex-wrap:wrap;">
                 <span class="fw-medium">{{ membership.user.get_full_name|default:membership.user.username }}</span>
                 {% if membership.role_admin %}<span class="badge badge-high">Admin</span>{% endif %}
                 {% if membership.role_technician %}<span class="badge badge-upcoming">Tech</span>{% endif %}
-                {% if not membership.is_active or not membership.user.is_active %}<span class="badge badge-normal">Inactive</span>{% endif %}
+                {% if not membership.is_active %}<span class="badge badge-normal">Membership inactive</span>{% endif %}
+                {% if not membership.user.is_active %}<span class="badge badge-overdue">Account disabled</span>{% endif %}
+                <form method="post" style="margin:0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="membership_id" value="{{ membership.pk }}">
+                  {% if membership.role_admin %}
+                    <input type="hidden" name="action" value="remove_company_admin">
+                    <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Remove this company admin role?');">Remove Admin</button>
+                  {% else %}
+                    <input type="hidden" name="action" value="grant_company_admin">
+                    <button type="submit" class="btn btn-secondary btn-sm" {% if not membership.user.is_active %}disabled{% endif %}>Make Admin</button>
+                  {% endif %}
+                </form>
               </div>
             {% empty %}
               <span class="text-muted">No users yet</span>
             {% endfor %}
           </td>
+          <td style="text-align:right;">
+            <form method="post" style="margin:0;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="{% if company.is_active %}suspend_company{% else %}reactivate_company{% endif %}">
+              <input type="hidden" name="company_id" value="{{ company.pk }}">
+              <button type="submit" class="btn btn-secondary btn-sm" {% if company.is_active %}onclick="return confirm('Suspend this company? Its users will lose access until it is reactivated.');"{% endif %}>
+                {% if company.is_active %}Suspend{% else %}Reactivate{% endif %}
+              </button>
+            </form>
+          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" style="text-align:center; padding:2rem;">No companies found.</td></tr>
+        <tr><td colspan="8" style="text-align:center; padding:2rem;">No companies found.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -220,6 +243,7 @@
           <th>Status</th>
           <th>Companies</th>
           <th>Last Login</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -251,9 +275,21 @@
             {% endfor %}
           </td>
           <td class="text-sm">{{ user_obj.last_login|date:"Y-m-d H:i"|default:"—" }}</td>
+          <td style="text-align:right;">
+            {% if not user_obj.is_superuser %}
+            <form method="post" style="margin:0;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="{% if user_obj.is_active %}suspend_user{% else %}reactivate_user{% endif %}">
+              <input type="hidden" name="user_id" value="{{ user_obj.pk }}">
+              <button type="submit" class="btn btn-secondary btn-sm" {% if user_obj.is_active %}onclick="return confirm('Suspend this user account across every company?');"{% endif %}>
+                {% if user_obj.is_active %}Suspend{% else %}Reactivate{% endif %}
+              </button>
+            </form>
+            {% endif %}
+          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" style="text-align:center; padding:2rem;">No users found.</td></tr>
+        <tr><td colspan="6" style="text-align:center; padding:2rem;">No users found.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -288,12 +324,20 @@
           <td class="text-sm">{{ invitation.invited_by.get_full_name|default:invitation.invited_by.username|default:"—" }}</td>
           <td class="text-sm">{{ invitation.expires_at|date:"Y-m-d H:i" }}</td>
           <td style="text-align:right;">
-            <form method="post" style="margin:0;">
-              {% csrf_token %}
-              <input type="hidden" name="action" value="resend_invitation">
-              <input type="hidden" name="invitation_id" value="{{ invitation.pk }}">
-              <button type="submit" class="btn btn-secondary btn-sm">Resend</button>
-            </form>
+            <div style="display:flex; justify-content:flex-end; gap:.4rem; flex-wrap:wrap;">
+              <form method="post" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="resend_invitation">
+                <input type="hidden" name="invitation_id" value="{{ invitation.pk }}">
+                <button type="submit" class="btn btn-secondary btn-sm">Resend</button>
+              </form>
+              <form method="post" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="revoke_invitation">
+                <input type="hidden" name="invitation_id" value="{{ invitation.pk }}">
+                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Revoke this invitation?');">Revoke</button>
+              </form>
+            </div>
           </td>
         </tr>
         {% empty %}

@@ -28,8 +28,8 @@ from .audit import log_audit_event, target_audit_events
 from .forms import (
     OrganizationForm, VenueForm, PianoForm, WorkOrderForm, WorkOrderCompleteForm,
     WorkOrderLogWorkForm, ConditionReadingForm, ScheduleTemplateForm, PartForm,
-    SignUpForm, CompanySettingsForm, UserProfileForm, TechnicianCreateForm,
-    TechnicianUpdateForm, CompanyInvitationForm, CompanySwitcherForm,
+    SignUpForm, CompanySettingsForm, UserProfileForm, TechnicianUpdateForm,
+    CompanyInvitationForm, CompanySwitcherForm,
     BulkPianoIntervalForm, PlatformCompanyInviteForm,
 )
 from .email_notifications import (
@@ -2111,40 +2111,6 @@ def technician_list(request):
 
 
 @admin_required
-def technician_create(request):
-    company = ensure_company_access(request)
-    if request.method == 'POST':
-        form = TechnicianCreateForm(request.POST)
-        if form.is_valid():
-            user = form.save(commit=False)
-            user.role_admin = False
-            user.role_technician = False
-            user.save()
-            CompanyMembership.objects.update_or_create(
-                company=company,
-                user=user,
-                defaults={
-                    'role_admin': form.cleaned_data['role_admin'],
-                    'role_technician': form.cleaned_data['role_technician'],
-                    'is_active': user.is_active,
-                },
-            )
-            log_audit_event(company=company, actor=request.user, event_type='membership.created', target=user)
-            messages.success(request, f'User {user.username} created.')
-            return redirect('technician_list')
-    else:
-        form = TechnicianCreateForm(initial={
-            'is_active': True,
-            'role_technician': True,
-        })
-    return render(request, 'maintenance/technician_form.html', {
-        'active_nav': 'technicians',
-        'form': form,
-        'editing': False,
-    })
-
-
-@admin_required
 def technician_edit(request, pk):
     company = ensure_company_access(request)
     membership = get_object_or_404(
@@ -2652,6 +2618,115 @@ def platform_admin(request):
                     )
                     return redirect('platform_admin')
 
+        elif action in {'suspend_company', 'reactivate_company'}:
+            company = get_object_or_404(Company, pk=request.POST.get('company_id'))
+            company.is_active = action == 'reactivate_company'
+            company.save(update_fields=['is_active'])
+            event_type = 'platform.company_reactivated' if company.is_active else 'platform.company_suspended'
+            log_audit_event(
+                company=company,
+                actor=request.user,
+                event_type=event_type,
+                target=company,
+                message='Platform operator reactivated company.' if company.is_active else 'Platform operator suspended company.',
+            )
+            messages.success(
+                request,
+                f'{company.name} is active again.' if company.is_active else f'{company.name} has been suspended.',
+            )
+            return redirect('platform_admin')
+
+        elif action in {'suspend_user', 'reactivate_user'}:
+            user = get_object_or_404(Technician, pk=request.POST.get('user_id'))
+            if user.is_superuser:
+                messages.error(request, 'Superuser accounts must be managed through Django admin.')
+                return redirect('platform_admin')
+
+            should_activate = action == 'reactivate_user'
+            if not should_activate and user.is_active:
+                sole_admin_companies = []
+                admin_memberships = user.company_memberships.filter(
+                    is_active=True,
+                    role_admin=True,
+                ).select_related('company')
+                for membership in admin_memberships:
+                    has_other_admin = CompanyMembership.objects.filter(
+                        company=membership.company,
+                        is_active=True,
+                        role_admin=True,
+                        user__is_active=True,
+                    ).exclude(pk=membership.pk).exists()
+                    if not has_other_admin:
+                        sole_admin_companies.append(membership.company.name)
+                if sole_admin_companies:
+                    messages.error(
+                        request,
+                        'Assign another active admin before disabling this user for: '
+                        + ', '.join(sole_admin_companies),
+                    )
+                    return redirect('platform_admin')
+
+            user.is_active = should_activate
+            user.save(update_fields=['is_active'])
+            event_type = 'platform.user_reactivated' if user.is_active else 'platform.user_suspended'
+            message = 'Platform operator reactivated user account.' if user.is_active else 'Platform operator suspended user account.'
+            for membership in user.company_memberships.select_related('company'):
+                log_audit_event(
+                    company=membership.company,
+                    actor=request.user,
+                    event_type=event_type,
+                    target=user,
+                    message=message,
+                )
+            messages.success(
+                request,
+                f'{user.get_full_name() or user.username} is active again.'
+                if user.is_active
+                else f'{user.get_full_name() or user.username} has been suspended.',
+            )
+            return redirect('platform_admin')
+
+        elif action in {'grant_company_admin', 'remove_company_admin'}:
+            with transaction.atomic():
+                membership = get_object_or_404(
+                    CompanyMembership.objects.select_for_update().select_related('company', 'user'),
+                    pk=request.POST.get('membership_id'),
+                )
+                if action == 'grant_company_admin':
+                    if not membership.user.is_active:
+                        messages.error(request, 'Reactivate this user account before assigning company admin access.')
+                        return redirect('platform_admin')
+                    membership.role_admin = True
+                    membership.is_active = True
+                    membership.save(update_fields=['role_admin', 'is_active'])
+                    event_type = 'platform.membership_admin_granted'
+                    message = 'Platform operator granted company admin access.'
+                    success_message = f'{membership.user} is now an admin for {membership.company.name}.'
+                else:
+                    other_admin_exists = CompanyMembership.objects.select_for_update().filter(
+                        company=membership.company,
+                        is_active=True,
+                        role_admin=True,
+                        user__is_active=True,
+                    ).exclude(pk=membership.pk).exists()
+                    if not other_admin_exists:
+                        messages.error(request, 'Assign another active admin before removing this admin role.')
+                        return redirect('platform_admin')
+                    membership.role_admin = False
+                    membership.save(update_fields=['role_admin'])
+                    event_type = 'platform.membership_admin_removed'
+                    message = 'Platform operator removed company admin access.'
+                    success_message = f'{membership.user} is no longer an admin for {membership.company.name}.'
+                log_audit_event(
+                    company=membership.company,
+                    actor=request.user,
+                    event_type=event_type,
+                    target=membership.user,
+                    message=message,
+                )
+            messages.success(request, success_message)
+            return redirect('platform_admin')
+
         elif action == 'resend_invitation':
             invitation = get_object_or_404(
                 CompanyInvitation.objects.select_related('company'),
@@ -2675,6 +2750,24 @@ def platform_admin(request):
                 messages.error(request, f'Invitation was not resent: {exc}')
             else:
                 messages.success(request, f'Invitation resent to {invitation.email}.')
+            return redirect('platform_admin')
+
+        elif action == 'revoke_invitation':
+            invitation = get_object_or_404(
+                CompanyInvitation.objects.select_related('company'),
+                pk=request.POST.get('invitation_id'),
+                status=CompanyInvitation.Status.PENDING,
+            )
+            invitation.status = CompanyInvitation.Status.REVOKED
+            invitation.save(update_fields=['status'])
+            log_audit_event(
+                company=invitation.company,
+                actor=request.user,
+                event_type='invitation.revoked',
+                target=invitation,
+                message='Platform operator revoked invitation.',
+            )
+            messages.success(request, f'Invitation revoked for {invitation.email}.')
             return redirect('platform_admin')
 
     companies = (
@@ -2778,7 +2871,10 @@ def settings_page(request):
     company_form = CompanySettingsForm(instance=company_settings, prefix='company') if is_admin else None
     profile_form = UserProfileForm(instance=request.user, prefix='profile')
     password_form = PasswordChangeForm(user=request.user, prefix='password')
-    invitation_form = CompanyInvitationForm(prefix='invite') if is_admin else None
+    invitation_form = CompanyInvitationForm(
+        prefix='invite',
+        company=active_company,
+    ) if is_admin else None
     pending_invitations = (
         CompanyInvitation.objects.filter(
             company=active_company,
@@ -2832,7 +2928,11 @@ def settings_page(request):
                 return redirect('settings')
 
         elif action == 'invite' and is_admin:
-            invitation_form = CompanyInvitationForm(request.POST, prefix='invite')
+            invitation_form = CompanyInvitationForm(
+                request.POST,
+                prefix='invite',
+                company=active_company,
+            )
             if invitation_form.is_valid():
                 invitation = invitation_form.save(commit=False)
                 invitation.company = active_company
@@ -2935,8 +3035,14 @@ def company_invitation_accept(request, token):
         messages.success(request, f'You joined {invitation.company.name}.')
         return redirect('dashboard')
 
+    existing_user = Technician.objects.filter(email__iexact=invitation.email).first()
+    if existing_user:
+        messages.info(request, 'An account already uses this email address. Sign in to accept the invitation.')
+        login_url = f"{reverse('login')}?{urlencode({'next': request.path})}"
+        return redirect(login_url)
+
     if request.method == 'POST':
-        form = SignUpForm(request.POST)
+        form = SignUpForm(request.POST, invited_email=invitation.email)
         if form.is_valid():
             user = form.save(commit=False)
             user.is_active = True
@@ -2959,11 +3065,14 @@ def company_invitation_accept(request, token):
             messages.success(request, 'Account created. You can sign in now.')
             return redirect('login')
     else:
-        form = SignUpForm(initial={
-            'email': invitation.email,
-            'first_name': invitation.first_name,
-            'last_name': invitation.last_name,
-        })
+        form = SignUpForm(
+            invited_email=invitation.email,
+            initial={
+                'email': invitation.email,
+                'first_name': invitation.first_name,
+                'last_name': invitation.last_name,
+            },
+        )
 
     return render(request, 'registration/signup.html', {
         'form': form,
