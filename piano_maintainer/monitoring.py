@@ -12,6 +12,16 @@ SENSITIVE_HEADERS = {
 }
 
 
+def make_sentry_traces_sampler(sample_rate):
+    def traces_sampler(sampling_context):
+        environ = sampling_context.get("wsgi_environ") or {}
+        if environ.get("PATH_INFO") == "/healthz/":
+            return 0.0
+        return sample_rate
+
+    return traces_sampler
+
+
 def sanitize_sentry_event(event, hint):
     event.pop("user", None)
     request = event.get("request")

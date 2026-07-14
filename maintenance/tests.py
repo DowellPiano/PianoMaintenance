@@ -43,7 +43,10 @@ from .models import (
 from .audit import log_audit_event
 from .services import generate_scheduled_work_orders
 from .views import _resolve_photo_storage_name
-from piano_maintainer.monitoring import sanitize_sentry_event
+from piano_maintainer.monitoring import (
+    make_sentry_traces_sampler,
+    sanitize_sentry_event,
+)
 
 
 class StubPhotoStorage(Storage):
@@ -418,6 +421,22 @@ class DemoDataCommandTests(TestCase):
 
 
 class SentrySanitizationTests(TestCase):
+    def test_traces_sampler_excludes_health_checks(self):
+        sampler = make_sentry_traces_sampler(0.1)
+
+        self.assertEqual(
+            sampler({'wsgi_environ': {'PATH_INFO': '/healthz/'}}),
+            0.0,
+        )
+
+    def test_traces_sampler_uses_configured_rate_for_application_requests(self):
+        sampler = make_sentry_traces_sampler(0.1)
+
+        self.assertEqual(
+            sampler({'wsgi_environ': {'PATH_INFO': '/pianos/'}}),
+            0.1,
+        )
+
     def test_sanitizer_removes_sensitive_request_context(self):
         event = {
             'user': {'id': '42', 'email': 'customer@example.com'},

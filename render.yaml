@@ -19,6 +19,8 @@ projects:
                 sync: false
               - key: SENTRY_DSN
                 sync: false
+              - key: SENTRY_TRACES_SAMPLE_RATE
+                value: "0.10"
               - key: BACKUP_S3_SECRET_ACCESS_KEY
                 sync: false
               - key: BACKUP_S3_REGION

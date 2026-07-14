@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 
-from .monitoring import sanitize_sentry_event
+from .monitoring import make_sentry_traces_sampler, sanitize_sentry_event
 
 load_dotenv()
 
@@ -36,6 +36,16 @@ SENTRY_RELEASE = config(
     "SENTRY_RELEASE",
     default=os.getenv("RENDER_GIT_COMMIT", ""),
 )
+SENTRY_TRACES_SAMPLE_RATE = config(
+    "SENTRY_TRACES_SAMPLE_RATE",
+    default=0.0,
+    cast=float,
+)
+
+if not 0.0 <= SENTRY_TRACES_SAMPLE_RATE <= 1.0:
+    raise ImproperlyConfigured(
+        "SENTRY_TRACES_SAMPLE_RATE must be between 0.0 and 1.0."
+    )
 
 if SENTRY_ENABLED:
     if not SENTRY_DSN:
@@ -48,8 +58,9 @@ if SENTRY_ENABLED:
         send_default_pii=False,
         max_request_body_size="never",
         include_local_variables=False,
-        traces_sample_rate=0.0,
+        traces_sampler=make_sentry_traces_sampler(SENTRY_TRACES_SAMPLE_RATE),
         before_send=sanitize_sentry_event,
+        before_send_transaction=sanitize_sentry_event,
     )
 
 BACKUP_DATABASE_URL = config("BACKUP_DATABASE_URL", default="")

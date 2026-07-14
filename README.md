@@ -404,6 +404,7 @@ EMAIL_TIMEOUT=10
 SENTRY_ENABLED=True
 SENTRY_DSN=...
 SENTRY_ENVIRONMENT=production
+SENTRY_TRACES_SAMPLE_RATE=0.10
 BACKUP_S3_ENDPOINT=https://s3.us-east-005.backblazeb2.com
 BACKUP_S3_REGION=us-east-005
 BACKUP_S3_BUCKET=overtone-backup-unique-suffix
@@ -448,7 +449,11 @@ with the verified Resend sender.
 For error monitoring, create a Sentry Django project and set `SENTRY_DSN` in the
 production environment. Sentry is disabled in debug mode by default. Production
 events omit default PII, request bodies, local variables, query strings, user
-context, sensitive headers, and UUID tokens embedded in URLs.
+context, sensitive headers, and UUID tokens embedded in URLs. The same
+sanitization is applied to performance transactions. Set
+`SENTRY_TRACES_SAMPLE_RATE` between `0.0` and `1.0` to control performance
+monitoring; `0.10` samples 10% of application requests. Health-check requests
+are always excluded from performance sampling.
 
 ### Off-site backups and restore drills
 
