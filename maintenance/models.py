@@ -470,6 +470,9 @@ class Piano(TenantValidatedModel):
 
     @property
     def profile_photo(self):
+        prefetched = getattr(self, 'prefetched_profile_photos', None)
+        if prefetched is not None:
+            return prefetched[0] if prefetched else None
         try:
             return self.photos.filter(is_profile_photo=True).first()
         except Exception:

@@ -575,6 +575,31 @@
 .select-controls a { font-size: .82rem; cursor: pointer; }
 
 /* ----------------------------------------------------------------
+   Pagination
+   ---------------------------------------------------------------- */
+.pagination {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}
+.pagination-links {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.pagination-status {
+  color: var(--clr-text-sec);
+  font-size: .88rem;
+  min-width: 7rem;
+  text-align: center;
+}
+.pagination .disabled {
+  cursor: default;
+  opacity: .5;
+  pointer-events: none;
+}
+
+/* ----------------------------------------------------------------
    Print overrides (QR codes)
    ---------------------------------------------------------------- */
 @media print {

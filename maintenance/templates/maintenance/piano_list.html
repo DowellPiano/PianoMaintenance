@@ -8,11 +8,11 @@
 <div class="page-header">
   <div>
     <h1>Pianos</h1>
-    <p class="page-subtitle">{{ pianos|length }} piano{{ pianos|length|pluralize }} registered</p>
+    <p class="page-subtitle">{{ page_obj.paginator.count }} piano{{ page_obj.paginator.count|pluralize }} registered</p>
   </div>
   {% if company_access.can_admin %}
   <div class="gap-row">
-    <a href="{% url 'piano_bulk_edit' %}?{{ request.GET.urlencode }}" class="btn btn-secondary">Bulk Edit</a>
+    <a href="{% url 'piano_bulk_edit' %}{% if pagination_query %}?{{ pagination_query }}{% endif %}" class="btn btn-secondary">Bulk Edit</a>
     <a href="{% url 'piano_import' %}" class="btn btn-secondary">Import CSV</a>
     <a href="{% url 'piano_create' %}" class="btn btn-primary">+ Add Piano</a>
   </div>
@@ -115,4 +115,5 @@
   </div>
   {% endfor %}
 </div>
+{% include "maintenance/partials/pagination.html" %}
 {% endblock %}

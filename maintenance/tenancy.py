@@ -28,8 +28,14 @@ def active_memberships_for_user(user: Technician):
     return user.active_company_memberships().order_by("company__name")
 
 
-def resolve_active_company_access(user: Technician, session_company_id: int | None) -> CompanyAccess:
-    memberships = list(active_memberships_for_user(user))
+def resolve_active_company_access(
+    user: Technician,
+    session_company_id: int | None,
+    *,
+    memberships: list[CompanyMembership] | None = None,
+) -> CompanyAccess:
+    if memberships is None:
+        memberships = list(active_memberships_for_user(user))
     if not memberships:
         return CompanyAccess(company=None, membership=None)
 

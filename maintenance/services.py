@@ -58,11 +58,22 @@ class CompanySetupProgress:
         return all(task.is_complete for task in self.tasks)
 
 
-def build_company_setup_progress(company):
-    settings = CompanySettings.objects.filter(company=company).first()
-    organization_count = Organization.objects.filter(company=company).count()
-    venue_count = Venue.objects.filter(company=company).count()
-    piano_count = Piano.objects.filter(company=company, is_active=True).count()
+def build_company_setup_progress(
+    company,
+    *,
+    company_settings=None,
+    organization_count=None,
+    venue_count=None,
+    piano_count=None,
+):
+    if company_settings is None:
+        company_settings = CompanySettings.objects.filter(company=company).first()
+    if organization_count is None:
+        organization_count = Organization.objects.filter(company=company).count()
+    if venue_count is None:
+        venue_count = Venue.objects.filter(company=company).count()
+    if piano_count is None:
+        piano_count = Piano.objects.filter(company=company, is_active=True).count()
     active_member_count = CompanyMembership.objects.filter(
         company=company,
         is_active=True,
@@ -74,9 +85,9 @@ def build_company_setup_progress(company):
     ).count()
 
     profile_complete = bool(
-        settings
-        and (settings.company_name or company.name)
-        and (settings.email or settings.phone or settings.address)
+        company_settings
+        and (company_settings.company_name or company.name)
+        and (company_settings.email or company_settings.phone or company_settings.address)
     )
     team_complete = active_member_count > 1 or pending_invitation_count > 0
 

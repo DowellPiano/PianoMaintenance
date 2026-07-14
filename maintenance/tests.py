@@ -11,9 +11,10 @@ from django.core.files.storage import Storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core import mail
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -162,6 +163,162 @@ class CompanyScopedTestCase(TestCase):
         session = self.client.session
         session['active_company_id'] = (company or self.company).pk
         session.save()
+
+
+class PerformanceRegressionTests(CompanyScopedTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin = self.create_user(
+            'performance-admin',
+            role_admin=True,
+            role_technician=True,
+        )
+        self.login_user(self.admin)
+
+    def captured_get(self, url, data=None):
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(url, data or {})
+        return response, queries.captured_queries
+
+    def test_authenticated_request_reuses_memberships_without_rewriting_session(self):
+        response, queries = self.captured_get(reverse('reports'))
+
+        self.assertEqual(response.status_code, 200)
+        membership_selects = [
+            query['sql'] for query in queries
+            if query['sql'].lstrip().upper().startswith('SELECT')
+            and 'maintenance_companymembership' in query['sql']
+        ]
+        session_updates = [
+            query['sql'] for query in queries
+            if query['sql'].lstrip().upper().startswith('UPDATE')
+            and 'django_session' in query['sql']
+        ]
+        self.assertEqual(len(membership_selects), 1)
+        self.assertEqual(session_updates, [])
+
+    def test_piano_list_query_count_is_fixed_and_results_are_paginated(self):
+        Piano.objects.bulk_create([
+            Piano(
+                company=self.company,
+                name=f'Performance Piano {index:02}',
+                make='Yamaha',
+                piano_type=Piano.PianoType.UPRIGHT,
+            )
+            for index in range(30)
+        ])
+        response, queries = self.captured_get(reverse('piano_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['page_obj'].paginator.count, 30)
+        self.assertEqual(len(response.context['pianos']), 25)
+        photo_selects = [
+            query['sql'] for query in queries
+            if query['sql'].lstrip().upper().startswith('SELECT')
+            and 'FROM "maintenance_photo"' in query['sql']
+        ]
+        self.assertEqual(len(photo_selects), 1)
+        self.assertLessEqual(len(queries), 10)
+
+        second_page = self.client.get(reverse('piano_list'), {'page': 2})
+        self.assertEqual(len(second_page.context['pianos']), 5)
+
+    def test_work_order_list_is_paginated_without_query_growth(self):
+        WorkOrder.objects.bulk_create([
+            WorkOrder(
+                company=self.company,
+                order_type=WorkOrder.OrderType.REQUEST,
+                status=WorkOrder.Status.OPEN,
+                priority=WorkOrder.Priority.NORMAL,
+                description=f'Performance work order {index:02}',
+            )
+            for index in range(55)
+        ])
+
+        response, queries = self.captured_get(reverse('workorder_list'), {'page': 2})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['page_obj'].paginator.count, 55)
+        self.assertEqual(len(response.context['work_orders']), 5)
+        work_order_selects = [
+            query['sql'] for query in queries
+            if query['sql'].lstrip().upper().startswith('SELECT')
+            and 'FROM "maintenance_workorder"' in query['sql']
+        ]
+        self.assertEqual(len(work_order_selects), 2)
+        self.assertLessEqual(len(queries), 8)
+
+    def test_dashboard_combines_work_order_counts(self):
+        WorkOrder.objects.create(
+            company=self.company,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response, queries = self.captured_get(reverse('dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        work_order_selects = [
+            query['sql'] for query in queries
+            if query['sql'].lstrip().upper().startswith('SELECT')
+            and 'FROM "maintenance_workorder"' in query['sql']
+        ]
+        self.assertEqual(len(work_order_selects), 2)
+        self.assertLessEqual(len(queries), 12)
+
+    def test_schedule_fetches_work_orders_once(self):
+        task_types = ['Tuning', 'Regulation', 'Voicing', 'Cleaning']
+        WorkOrder.objects.bulk_create([
+            WorkOrder(
+                company=self.company,
+                order_type=WorkOrder.OrderType.PREVENTIVE,
+                task_type=task_types[index % len(task_types)],
+                status=WorkOrder.Status.OPEN,
+                priority=WorkOrder.Priority.NORMAL,
+            )
+            for index in range(40)
+        ])
+
+        response, queries = self.captured_get(reverse('schedule'))
+
+        self.assertEqual(response.status_code, 200)
+        work_order_selects = [
+            query['sql'] for query in queries
+            if query['sql'].lstrip().upper().startswith('SELECT')
+            and 'FROM "maintenance_workorder"' in query['sql']
+        ]
+        self.assertEqual(len(work_order_selects), 1)
+        self.assertLessEqual(len(queries), 6)
+
+    def test_platform_company_counts_use_correlated_subqueries(self):
+        self.admin.is_staff = True
+        self.admin.is_superuser = True
+        self.admin.save(update_fields=['is_staff', 'is_superuser'])
+        self.create_piano(name='Platform Performance Piano')
+        WorkOrder.objects.create(
+            company=self.company,
+            order_type=WorkOrder.OrderType.REQUEST,
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response, queries = self.captured_get(reverse('platform_admin'))
+
+        self.assertEqual(response.status_code, 200)
+        company = next(
+            item for item in response.context['companies']
+            if item.pk == self.company.pk
+        )
+        self.assertEqual(company.active_member_count, 1)
+        self.assertEqual(company.active_piano_count, 1)
+        self.assertEqual(company.open_work_order_count, 1)
+        company_summary_sql = next(
+            query['sql'] for query in queries
+            if 'active_member_count' in query['sql']
+        )
+        self.assertNotIn('LEFT OUTER JOIN "maintenance_workorder"', company_summary_sql)
+
 
 class AuthEntryTests(TestCase):
     def test_login_page_does_not_offer_public_signup(self):

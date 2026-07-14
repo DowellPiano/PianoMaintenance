@@ -14,8 +14,12 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.mail import send_mail
 from django.core.files.storage import FileSystemStorage
+from django.core.paginator import Paginator
 from django.db import connection, transaction
-from django.db.models import Q, Count, Sum, Max, DecimalField, Prefetch
+from django.db.models import (
+    Q, Count, Sum, Max, DecimalField, IntegerField, OuterRef, Prefetch,
+    Subquery, Value,
+)
 from django.db.models.functions import Coalesce
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
@@ -47,6 +51,10 @@ from .tenancy import ACTIVE_COMPANY_SESSION_KEY, company_queryset, company_users
 from .services import build_company_setup_progress
 
 
+PIANOS_PER_PAGE = 25
+WORK_ORDERS_PER_PAGE = 50
+
+
 @require_GET
 def health_check(request):
     try:
@@ -74,6 +82,27 @@ def _safe_return_url(request, fallback):
     return _safe_local_url(request, return_url, fallback)
 
 
+def _pagination_query(request):
+    params = request.GET.copy()
+    params.pop('page', None)
+    return params.urlencode()
+
+
+def _company_count_annotation(model, **filters):
+    counts = (
+        model.objects
+        .filter(company_id=OuterRef('pk'), **filters)
+        .order_by()
+        .values('company_id')
+        .annotate(total=Count('pk'))
+        .values('total')[:1]
+    )
+    return Coalesce(
+        Subquery(counts, output_field=IntegerField()),
+        Value(0),
+    )
+
+
 def _workorder_detail_url(wo, return_url=None):
     url = f'/work-orders/{wo.pk}/'
     if return_url:
@@ -92,7 +121,14 @@ def _filtered_piano_queryset(request):
     company = ensure_company_access(request)
     qs = Piano.objects.filter(company=company, is_active=True).select_related(
         'venue', 'venue__organization',
-    ).prefetch_related('photos', 'tags')
+    ).prefetch_related(
+        Prefetch(
+            'photos',
+            queryset=Photo.objects.filter(is_profile_photo=True).order_by('pk'),
+            to_attr='prefetched_profile_photos',
+        ),
+        'tags',
+    )
 
     search_query = request.GET.get('q', '').strip()
     org_filter = request.GET.get('org', '')
@@ -360,8 +396,8 @@ SETUP_TASK_URLS = {
 }
 
 
-def _setup_progress_context(company):
-    progress = build_company_setup_progress(company)
+def _setup_progress_context(company, **known_values):
+    progress = build_company_setup_progress(company, **known_values)
     tasks = []
     for task in progress.tasks:
         url_name = SETUP_TASK_URLS.get(task.key)
@@ -524,17 +560,33 @@ def dashboard(request):
     company = ensure_company_access(request)
     tech_mode = _is_tech_mode(request)
     is_admin = _user_is_company_admin(request) and not tech_mode
-    setup_progress = _setup_progress_context(company) if is_admin else None
+    setup_progress = None
 
     if is_admin:
         # Admin sees everything
         wo_base = WorkOrder.objects.filter(company=company)
-        overdue_count = wo_base.filter(
-            status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
-            due_date__lt=today,
-        ).count()
-        open_wo_count = wo_base.filter(status=WorkOrder.Status.OPEN).count()
-        in_progress_count = wo_base.filter(status=WorkOrder.Status.IN_PROGRESS).count()
+        work_order_counts = wo_base.aggregate(
+            overdue=Count(
+                'pk',
+                filter=Q(
+                    status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
+                    due_date__lt=today,
+                ),
+            ),
+            open=Count('pk', filter=Q(status=WorkOrder.Status.OPEN)),
+            in_progress=Count('pk', filter=Q(status=WorkOrder.Status.IN_PROGRESS)),
+            completed_this_month=Count(
+                'pk',
+                filter=Q(
+                    status=WorkOrder.Status.COMPLETE,
+                    completed_date__gte=month_start,
+                ),
+            ),
+        )
+        overdue_count = work_order_counts['overdue']
+        open_wo_count = work_order_counts['open']
+        in_progress_count = work_order_counts['in_progress']
+        completed_this_month = work_order_counts['completed_this_month']
         pending_request_count = MaintenanceRequest.objects.filter(
             company=company,
             status=MaintenanceRequest.RequestStatus.NEW,
@@ -542,10 +594,12 @@ def dashboard(request):
         piano_count = Piano.objects.filter(company=company, is_active=True).count()
         venue_count = Venue.objects.filter(company=company).count()
         org_count = Organization.objects.filter(company=company).count()
-        completed_this_month = wo_base.filter(
-            status=WorkOrder.Status.COMPLETE,
-            completed_date__gte=month_start,
-        ).count()
+        setup_progress = _setup_progress_context(
+            company,
+            organization_count=org_count,
+            venue_count=venue_count,
+            piano_count=piano_count,
+        )
         dashboard_work_orders = (
             wo_base
             .select_related('piano', 'piano__venue')
@@ -554,20 +608,32 @@ def dashboard(request):
     else:
         # Tech-only: show their own assigned work plus shared team jobs.
         my_wos = WorkOrder.objects.filter(company=company).filter(_technician_workorders_q(user))
-        overdue_count = my_wos.filter(
-            status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
-            due_date__lt=today,
-        ).count()
-        open_wo_count = my_wos.filter(status=WorkOrder.Status.OPEN).count()
-        in_progress_count = my_wos.filter(status=WorkOrder.Status.IN_PROGRESS).count()
+        work_order_counts = my_wos.aggregate(
+            overdue=Count(
+                'pk',
+                filter=Q(
+                    status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
+                    due_date__lt=today,
+                ),
+            ),
+            open=Count('pk', filter=Q(status=WorkOrder.Status.OPEN)),
+            in_progress=Count('pk', filter=Q(status=WorkOrder.Status.IN_PROGRESS)),
+            completed_this_month=Count(
+                'pk',
+                filter=Q(
+                    status=WorkOrder.Status.COMPLETE,
+                    completed_date__gte=month_start,
+                ),
+            ),
+        )
+        overdue_count = work_order_counts['overdue']
+        open_wo_count = work_order_counts['open']
+        in_progress_count = work_order_counts['in_progress']
+        completed_this_month = work_order_counts['completed_this_month']
         pending_request_count = None
         piano_count = None
         venue_count = None
         org_count = None
-        completed_this_month = my_wos.filter(
-            status=WorkOrder.Status.COMPLETE,
-            completed_date__gte=month_start,
-        ).count()
         dashboard_work_orders = (
             my_wos
             .select_related('piano', 'piano__venue')
@@ -601,10 +667,13 @@ def piano_list(request):
     company = ensure_company_access(request)
 
     qs, filters = _filtered_piano_queryset(request)
+    page_obj = Paginator(qs, PIANOS_PER_PAGE).get_page(request.GET.get('page'))
 
     return render(request, 'maintenance/piano_list.html', {
         'active_nav': 'pianos',
-        'pianos': qs,
+        'pianos': page_obj.object_list,
+        'page_obj': page_obj,
+        'pagination_query': _pagination_query(request),
         'organizations': Organization.objects.filter(company=company),
         'venues': Venue.objects.filter(company=company),
         'tags': Tag.objects.filter(company=company),
@@ -1134,6 +1203,7 @@ def workorder_list(request):
         ('created', 'Created'),
     ]:
         params = request.GET.copy()
+        params.pop('page', None)
         params['sort'] = key
         params['dir'] = 'desc' if filters['sort_key'] == key and filters['sort_dir'] == 'asc' else 'asc'
         sort_columns.append({
@@ -1143,9 +1213,12 @@ def workorder_list(request):
             'active': filters['sort_key'] == key,
         })
 
+    page_obj = Paginator(qs, WORK_ORDERS_PER_PAGE).get_page(request.GET.get('page'))
     context = {
         'active_nav': 'workorders',
-        'work_orders': qs,
+        'work_orders': page_obj.object_list,
+        'page_obj': page_obj,
+        'pagination_query': _pagination_query(request),
         'tech_mode': tech_mode,
         'sort_key': filters['sort_key'],
         'sort_dir': filters['sort_dir'],
@@ -1165,7 +1238,7 @@ def workorder_list(request):
         'priority_choices': WorkOrder.Priority.choices,
         'type_choices': TaskType.choices,
         'today': today,
-        'export_query': request.GET.urlencode(),
+        'export_query': _pagination_query(request),
     }
 
     if request.headers.get('HX-Request') == 'true':
@@ -1759,30 +1832,43 @@ def schedule(request):
     else:
         due_filter = ''
 
+    work_orders_by_type = {
+        task_type: []
+        for task_type in (
+            TaskType.TUNING,
+            TaskType.REGULATION,
+            TaskType.VOICING,
+            TaskType.CLEANING,
+        )
+    }
+    for work_order in active_wos.order_by('due_date', '-created_at'):
+        if work_order.task_type in work_orders_by_type:
+            work_orders_by_type[work_order.task_type].append(work_order)
+
     schedule_columns = [
         {
             'label': 'Pianos Needing Tuning',
             'short_label': 'Tuning',
             'css_class': 'col-tuning',
-            'work_orders': active_wos.filter(task_type=TaskType.TUNING).order_by('due_date', '-created_at'),
+            'work_orders': work_orders_by_type[TaskType.TUNING],
         },
         {
             'label': 'Pianos Needing Regulation',
             'short_label': 'Regulation',
             'css_class': 'col-regulation',
-            'work_orders': active_wos.filter(task_type=TaskType.REGULATION).order_by('due_date', '-created_at'),
+            'work_orders': work_orders_by_type[TaskType.REGULATION],
         },
         {
             'label': 'Pianos Needing Voicing',
             'short_label': 'Voicing',
             'css_class': 'col-voicing',
-            'work_orders': active_wos.filter(task_type=TaskType.VOICING).order_by('due_date', '-created_at'),
+            'work_orders': work_orders_by_type[TaskType.VOICING],
         },
         {
             'label': 'Pianos Needing Cleaning',
             'short_label': 'Cleaning',
             'css_class': 'col-cleaning',
-            'work_orders': active_wos.filter(task_type=TaskType.CLEANING).order_by('due_date', '-created_at'),
+            'work_orders': work_orders_by_type[TaskType.CLEANING],
         },
     ]
     due_filter_choices = [
@@ -2773,46 +2859,37 @@ def platform_admin(request):
     companies = (
         Company.objects
         .annotate(
-            active_member_count=Count(
-                'memberships',
-                filter=Q(memberships__is_active=True, memberships__user__is_active=True),
-                distinct=True,
+            active_member_count=_company_count_annotation(
+                CompanyMembership,
+                is_active=True,
+                user__is_active=True,
             ),
-            admin_count=Count(
-                'memberships',
-                filter=Q(
-                    memberships__is_active=True,
-                    memberships__user__is_active=True,
-                    memberships__role_admin=True,
-                ),
-                distinct=True,
+            admin_count=_company_count_annotation(
+                CompanyMembership,
+                is_active=True,
+                user__is_active=True,
+                role_admin=True,
             ),
-            technician_count=Count(
-                'memberships',
-                filter=Q(
-                    memberships__is_active=True,
-                    memberships__user__is_active=True,
-                    memberships__role_technician=True,
-                ),
-                distinct=True,
+            technician_count=_company_count_annotation(
+                CompanyMembership,
+                is_active=True,
+                user__is_active=True,
+                role_technician=True,
             ),
-            pending_invitation_count=Count(
-                'invitations',
-                filter=Q(invitations__status=CompanyInvitation.Status.PENDING),
-                distinct=True,
+            pending_invitation_count=_company_count_annotation(
+                CompanyInvitation,
+                status=CompanyInvitation.Status.PENDING,
             ),
-            active_piano_count=Count(
-                'pianos',
-                filter=Q(pianos__is_active=True),
-                distinct=True,
+            active_piano_count=_company_count_annotation(
+                Piano,
+                is_active=True,
             ),
-            open_work_order_count=Count(
-                'work_orders',
-                filter=Q(work_orders__status__in=[
+            open_work_order_count=_company_count_annotation(
+                WorkOrder,
+                status__in=[
                     WorkOrder.Status.OPEN,
                     WorkOrder.Status.IN_PROGRESS,
-                ]),
-                distinct=True,
+                ],
             ),
         )
         .prefetch_related(
@@ -2866,8 +2943,14 @@ def platform_admin(request):
 def settings_page(request):
     is_admin = _user_is_company_admin(request)
     active_company = ensure_company_access(request)
-    setup_progress = _setup_progress_context(active_company) if is_admin else None
     company_settings = CompanySettings.load_for_company(active_company) if is_admin else None
+    setup_progress = (
+        _setup_progress_context(
+            active_company,
+            company_settings=company_settings,
+        )
+        if is_admin else None
+    )
     company_form = CompanySettingsForm(instance=company_settings, prefix='company') if is_admin else None
     profile_form = UserProfileForm(instance=request.user, prefix='profile')
     password_form = PasswordChangeForm(user=request.user, prefix='password')

@@ -8,7 +8,7 @@
 <div class="page-header">
   <div>
     <h1>Work Orders</h1>
-    <p class="page-subtitle">{{ work_orders|length }} work order{{ work_orders|length|pluralize }}</p>
+    <p class="page-subtitle">{{ page_obj.paginator.count }} work order{{ page_obj.paginator.count|pluralize }}</p>
   </div>
   <div class="gap-row">
     <a href="{% url 'workorder_export_csv' %}{% if export_query %}?{{ export_query }}{% endif %}" class="btn btn-secondary">Download CSV</a>

@@ -1,4 +1,8 @@
-from .tenancy import ACTIVE_COMPANY_SESSION_KEY, resolve_active_company_access
+from .tenancy import (
+    ACTIVE_COMPANY_SESSION_KEY,
+    active_memberships_for_user,
+    resolve_active_company_access,
+)
 
 
 class ActiveCompanyMiddleware:
@@ -12,20 +16,18 @@ class ActiveCompanyMiddleware:
         request.available_companies = []
 
         if request.user.is_authenticated:
+            memberships = list(active_memberships_for_user(request.user))
+            session_company_id = request.session.get(ACTIVE_COMPANY_SESSION_KEY)
             access = resolve_active_company_access(
                 request.user,
-                request.session.get(ACTIVE_COMPANY_SESSION_KEY),
+                session_company_id,
+                memberships=memberships,
             )
             request.active_company = access.company
             request.active_membership = access.membership
             request.company_access = access
-            request.available_companies = list(
-                request.user.company_memberships.filter(
-                    is_active=True,
-                    company__is_active=True,
-                ).select_related("company").order_by("company__name")
-            )
-            if access.company:
+            request.available_companies = memberships
+            if access.company and session_company_id != access.company.pk:
                 request.session[ACTIVE_COMPANY_SESSION_KEY] = access.company.pk
 
         return self.get_response(request)
