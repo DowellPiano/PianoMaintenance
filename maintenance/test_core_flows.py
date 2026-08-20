@@ -217,7 +217,7 @@ class CoreCrudFlowTests(CompanyAdminWebTestCase):
             {'venue.created', 'venue.updated', 'venue.deleted'},
         )
 
-    def test_piano_create_edit_and_deactivate_are_scoped_and_audited(self):
+    def test_piano_create_edit_pause_and_resume_are_scoped_and_audited(self):
         venue = Venue.objects.create(company=self.company, name='Music School')
 
         response = self.client.post(
@@ -241,9 +241,18 @@ class CoreCrudFlowTests(CompanyAdminWebTestCase):
         self.assertRedirects(response, reverse('piano_list'))
         piano.refresh_from_db()
         self.assertFalse(piano.is_active)
+        response = self.client.get(reverse('piano_list'))
+        self.assertNotContains(response, 'Teaching Studio Piano')
+        response = self.client.get(reverse('piano_list'), {'status': 'paused'})
+        self.assertContains(response, 'Teaching Studio Piano')
+
+        response = self.client.post(reverse('piano_reactivate', args=[piano.pk]))
+        self.assertRedirects(response, reverse('piano_detail', args=[piano.pk]))
+        piano.refresh_from_db()
+        self.assertTrue(piano.is_active)
         self.assertEqual(
             list(AuditLog.objects.filter(company=self.company).order_by('created_at').values_list('event_type', flat=True)),
-            ['piano.created', 'piano.updated', 'piano.deactivated'],
+            ['piano.created', 'piano.updated', 'piano.paused', 'piano.reactivated'],
         )
 
     def test_core_edit_and_delete_views_hide_other_company_records(self):
@@ -263,6 +272,7 @@ class CoreCrudFlowTests(CompanyAdminWebTestCase):
             reverse('venue_delete', args=[venue.pk]),
             reverse('piano_edit', args=[piano.pk]),
             reverse('piano_deactivate', args=[piano.pk]),
+            reverse('piano_reactivate', args=[piano.pk]),
         ]
         for url in urls:
             with self.subTest(url=url):
@@ -667,6 +677,7 @@ class CoreRoleBoundaryTests(CompanyAdminWebTestCase):
             reverse('piano_create'),
             reverse('piano_edit', args=[self.piano.pk]),
             reverse('piano_deactivate', args=[self.piano.pk]),
+            reverse('piano_reactivate', args=[self.piano.pk]),
             reverse('piano_import'),
             reverse('piano_import_sample'),
             reverse('part_list'),

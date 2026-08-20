@@ -230,7 +230,10 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
         if needs_save:
             piano.save(update_fields=needs_save)
 
-    schedule_qs = MaintenanceSchedule.objects.filter(is_active=True).select_related('piano')
+    schedule_qs = MaintenanceSchedule.objects.filter(
+        is_active=True,
+        piano__is_active=True,
+    ).select_related('piano')
     if company is not None:
         schedule_qs = schedule_qs.filter(company=company)
 

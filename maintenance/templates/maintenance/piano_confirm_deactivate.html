@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
-{% block title %}Deactivate {{ piano.name }} — Overtone{% endblock %}
-{% block topbar_title %}Deactivate Piano{% endblock %}
+{% block title %}Pause {{ piano.name }} — Overtone{% endblock %}
+{% block topbar_title %}Pause Piano{% endblock %}
 
 {% block content %}
 <div style="margin-bottom:1rem;">
@@ -9,22 +9,23 @@
 </div>
 
 <div class="card" style="max-width:520px;">
-  <div class="card-header"><h2>Deactivate Piano</h2></div>
+  <div class="card-header"><h2>Pause Piano</h2></div>
   <div class="card-body">
     <p style="margin-bottom:1rem;">
-      Are you sure you want to deactivate <strong>{{ piano.name }}</strong>
+      Pause <strong>{{ piano.name }}</strong>
       ({{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %})
       at {{ piano.venue_name }}?
     </p>
     <p class="text-sm text-muted" style="margin-bottom:1.25rem;">
-      The piano will be hidden from lists and reports but its data will be preserved.
-      It can be reactivated later via the admin panel.
+      It will be removed from the active piano list, future scheduled work-order generation,
+      piano reports, and new work-order selectors. Existing work orders, history, and settings will be preserved,
+      and you can resume it at any time from the Paused list.
     </p>
     <form method="post">
       {% csrf_token %}
       <div style="display:flex; gap:.5rem; justify-content:flex-end;">
         <a href="{% url 'piano_detail' piano.pk %}" class="btn btn-secondary">Cancel</a>
-        <button type="submit" class="btn btn-danger">Deactivate</button>
+        <button type="submit" class="btn btn-danger">Pause Piano</button>
       </div>
     </form>
   </div>

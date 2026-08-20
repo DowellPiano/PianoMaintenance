@@ -75,6 +75,7 @@ urlpatterns = [
     path('pianos/<int:pk>/', views.piano_detail, name='piano_detail'),
     path('pianos/<int:pk>/edit/', views.piano_edit, name='piano_edit'),
     path('pianos/<int:pk>/deactivate/', views.piano_deactivate, name='piano_deactivate'),
+    path('pianos/<int:pk>/reactivate/', views.piano_reactivate, name='piano_reactivate'),
     path('pianos/<int:pk>/tags/add/', views.piano_add_tag, name='piano_add_tag'),
     path('pianos/<int:pk>/tags/<int:tag_pk>/remove/', views.piano_remove_tag, name='piano_remove_tag'),
     path('pianos/<int:pk>/tab/<str:tab>/', views.piano_tab, name='piano_tab'),

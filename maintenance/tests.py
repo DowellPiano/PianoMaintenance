@@ -1419,6 +1419,24 @@ class ScheduledWorkOrderGenerationTests(CompanyScopedTestCase):
         )
         self.assertFalse(work_order.is_team_job)
 
+    def test_service_skips_all_schedules_for_paused_piano(self):
+        self.piano.is_active = False
+        self.piano.save(update_fields=['is_active'])
+        MaintenanceSchedule.objects.create(
+            company=self.company,
+            piano=self.piano,
+            task_name='Annual inspection',
+            task_type='Inspection',
+            interval_days=365,
+            warning_days_before=14,
+            last_service_date=self.today - timedelta(days=360),
+        )
+
+        result = generate_scheduled_work_orders(today=self.today)
+
+        self.assertEqual(result.created, 0)
+        self.assertFalse(WorkOrder.objects.filter(piano=self.piano).exists())
+
     def test_dry_run_does_not_create_work_orders(self):
         result = generate_scheduled_work_orders(today=self.today, dry_run=True)
 

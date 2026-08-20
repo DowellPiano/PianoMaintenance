@@ -119,7 +119,7 @@ def _piano_detail_url(piano, return_url=None):
 
 def _filtered_piano_queryset(request):
     company = ensure_company_access(request)
-    qs = Piano.objects.filter(company=company, is_active=True).select_related(
+    qs = Piano.objects.filter(company=company).select_related(
         'venue', 'venue__organization',
     ).prefetch_related(
         Prefetch(
@@ -135,6 +135,15 @@ def _filtered_piano_queryset(request):
     venue_filter = request.GET.get('venue', '')
     type_filter = request.GET.get('type', '')
     tag_filter = request.GET.get('tag', '')
+    status_filter = request.GET.get('status', 'active')
+
+    if status_filter == 'paused':
+        qs = qs.filter(is_active=False)
+    elif status_filter == 'all':
+        pass
+    else:
+        status_filter = 'active'
+        qs = qs.filter(is_active=True)
 
     if search_query:
         qs = qs.filter(
@@ -165,6 +174,7 @@ def _filtered_piano_queryset(request):
         'venue_filter': venue_filter,
         'type_filter': type_filter,
         'tag_filter': tag_filter,
+        'status_filter': status_filter,
     }
 
 
@@ -937,16 +947,34 @@ def piano_deactivate(request, pk):
         log_audit_event(
             company=piano.company,
             actor=request.user,
-            event_type='piano.deactivated',
+            event_type='piano.paused',
             target=piano,
-            message=f'Deactivated piano {piano.name}.',
+            message=f'Paused piano {piano.name}.',
         )
-        messages.success(request, f'Piano "{piano.name}" has been deactivated.')
+        messages.success(request, f'Piano "{piano.name}" has been paused and removed from active maintenance.')
         return redirect('piano_list')
     return render(request, 'maintenance/piano_confirm_deactivate.html', {
         'active_nav': 'pianos',
         'piano': piano,
     })
+
+
+@admin_required
+def piano_reactivate(request, pk):
+    piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=pk)
+    if request.method == 'POST':
+        piano.is_active = True
+        piano.save(update_fields=['is_active'])
+        log_audit_event(
+            company=piano.company,
+            actor=request.user,
+            event_type='piano.reactivated',
+            target=piano,
+            message=f'Resumed piano {piano.name}.',
+        )
+        messages.success(request, f'Piano "{piano.name}" is back in active maintenance.')
+        return redirect('piano_detail', pk=piano.pk)
+    return redirect('piano_detail', pk=piano.pk)
 
 
 def _piano_tags_context(piano):

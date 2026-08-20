@@ -40,6 +40,11 @@
     <option value="Upright" {% if type_filter == "Upright" %}selected{% endif %}>Upright</option>
     <option value="Digital" {% if type_filter == "Digital" %}selected{% endif %}>Digital</option>
   </select>
+  <select name="status" class="form-select" style="width:150px;" onchange="this.form.submit()">
+    <option value="active" {% if status_filter == "active" %}selected{% endif %}>Active</option>
+    <option value="paused" {% if status_filter == "paused" %}selected{% endif %}>Paused</option>
+    <option value="all" {% if status_filter == "all" %}selected{% endif %}>All statuses</option>
+  </select>
   {% if tags %}
   <select name="tag" class="form-select" style="width:160px;" onchange="this.form.submit()">
     <option value="">All Tags</option>
@@ -64,7 +69,10 @@
     <div class="piano-card-body">
       <div class="piano-card-top">
         <a href="{% url 'piano_detail' piano.pk %}?return_url={{ request.get_full_path|urlencode }}" class="piano-card-name">{{ piano.name }}</a>
-        <span class="badge badge-{{ piano.piano_type|lower }}">{{ piano.piano_type }}</span>
+        <div class="gap-row">
+          {% if not piano.is_active %}<span class="badge">Paused</span>{% endif %}
+          <span class="badge badge-{{ piano.piano_type|lower }}">{{ piano.piano_type }}</span>
+        </div>
       </div>
       <p class="piano-card-meta">{{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %}{% if piano.year_built %} · {{ piano.year_built }}{% endif %}</p>
       <p class="piano-card-venue">{{ piano.venue_name }}{% if piano.room %} · {{ piano.room }}{% endif %}</p>
@@ -108,7 +116,11 @@
       <div class="card-body">
         <div class="empty-state">
           <div class="empty-icon">🎹</div>
+          {% if status_filter == 'paused' %}
+          <p>No paused pianos.</p>
+          {% else %}
           <p>No pianos found. <a href="{% url 'piano_create' %}">Add your first piano.</a></p>
+          {% endif %}
         </div>
       </div>
     </div>

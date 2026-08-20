@@ -18,6 +18,7 @@
         <p class="hero-sub">{{ piano.make }}{% if piano.model %} — {{ piano.model }}{% endif %}</p>
         <p class="hero-loc">{{ piano.venue_name }}{% if piano.section %} · {{ piano.section }}{% endif %}{% if piano.room %} · {{ piano.room }}{% endif %}</p>
         <div class="hero-badges">
+          {% if not piano.is_active %}<span class="badge">Paused</span>{% endif %}
           <span class="badge badge-{{ piano.piano_type|lower }}">{{ piano.piano_type }}</span>
           {% if piano.serial_number %}<span class="text-dim text-sm">S/N: {{ piano.serial_number }}</span>{% endif %}
           {% if piano.year_built %}<span class="text-dim text-sm">Built {{ piano.year_built }}</span>{% endif %}
@@ -38,8 +39,15 @@
         <a href="{% url 'piano_photo_upload' piano.pk %}" class="btn btn-sm btn-secondary">Photos</a>
         <a href="{% url 'condition_reading_create' piano.pk %}" class="btn btn-sm btn-secondary">Condition Report</a>
         {% if company_access.can_admin %}
-        <a href="{% url 'workorder_create' %}?piano={{ piano.pk }}" class="btn btn-sm btn-primary">+ Work Order</a>
-        <a href="{% url 'piano_deactivate' piano.pk %}" class="btn btn-sm btn-danger">Deactivate</a>
+          {% if piano.is_active %}
+          <a href="{% url 'workorder_create' %}?piano={{ piano.pk }}" class="btn btn-sm btn-primary">+ Work Order</a>
+          <a href="{% url 'piano_deactivate' piano.pk %}" class="btn btn-sm btn-danger">Pause</a>
+          {% else %}
+          <form method="post" action="{% url 'piano_reactivate' piano.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-primary">Resume Maintenance</button>
+          </form>
+          {% endif %}
         {% endif %}
       </div>
     </div>
