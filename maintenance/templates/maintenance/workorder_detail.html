@@ -68,6 +68,7 @@
         <tbody>
           <tr><td>Piano</td><td>{% if wo.piano %}<a href="{% url 'piano_detail' wo.piano.pk %}">{{ wo.piano.name }}</a>{% else %}<span class="text-dim">{{ wo.piano_name }}</span>{% endif %}</td></tr>
           <tr><td>Venue</td><td>{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% else %}—{% endif %}</td></tr>
+          <tr><td>Room</td><td>{% if wo.piano and wo.piano.room %}{{ wo.piano.room }}{% else %}—{% endif %}</td></tr>
           <tr><td>Order Type</td><td>{{ wo.task_type|default:wo.order_type }}</td></tr>
           {% if wo.is_team_job %}<tr><td>Work Scope</td><td>{% include "maintenance/partials/team_job_badge.html" %}</td></tr>{% endif %}
           {% if service_status %}

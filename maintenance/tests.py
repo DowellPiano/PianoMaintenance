@@ -1239,6 +1239,24 @@ class WorkOrderStateTests(CompanyScopedTestCase):
         self.assertContains(response, 'Updated by State Tech')
         self.assertContains(response, 'Adjusted description and due date.')
 
+    def test_workorder_detail_shows_piano_room(self):
+        self.piano.room = 'Recital Hall 204'
+        self.piano.save(update_fields=['room'])
+        wo = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            assigned_tech=self.tech,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+
+        response = self.client.get(reverse('workorder_detail', args=[wo.pk]))
+
+        self.assertContains(response, '<td>Room</td>', html=True)
+        self.assertContains(response, 'Recital Hall 204')
+
     def test_reopen_completed_workorder_clears_completed_date(self):
         wo = WorkOrder.objects.create(
             company=self.company,
@@ -1545,6 +1563,16 @@ class ScheduleViewTests(CompanyScopedTestCase):
         self.assertNotContains(response, 'Inspection')
         self.assertContains(response, 'class="schedule-mobile-tab active"')
         self.assertContains(response, 'data-schedule-tab="col-tuning"')
+
+    def test_schedule_card_shows_piano_room(self):
+        self.piano.room = 'Studio B'
+        self.piano.save(update_fields=['room'])
+        tuning = self._work_order('Tuning')
+
+        response = self.client.get(reverse('schedule'))
+
+        self.assertContains(response, f'WO-{tuning.pk}')
+        self.assertContains(response, 'Studio B')
 
     def test_schedule_due_filter_applies_before_category_grouping(self):
         today = date.today()

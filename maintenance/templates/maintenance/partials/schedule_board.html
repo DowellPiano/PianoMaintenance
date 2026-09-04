@@ -53,7 +53,7 @@
           </div>
           <div class="kc-piano">{{ wo.piano_name }}</div>
           {% include "maintenance/partials/team_job_badge.html" %}
-          <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}</div>
+          <div class="kc-meta">{% if wo.piano and wo.piano.venue %}{{ wo.piano.venue.name }}{% endif %}{% if wo.piano and wo.piano.room %}{% if wo.piano.venue %} · {% endif %}{{ wo.piano.room }}{% endif %}</div>
           {% if wo.due_date %}
             <div class="kc-due {% if wo.due_date < today %}text-danger{% endif %}">Due {{ wo.due_date|date:"M d" }}</div>
           {% else %}
