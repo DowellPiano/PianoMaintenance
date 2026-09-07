@@ -14,3 +14,7 @@ class PlatformAdminSite(AdminSite):
 
 class PlatformAdminConfig(AdminConfig):
     default_site = "piano_maintainer.admin.PlatformAdminSite"
+
+    def ready(self):
+        super().ready()
+        from . import checks  # noqa: F401

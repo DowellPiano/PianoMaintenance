@@ -201,6 +201,67 @@ class BulkPianoIntervalForm(forms.Form):
         return updates
 
 
+class WorkOrderReportFilterForm(forms.Form):
+    DATE_FIELD_COMPLETED = 'completed'
+    DATE_FIELD_CREATED = 'created'
+
+    organizations = forms.ModelMultipleChoiceField(
+        queryset=Organization.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    venues = forms.ModelMultipleChoiceField(
+        queryset=Venue.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    technicians = forms.ModelMultipleChoiceField(
+        queryset=Technician.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    date_field = forms.ChoiceField(
+        label='Date type',
+        choices=(
+            (DATE_FIELD_COMPLETED, 'Completed date'),
+            (DATE_FIELD_CREATED, 'Created date'),
+        ),
+        initial=DATE_FIELD_COMPLETED,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    date_from = forms.DateField(
+        label='From',
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-input'}),
+    )
+    date_to = forms.DateField(
+        label='Through',
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-input'}),
+    )
+
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if company:
+            self.fields['organizations'].queryset = Organization.objects.filter(company=company)
+            self.fields['venues'].queryset = Venue.objects.filter(company=company).select_related('organization')
+            self.fields['technicians'].queryset = company_users(company, technicians_only=True).order_by(
+                'last_name', 'first_name', 'username',
+            )
+
+    def clean(self):
+        cleaned = super().clean()
+        date_from = cleaned.get('date_from')
+        date_to = cleaned.get('date_to')
+        if date_from and date_to and date_from > date_to:
+            raise forms.ValidationError('From date must be on or before through date.')
+        return cleaned
+
+    def clean_date_field(self):
+        return self.cleaned_data.get('date_field') or self.DATE_FIELD_COMPLETED
+
+
 class WorkOrderForm(forms.ModelForm):
     def __init__(self, *args, company=None, **kwargs):
         super().__init__(*args, **kwargs)

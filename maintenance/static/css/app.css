@@ -561,6 +561,27 @@
 .report-card-title { font-weight: 700; font-size: 1rem; margin-bottom: .25rem; }
 .report-card-desc { color: var(--clr-text-sec); font-size: .88rem; margin-bottom: 1rem; }
 
+.report-filter-dialog {
+  border: 0;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 0;
+  width: min(760px, calc(100% - 2rem));
+  max-height: 90vh;
+  color: var(--clr-text);
+}
+.report-filter-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.report-filter-subtitle { color: var(--clr-text-sec); font-size: .82rem; margin: .2rem 0 0; }
+.report-date-range { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem; }
+.report-filter-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.report-filter-group { border: 1px solid var(--clr-border); border-radius: var(--radius-sm); padding: .75rem; min-width: 0; }
+.report-filter-group legend { font-size: .85rem; font-weight: 600; padding: 0 .25rem; }
+.report-filter-options { max-height: 190px; overflow-y: auto; }
+.report-filter-options ul { list-style: none; margin: 0; padding: 0; }
+.report-filter-options li + li { margin-top: .45rem; }
+.report-filter-options label { align-items: flex-start; cursor: pointer; display: flex; font-size: .85rem; gap: .45rem; }
+.report-filter-options input { margin-top: .15rem; }
+
 /* ----------------------------------------------------------------
    Template apply (piano checklist)
    ---------------------------------------------------------------- */
@@ -623,4 +644,6 @@
   .filter-bar { flex-direction: column; }
   .filter-bar .form-input,
   .filter-bar .form-select { width: 100%; }
+  .report-date-range,
+  .report-filter-grid { grid-template-columns: 1fr; }
 }

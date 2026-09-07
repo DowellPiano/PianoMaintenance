@@ -2,11 +2,13 @@
 Django settings for piano_maintainer project.
 """
 
+import os
 from importlib.util import find_spec
 from pathlib import Path
-from decouple import config, Csv
+
+from decouple import Csv, config
 from django.core.exceptions import ImproperlyConfigured
-import dj_database_url, os
+import dj_database_url
 from dotenv import load_dotenv
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
@@ -102,6 +104,11 @@ INSTALLED_APPS = [
 ]
 
 SUPABASE_S3_REQUIRED = config("SUPABASE_S3_REQUIRED", default=False, cast=bool)
+PRIVATE_MEDIA_URL_TTL = config(
+    "PRIVATE_MEDIA_URL_TTL",
+    default=900,
+    cast=int,
+)
 SUPABASE_S3_ENV_KEYS = (
     "SUPABASE_S3_ACCESS_KEY_ID",
     "SUPABASE_S3_SECRET_ACCESS_KEY",
@@ -153,7 +160,7 @@ if SUPABASE_S3_ENABLED:
             "file_overwrite": False,
             "default_acl": None,
             "querystring_auth": True,
-            "querystring_expire": 3600,
+            "querystring_expire": PRIVATE_MEDIA_URL_TTL,
         },
     }
 else:
@@ -245,12 +252,6 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-STATICFILES_STORAGE = (
-    "whitenoise.storage.CompressedStaticFilesStorage"
-    if DEBUG
-    else "whitenoise.storage.CompressedManifestStaticFilesStorage"
-)
-
 
 # MEDIA FILES
 MEDIA_URL = "/media/"
@@ -269,8 +270,12 @@ EMAIL_NOTIFICATIONS_ENABLED = config(
 )
 EMAIL_BACKEND = config(
     "EMAIL_BACKEND",
-    default="django.core.mail.backends.console.EmailBackend",
+    default="django.core.mail.backends.dummy.EmailBackend",
 )
+if not DEBUG and EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend":
+    raise ImproperlyConfigured(
+        "The console email backend can expose password-reset tokens in production logs."
+    )
 EMAIL_HOST = config("EMAIL_HOST", default="localhost")
 EMAIL_PORT = config("EMAIL_PORT", default=25, cast=int)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
@@ -287,13 +292,6 @@ ANYMAIL = {
     "RESEND_API_KEY": RESEND_API_KEY,
     "REQUESTS_TIMEOUT": EMAIL_TIMEOUT,
 }
-PRIVATE_MEDIA_URL_TTL = config(
-    "PRIVATE_MEDIA_URL_TTL",
-    default=900,
-    cast=int,
-)
-
-
 # SECURITY HEADERS
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
@@ -333,6 +331,3 @@ SECURE_HSTS_PRELOAD = config(
 
 if config("USE_X_FORWARDED_PROTO", default=False, cast=bool):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
-STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"

@@ -75,6 +75,7 @@ projects:
             buildCommand: >-
               python -m pip install --upgrade pip==26.1.2 &&
               python -m pip install --require-hashes -r requirements.txt &&
+              python manage.py check --deploy &&
               python manage.py collectstatic --noinput
             preDeployCommand: python manage.py migrate --noinput
             startCommand: gunicorn piano_maintainer.wsgi:application
@@ -150,7 +151,8 @@ projects:
             region: ohio
             buildCommand: >-
               python -m pip install --upgrade pip==26.1.2 &&
-              python -m pip install --require-hashes -r requirements.txt
+              python -m pip install --require-hashes -r requirements.txt &&
+              python manage.py check --deploy
             startCommand: python manage.py run_daily_operations
             schedule: 0 6 * * *
             autoDeployTrigger: checksPass

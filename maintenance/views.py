@@ -35,6 +35,7 @@ from .forms import (
     SignUpForm, CompanySettingsForm, UserProfileForm, TechnicianUpdateForm,
     CompanyInvitationForm, CompanySwitcherForm,
     BulkPianoIntervalForm, PlatformCompanyInviteForm,
+    WorkOrderReportFilterForm,
 )
 from .email_notifications import (
     notify_maintenance_request,
@@ -2617,31 +2618,73 @@ def qr_codes_csv(request):
 
 @admin_required
 def reports(request):
+    company = ensure_company_access(request)
     return render(request, 'maintenance/reports.html', {
-        'active_nav': 'dashboard',
+        'active_nav': 'reports',
+        'workorder_filter_form': WorkOrderReportFilterForm(company=company),
     })
 
 
 @admin_required
 def report_export_workorders(request):
     company = ensure_company_access(request)
+    filter_form = WorkOrderReportFilterForm(request.GET, company=company)
+    if not filter_form.is_valid():
+        return render(request, 'maintenance/reports.html', {
+            'active_nav': 'reports',
+            'workorder_filter_form': filter_form,
+            'open_workorder_filter_dialog': True,
+        }, status=400)
+
+    selected = filter_form.cleaned_data
+    wos = WorkOrder.objects.filter(company=company)
+    if selected['organizations']:
+        wos = wos.filter(piano__venue__organization__in=selected['organizations'])
+    if selected['venues']:
+        wos = wos.filter(piano__venue__in=selected['venues'])
+    if selected['technicians']:
+        wos = wos.filter(assigned_tech__in=selected['technicians'])
+    if selected['date_field'] == WorkOrderReportFilterForm.DATE_FIELD_CREATED:
+        if selected['date_from']:
+            wos = wos.filter(created_at__date__gte=selected['date_from'])
+        if selected['date_to']:
+            wos = wos.filter(created_at__date__lte=selected['date_to'])
+    else:
+        if selected['date_from']:
+            wos = wos.filter(completed_date__gte=selected['date_from'])
+        if selected['date_to']:
+            wos = wos.filter(completed_date__lte=selected['date_to'])
+    wos = wos.select_related(
+        'piano', 'piano__venue', 'piano__venue__organization', 'assigned_tech',
+    ).order_by('-created_at')
+
     log_audit_event(
         company=company,
         actor=request.user,
         event_type='report.workorders_exported',
-        message='Exported work orders CSV.',
+        message='Exported filtered work orders CSV.',
+        metadata={
+            'organization_ids': list(selected['organizations'].values_list('pk', flat=True)),
+            'venue_ids': list(selected['venues'].values_list('pk', flat=True)),
+            'technician_ids': list(selected['technicians'].values_list('pk', flat=True)),
+            'date_field': selected['date_field'],
+            'date_from': selected['date_from'].isoformat() if selected['date_from'] else '',
+            'date_to': selected['date_to'].isoformat() if selected['date_to'] else '',
+        },
     )
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="work_orders.csv"'
     writer = csv.writer(response)
-    writer.writerow(['ID', 'Piano', 'Venue', 'Type', 'Status', 'Priority',
+    writer.writerow(['ID', 'Piano', 'Organization', 'Venue', 'Type', 'Status', 'Priority',
                      'Assigned To', 'Due Date', 'Completed', 'Created', 'Description'])
-    wos = WorkOrder.objects.filter(company=company).select_related('piano', 'piano__venue', 'assigned_tech').order_by('-created_at')
     for wo in wos:
+        piano = wo.piano
+        venue = piano.venue if piano else None
         writer.writerow([
             f'WO-{wo.pk}',
-            wo.piano.name,
-            wo.piano.venue.name,
+            piano.name if piano else wo.piano_display,
+            str(venue.organization) if venue and venue.organization else '',
+            venue.name if venue else '',
             wo.order_type,
             wo.status,
             wo.priority,

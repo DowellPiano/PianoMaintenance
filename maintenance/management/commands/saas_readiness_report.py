@@ -28,8 +28,13 @@ class Command(BaseCommand):
                 missing.append(setting_name)
 
         email_backend = getattr(settings, "EMAIL_BACKEND", "")
-        if email_backend == "django.core.mail.backends.console.EmailBackend":
-            warnings.append("EMAIL_BACKEND is still using the console backend.")
+        if email_backend in {
+            "django.core.mail.backends.console.EmailBackend",
+            "django.core.mail.backends.dummy.EmailBackend",
+        }:
+            warnings.append(
+                "EMAIL_BACKEND is not configured for production email delivery."
+            )
         elif email_backend == "anymail.backends.resend.EmailBackend":
             if not getattr(settings, "RESEND_API_KEY", ""):
                 warnings.append("RESEND_API_KEY is not configured for Resend email delivery.")

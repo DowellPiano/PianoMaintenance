@@ -12,8 +12,8 @@
 <div class="report-cards">
   <div class="report-card">
     <div class="report-card-title">Work Orders Export</div>
-    <div class="report-card-desc">Download all work orders as a CSV file with status, assignment, and dates.</div>
-    <a href="{% url 'report_export_workorders' %}" class="btn btn-sm btn-primary">Download CSV</a>
+    <div class="report-card-desc">Download work orders by organization, venue, technician, and created or completed date.</div>
+    <button type="button" class="btn btn-sm btn-primary" id="open-workorder-report-dialog">Generate Report</button>
   </div>
 
   <div class="report-card">
@@ -34,4 +34,74 @@
     <a href="{% url 'piano_import' %}" class="btn btn-sm btn-secondary">Import CSV</a>
   </div>
 </div>
+
+<dialog class="report-filter-dialog" id="workorder-report-dialog"{% if open_workorder_filter_dialog %} data-open="true"{% endif %}>
+  <div class="modal-header">
+    <div>
+      <h2>Work Order Report</h2>
+      <p class="report-filter-subtitle">Leave a group empty to include all.</p>
+    </div>
+    <button type="button" class="modal-close" data-close-report-dialog aria-label="Close">&times;</button>
+  </div>
+  <form method="get" action="{% url 'report_export_workorders' %}">
+    <div class="modal-body">
+      {% if workorder_filter_form.non_field_errors %}
+        <div class="alert alert-error">{{ workorder_filter_form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="report-date-range">
+        <div class="form-group">
+          <label class="form-label" for="{{ workorder_filter_form.date_field.id_for_label }}">{{ workorder_filter_form.date_field.label }}</label>
+          {{ workorder_filter_form.date_field }}
+          {% for error in workorder_filter_form.date_field.errors %}<div class="form-error">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="{{ workorder_filter_form.date_from.id_for_label }}">{{ workorder_filter_form.date_from.label }}</label>
+          {{ workorder_filter_form.date_from }}
+          {% for error in workorder_filter_form.date_from.errors %}<div class="form-error">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="{{ workorder_filter_form.date_to.id_for_label }}">{{ workorder_filter_form.date_to.label }}</label>
+          {{ workorder_filter_form.date_to }}
+          {% for error in workorder_filter_form.date_to.errors %}<div class="form-error">{{ error }}</div>{% endfor %}
+        </div>
+      </div>
+
+      <div class="report-filter-grid">
+        {% for field in workorder_filter_form %}
+          {% if field.name != 'date_field' and field.name != 'date_from' and field.name != 'date_to' %}
+            <fieldset class="report-filter-group">
+              <legend>{{ field.label }}</legend>
+              <div class="report-filter-options">{{ field }}</div>
+              {% for error in field.errors %}<div class="form-error">{{ error }}</div>{% endfor %}
+            </fieldset>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-close-report-dialog>Cancel</button>
+      <button type="submit" class="btn btn-primary">Download CSV</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const dialog = document.getElementById('workorder-report-dialog');
+    const openButton = document.getElementById('open-workorder-report-dialog');
+    if (!dialog || !openButton) return;
+
+    openButton.addEventListener('click', function () { dialog.showModal(); });
+    dialog.querySelectorAll('[data-close-report-dialog]').forEach(function (button) {
+      button.addEventListener('click', function () { dialog.close(); });
+    });
+    dialog.addEventListener('click', function (event) {
+      if (event.target === dialog) dialog.close();
+    });
+    if (dialog.dataset.open === 'true') dialog.showModal();
+  }());
+</script>
 {% endblock %}

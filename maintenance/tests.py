@@ -1,3 +1,4 @@
+import csv
 import os
 import tempfile
 from datetime import date, datetime, timedelta
@@ -47,6 +48,7 @@ from piano_maintainer.monitoring import (
     make_sentry_traces_sampler,
     sanitize_sentry_event,
 )
+from piano_maintainer.checks import check_private_media_storage
 
 
 class StubPhotoStorage(Storage):
@@ -168,6 +170,165 @@ class CompanyScopedTestCase(TestCase):
         session.save()
 
 
+class WorkOrderReportExportTests(CompanyScopedTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin = self.create_user(
+            'report-admin',
+            role_admin=True,
+            role_technician=True,
+        )
+        self.tech_a = self.create_user('report-tech-a')
+        self.tech_b = self.create_user('report-tech-b')
+        self.organization_a = Organization.objects.create(
+            company=self.company,
+            name='Organization A',
+        )
+        self.organization_b = Organization.objects.create(
+            company=self.company,
+            name='Organization B',
+        )
+        self.venue_a = Venue.objects.create(
+            company=self.company,
+            organization=self.organization_a,
+            name='Venue A',
+        )
+        self.venue_b = Venue.objects.create(
+            company=self.company,
+            organization=self.organization_b,
+            name='Venue B',
+        )
+        self.piano_a = self.create_piano(name='Piano A', venue=self.venue_a)
+        self.piano_b = self.create_piano(name='Piano B', venue=self.venue_b)
+        self.work_order_a = self._create_work_order(
+            piano=self.piano_a,
+            technician=self.tech_a,
+            created=date(2026, 8, 10),
+            completed=date(2026, 8, 12),
+        )
+        self.work_order_b = self._create_work_order(
+            piano=self.piano_b,
+            technician=self.tech_b,
+            created=date(2026, 8, 20),
+            completed=date(2026, 8, 25),
+        )
+        self.work_order_cross = self._create_work_order(
+            piano=self.piano_a,
+            technician=self.tech_b,
+            created=date(2026, 8, 15),
+            completed=date(2026, 8, 16),
+        )
+        self.login_user(self.admin)
+
+    def _create_work_order(self, *, piano, technician, created, completed):
+        work_order = WorkOrder.objects.create(
+            company=self.company,
+            piano=piano,
+            assigned_tech=technician,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            status=WorkOrder.Status.COMPLETE,
+            completed_date=completed,
+            description=f'Created {created.isoformat()}',
+        )
+        WorkOrder.objects.filter(pk=work_order.pk).update(
+            created_at=timezone.make_aware(datetime.combine(created, datetime.min.time())),
+        )
+        work_order.refresh_from_db()
+        return work_order
+
+    def _csv_rows(self, response):
+        return list(csv.reader(StringIO(response.content.decode())))
+
+    def test_reports_page_shows_company_scoped_filter_dialog(self):
+        other_company = Company.objects.create(name='Other Company', slug='other-company-report')
+        other_organization = Organization.objects.create(
+            company=other_company,
+            name='Other Organization',
+        )
+
+        response = self.client.get(reverse('reports'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Generate Report')
+        self.assertContains(response, self.organization_a.name)
+        self.assertContains(response, self.venue_a.name)
+        self.assertContains(response, str(self.tech_a))
+        self.assertContains(response, '<option value="completed" selected>Completed date</option>', html=True)
+        self.assertNotContains(response, other_organization.name)
+        self.assertEqual(response.context['active_nav'], 'reports')
+
+    def test_export_filters_across_organization_venue_technician_and_created_date(self):
+        response = self.client.get(reverse('report_export_workorders'), {
+            'organizations': [self.organization_a.pk],
+            'venues': [self.venue_a.pk],
+            'technicians': [self.tech_b.pk],
+            'date_field': 'created',
+            'date_from': '2026-08-14',
+            'date_to': '2026-08-16',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        rows = self._csv_rows(response)
+        self.assertEqual(
+            rows[0],
+            ['ID', 'Piano', 'Organization', 'Venue', 'Type', 'Status', 'Priority',
+             'Assigned To', 'Due Date', 'Completed', 'Created', 'Description'],
+        )
+        self.assertEqual([row[0] for row in rows[1:]], [f'WO-{self.work_order_cross.pk}'])
+        self.assertEqual(rows[1][2:4], ['Organization A', 'Venue A'])
+
+    def test_export_uses_completed_date_by_default(self):
+        response = self.client.get(reverse('report_export_workorders'), {
+            'date_from': '2026-08-15',
+            'date_to': '2026-08-20',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [row[0] for row in self._csv_rows(response)[1:]],
+            [f'WO-{self.work_order_cross.pk}'],
+        )
+
+    def test_export_with_empty_filters_includes_all_company_work_orders(self):
+        response = self.client.get(reverse('report_export_workorders'))
+
+        self.assertEqual(response.status_code, 200)
+        exported_ids = {row[0] for row in self._csv_rows(response)[1:]}
+        self.assertEqual(exported_ids, {
+            f'WO-{self.work_order_a.pk}',
+            f'WO-{self.work_order_b.pk}',
+            f'WO-{self.work_order_cross.pk}',
+        })
+
+    def test_export_rejects_filters_from_another_company(self):
+        other_company = Company.objects.create(name='Other Company', slug='other-company-filter')
+        other_organization = Organization.objects.create(
+            company=other_company,
+            name='Other Organization',
+        )
+
+        response = self.client.get(reverse('report_export_workorders'), {
+            'organizations': [other_organization.pk],
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, 'Select a valid choice', status_code=400)
+        self.assertEqual(response.context['open_workorder_filter_dialog'], True)
+
+    def test_export_rejects_reversed_created_date_range(self):
+        response = self.client.get(reverse('report_export_workorders'), {
+            'date_from': '2026-08-20',
+            'date_to': '2026-08-10',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(
+            response,
+            'From date must be on or before through date.',
+            status_code=400,
+        )
+
+
 class PerformanceRegressionTests(CompanyScopedTestCase):
     def setUp(self):
         super().setUp()
@@ -187,17 +348,22 @@ class PerformanceRegressionTests(CompanyScopedTestCase):
         response, queries = self.captured_get(reverse('reports'))
 
         self.assertEqual(response.status_code, 200)
-        membership_selects = [
+        membership_resolution_selects = [
             query['sql'] for query in queries
-            if query['sql'].lstrip().upper().startswith('SELECT')
-            and 'maintenance_companymembership' in query['sql']
+            if query['sql'].lstrip().startswith(
+                'SELECT "maintenance_companymembership".'
+            )
         ]
         session_updates = [
             query['sql'] for query in queries
             if query['sql'].lstrip().upper().startswith('UPDATE')
             and 'django_session' in query['sql']
         ]
-        self.assertEqual(len(membership_selects), 1)
+        self.assertEqual(
+            len(membership_resolution_selects),
+            1,
+            membership_resolution_selects,
+        )
         self.assertEqual(session_updates, [])
 
     def test_piano_list_query_count_is_fixed_and_results_are_paginated(self):
@@ -468,6 +634,46 @@ class SentrySanitizationTests(TestCase):
         self.assertEqual(request['headers']['User-Agent'], 'Browser')
         self.assertIn('<redacted-uuid>', request['url'])
         self.assertNotIn('123e4567-e89b-42d3-a456-426614174000', request['url'])
+
+    def test_sanitizer_removes_password_reset_tokens_and_referrer(self):
+        reset_url = (
+            'https://app.example.com/password-reset/'
+            'MQ/cq1abc-example-secret-token/'
+        )
+        event = {
+            'request': {
+                'url': reset_url,
+                'headers': {'Referer': reset_url},
+            },
+        }
+
+        sanitized = sanitize_sentry_event(event, {})
+
+        request = sanitized['request']
+        self.assertEqual(
+            request['url'],
+            'https://app.example.com/password-reset/'
+            '<redacted-user>/<redacted-token>/',
+        )
+        self.assertNotIn('Referer', request['headers'])
+
+
+class ProductionConfigurationCheckTests(TestCase):
+    @override_settings(
+        DEBUG=False,
+        SUPABASE_S3_ENABLED=False,
+        SUPABASE_S3_MISSING_KEYS=['SUPABASE_S3_BUCKET'],
+    )
+    def test_deploy_check_warns_when_private_storage_is_incomplete(self):
+        warnings = check_private_media_storage(None)
+
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, 'overtone.W001')
+        self.assertIn('SUPABASE_S3_BUCKET', warnings[0].msg)
+
+    @override_settings(DEBUG=False, SUPABASE_S3_ENABLED=True)
+    def test_deploy_check_accepts_configured_private_storage(self):
+        self.assertEqual(check_private_media_storage(None), [])
 
 
 @override_settings(
@@ -2993,7 +3199,7 @@ class SaaSReadinessReportCommandTests(TestCase):
         output = out.getvalue()
         self.assertIn('SaaS readiness report', output)
         self.assertIn('Warnings:', output)
-        self.assertIn('console backend', output)
+        self.assertIn('not configured for production email delivery', output)
         self.assertIn('SQLite', output)
 
     @override_settings(

@@ -4,10 +4,14 @@ import re
 UUID_PATTERN = re.compile(
     r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b"
 )
+PASSWORD_RESET_PATTERN = re.compile(
+    r"(?i)(/password-reset/)[^/?#]+/[^/?#]+"
+)
 SENSITIVE_HEADERS = {
     "authorization",
     "cookie",
     "proxy-authorization",
+    "referer",
     "x-api-key",
 }
 
@@ -33,7 +37,11 @@ def sanitize_sentry_event(event, hint):
     request.pop("query_string", None)
 
     if request.get("url"):
-        request["url"] = UUID_PATTERN.sub("<redacted-uuid>", request["url"])
+        sanitized_url = UUID_PATTERN.sub("<redacted-uuid>", request["url"])
+        request["url"] = PASSWORD_RESET_PATTERN.sub(
+            r"\1<redacted-user>/<redacted-token>",
+            sanitized_url,
+        )
 
     headers = request.get("headers")
     if headers:
