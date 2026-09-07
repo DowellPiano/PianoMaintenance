@@ -1,4 +1,7 @@
-<div class="form-group work-timer" data-work-timer data-hours-input-id="id_hours_worked">
+<div class="form-group work-timer"
+     data-work-timer
+     data-hours-input-id="id_hours_worked"
+     data-work-timer-storage-key="overtone.workTimer.v1.{{ request.user.pk }}.{{ wo.pk }}">
   <label class="form-label">Work Timer</label>
   <div class="work-timer-panel" aria-live="polite">
     <div class="work-timer-summary">

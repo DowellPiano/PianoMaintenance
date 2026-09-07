@@ -2131,20 +2131,30 @@ class WorkOrderTimerTemplateTests(CompanyScopedTestCase):
         )
         self.login_user(self.tech)
 
-    def test_log_work_form_includes_client_side_timer(self):
+    def test_log_work_form_includes_persistent_timer(self):
         response = self.client.get(reverse('workorder_log_work', args=[self.work_order.pk]))
 
         self.assertContains(response, 'data-work-timer')
+        self.assertContains(
+            response,
+            f'data-work-timer-storage-key="overtone.workTimer.v1.{self.tech.pk}.{self.work_order.pk}"',
+            html=False,
+        )
         self.assertContains(response, 'data-work-timer-start')
         self.assertContains(response, 'data-work-timer-end')
         self.assertContains(response, 'static/js/work-timer.js')
         self.assertContains(response, 'name="hours_worked" id="id_hours_worked"', html=False)
         self.assertContains(response, 'step="0.01"', html=False)
 
-    def test_complete_form_includes_client_side_timer(self):
+    def test_complete_form_includes_persistent_timer(self):
         response = self.client.get(reverse('workorder_complete', args=[self.work_order.pk]))
 
         self.assertContains(response, 'data-work-timer')
+        self.assertContains(
+            response,
+            f'data-work-timer-storage-key="overtone.workTimer.v1.{self.tech.pk}.{self.work_order.pk}"',
+            html=False,
+        )
         self.assertContains(response, 'data-work-timer-start')
         self.assertContains(response, 'data-work-timer-end')
         self.assertContains(response, 'static/js/work-timer.js')
