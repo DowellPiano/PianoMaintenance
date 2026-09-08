@@ -8,21 +8,33 @@
     {% endif %}
   {% elif company_access.can_admin and not tech_mode %}
     {% if wo.is_team_job %}<div style="margin-bottom:.35rem;">{% include "maintenance/partials/team_job_badge.html" %}</div>{% endif %}
-    {# Admin: full dropdown to assign any technician as owner/lead #}
-    <form class="assign-form"
-          hx-post="{% url 'workorder_assign' wo.pk %}"
-          hx-target="closest .assign-cell"
-          hx-swap="outerHTML">
-      {% csrf_token %}
-      <select name="assigned_tech" onchange="this.form.requestSubmit()">
-        <option value="">{% if wo.is_team_job %}No lead{% else %}Unassigned{% endif %}</option>
-        {% for tech in technicians %}
-          <option value="{{ tech.pk }}" {% if wo.assigned_tech_id == tech.pk %}selected{% endif %}>
-            {{ tech.get_full_name|default:tech.username }}
-          </option>
-        {% endfor %}
-      </select>
-    </form>
+    {% if assignment_editing %}
+      <form class="assign-form"
+            hx-post="{% url 'workorder_assign' wo.pk %}"
+            hx-target="closest .assign-cell"
+            hx-swap="outerHTML">
+        {% csrf_token %}
+        <select name="assigned_tech" onchange="this.form.requestSubmit()" autofocus>
+          <option value="">{% if wo.is_team_job %}No lead{% else %}Unassigned{% endif %}</option>
+          {% for tech in technicians %}
+            <option value="{{ tech.pk }}" {% if wo.assigned_tech_id == tech.pk %}selected{% endif %}>
+              {{ tech.get_full_name|default:tech.username }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+    {% else %}
+      <span class="text-sm text-muted">
+        {% if wo.assigned_tech %}{{ wo.assigned_tech.get_full_name|default:wo.assigned_tech.username }}{% elif wo.is_team_job %}No lead{% else %}Unassigned{% endif %}
+      </span>
+      <button type="button"
+              class="btn btn-xs btn-secondary"
+              hx-get="{% url 'workorder_assign' wo.pk %}"
+              hx-target="closest .assign-cell"
+              hx-swap="outerHTML">
+        Change
+      </button>
+    {% endif %}
   {% elif wo.is_team_job %}
     <span>{% include "maintenance/partials/team_job_badge.html" %}</span>
     <span class="text-sm text-muted">{% if wo.assigned_tech %}Lead: {{ wo.assigned_tech.get_full_name|default:wo.assigned_tech.username }}{% else %}No lead{% endif %}</span>

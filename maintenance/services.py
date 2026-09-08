@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
+from django.db.models import Max
+
 from .models import (
     CompanyInvitation,
     CompanyMembership,
@@ -161,8 +163,41 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
     if company is not None:
         piano_qs = piano_qs.filter(company=company)
 
+    work_order_scope = WorkOrder.objects.filter(piano__is_active=True)
+    if company is not None:
+        work_order_scope = work_order_scope.filter(company=company)
+
+    built_in_task_types = [task_type for task_type, *_fields in built_in_types]
+    last_completed_by_key = {
+        (row['piano_id'], row['task_type']): row['last_completed_date']
+        for row in (
+            work_order_scope
+            .filter(
+                task_type__in=built_in_task_types,
+                status=WorkOrder.Status.COMPLETE,
+                completed_date__isnull=False,
+            )
+            .order_by()
+            .values('piano_id', 'task_type')
+            .annotate(last_completed_date=Max('completed_date'))
+        )
+    }
+    open_built_in_keys = set(
+        work_order_scope
+        .filter(
+            task_type__in=built_in_task_types,
+            status__in=open_statuses,
+        )
+        .order_by()
+        .values_list('piano_id', 'task_type')
+    )
+    piano_updates_by_field = {
+        due_field: []
+        for _task_type, due_field, _value_field, _unit_field in built_in_types
+    }
+    work_orders_to_create = []
+
     for piano in piano_qs:
-        needs_save = []
         for task_type, due_field, interval_value_field, interval_unit_field in built_in_types:
             stored_due_date = getattr(piano, due_field)
             due_date = stored_due_date
@@ -170,16 +205,12 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
             interval_unit = getattr(piano, interval_unit_field)
 
             if interval_val:
-                last_completed = WorkOrder.objects.filter(
-                    company=piano.company,
-                    piano=piano,
-                    task_type=task_type,
-                    status=WorkOrder.Status.COMPLETE,
-                    completed_date__isnull=False,
-                ).order_by('-completed_date', '-pk').first()
-                if last_completed:
+                last_completed_date = last_completed_by_key.get(
+                    (piano.pk, task_type)
+                )
+                if last_completed_date:
                     interval_days = piano._interval_to_days(interval_val, interval_unit)
-                    due_date = last_completed.completed_date + timedelta(days=interval_days)
+                    due_date = last_completed_date + timedelta(days=interval_days)
 
             if due_date != stored_due_date:
                 if dry_run:
@@ -188,24 +219,19 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
                     )
                 else:
                     setattr(piano, due_field, due_date)
-                    needs_save.append(due_field)
+                    piano_updates_by_field[due_field].append(piano)
 
             if due_date is None and interval_val:
                 due_date = today
                 if not dry_run:
                     setattr(piano, due_field, today)
-                    needs_save.append(due_field)
+                    piano_updates_by_field[due_field].append(piano)
 
             if not due_date or due_date > today:
                 result.skipped_not_due += 1
                 continue
 
-            exists = WorkOrder.objects.filter(
-                piano=piano,
-                task_type=task_type,
-                status__in=open_statuses,
-            ).exists()
-            if exists:
+            if (piano.pk, task_type) in open_built_in_keys:
                 result.skipped_existing += 1
                 continue
 
@@ -213,9 +239,9 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
             if dry_run:
                 result.messages.append(f"[DRY RUN] Would create WO: {message}")
             else:
-                WorkOrder.objects.create(
-                    company=piano.company,
-                    piano=piano,
+                work_orders_to_create.append(WorkOrder(
+                    company_id=piano.company_id,
+                    piano_id=piano.pk,
                     order_type=WorkOrder.OrderType.PREVENTIVE,
                     task_type=task_type,
                     status=WorkOrder.Status.OPEN,
@@ -223,12 +249,9 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
                     is_team_job=False,
                     description=f"Scheduled {task_type.lower()}",
                     due_date=due_date,
-                )
+                ))
                 result.messages.append(f"Created WO: {message}")
             result.created += 1
-
-        if needs_save:
-            piano.save(update_fields=needs_save)
 
     schedule_qs = MaintenanceSchedule.objects.filter(
         is_active=True,
@@ -237,13 +260,22 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
     if company is not None:
         schedule_qs = schedule_qs.filter(company=company)
 
-    for sched in schedule_qs:
-        exists = WorkOrder.objects.filter(
-            piano=sched.piano,
-            schedule=sched,
-            status__in=open_statuses,
-        ).exists()
-        if exists:
+    schedules = list(schedule_qs)
+    open_schedule_scope = WorkOrder.objects.filter(
+        schedule__is_active=True,
+        schedule__piano__is_active=True,
+        status__in=open_statuses,
+    )
+    if company is not None:
+        open_schedule_scope = open_schedule_scope.filter(company=company)
+    open_schedule_keys = set(
+        open_schedule_scope
+        .order_by()
+        .values_list('piano_id', 'schedule_id')
+    ) if schedules else set()
+
+    for sched in schedules:
+        if (sched.piano_id, sched.pk) in open_schedule_keys:
             result.skipped_existing += 1
             continue
 
@@ -258,9 +290,9 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
         if dry_run:
             result.messages.append(f"[DRY RUN] Would create WO: {message}")
         else:
-            WorkOrder.objects.create(
-                company=sched.company,
-                piano=sched.piano,
+            work_orders_to_create.append(WorkOrder(
+                company_id=sched.company_id,
+                piano_id=sched.piano_id,
                 order_type=WorkOrder.OrderType.PREVENTIVE,
                 task_type=sched.task_type,
                 status=WorkOrder.Status.OPEN,
@@ -268,9 +300,16 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
                 is_team_job=False,
                 description=f"Scheduled: {sched.task_name}",
                 due_date=next_due,
-                schedule=sched,
-            )
+                schedule_id=sched.pk,
+            ))
             result.messages.append(f"Created WO: {message}")
         result.created += 1
+
+    if not dry_run:
+        for due_field, pianos in piano_updates_by_field.items():
+            if pianos:
+                Piano.objects.bulk_update(pianos, [due_field])
+        if work_orders_to_create:
+            WorkOrder.objects.bulk_create(work_orders_to_create)
 
     return result

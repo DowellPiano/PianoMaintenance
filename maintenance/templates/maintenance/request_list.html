@@ -8,7 +8,7 @@
 <div class="page-header">
   <div>
     <h1>Maintenance Requests</h1>
-    <p class="page-subtitle">{{ requests|length }} request{{ requests|length|pluralize }}</p>
+    <p class="page-subtitle">{{ page_obj.paginator.count }} request{{ page_obj.paginator.count|pluralize }}</p>
   </div>
 </div>
 
@@ -102,4 +102,5 @@
     </table>
   </div>
 </div>
+{% include "maintenance/partials/pagination.html" %}
 {% endblock %}

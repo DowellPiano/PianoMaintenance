@@ -48,12 +48,16 @@ from .models import (
     Technician, Part, PartUsed, MaintenanceLog, TaskType, Photo, Tag,
     CompanySettings, JobRun,
 )
+from .photo_processing import build_photo_thumbnail
 from .tenancy import ACTIVE_COMPANY_SESSION_KEY, company_queryset, company_users, ensure_company_access
 from .services import build_company_setup_progress
 
 
 PIANOS_PER_PAGE = 25
 WORK_ORDERS_PER_PAGE = 50
+REQUESTS_PER_PAGE = 50
+SCHEDULE_WORK_ORDERS_PER_PAGE = 100
+DASHBOARD_WORK_ORDERS_LIMIT = 10
 
 
 @require_GET
@@ -260,17 +264,27 @@ def _is_tech_mode(request):
     )
 
 
-def _can_update_workorder(user, wo, tech_mode=False):
-    return (user.has_company_role(wo.company, admin=True) and not tech_mode) or (
-        user.has_company_role(wo.company, technician=True)
-        and (wo.assigned_tech_id == user.pk or wo.assigned_tech_id is None)
+def _can_update_workorder(request, wo, tech_mode=False):
+    membership = getattr(request, 'active_membership', None)
+    if not membership or membership.company_id != wo.company_id:
+        return False
+    return (membership.role_admin and not tech_mode) or (
+        membership.role_technician
+        and (wo.assigned_tech_id == request.user.pk or wo.assigned_tech_id is None)
     )
 
 
-def _can_work_on_workorder(user, wo, tech_mode=False):
-    return (user.has_company_role(wo.company, admin=True) and not tech_mode) or (
-        user.has_company_role(wo.company, technician=True)
-        and (wo.is_team_job or wo.assigned_tech_id == user.pk or wo.assigned_tech_id is None)
+def _can_work_on_workorder(request, wo, tech_mode=False):
+    membership = getattr(request, 'active_membership', None)
+    if not membership or membership.company_id != wo.company_id:
+        return False
+    return (membership.role_admin and not tech_mode) or (
+        membership.role_technician
+        and (
+            wo.is_team_job
+            or wo.assigned_tech_id == request.user.pk
+            or wo.assigned_tech_id is None
+        )
     )
 
 
@@ -614,7 +628,7 @@ def dashboard(request):
         dashboard_work_orders = (
             wo_base
             .select_related('piano', 'piano__venue')
-            .order_by('-created_at')[:10]
+            .order_by('-created_at')[:DASHBOARD_WORK_ORDERS_LIMIT]
         )
     else:
         # Tech-only: show their own assigned work plus shared team jobs.
@@ -650,7 +664,7 @@ def dashboard(request):
             .select_related('piano', 'piano__venue')
             .filter(status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS])
             .order_by('due_date', '-created_at')
-        )
+        )[:DASHBOARD_WORK_ORDERS_LIMIT]
 
     return render(request, 'maintenance/dashboard.html', {
         'active_nav': 'dashboard',
@@ -792,8 +806,9 @@ def photo_file(request, photo_pk):
         company__memberships__is_active=True,
     )
 
-    storage = photo.image.storage
-    storage_name = _resolve_photo_storage_name(storage, photo.image.name, photo.uploaded_at)
+    image = photo.thumbnail if request.GET.get('variant') == 'thumbnail' and photo.thumbnail else photo.image
+    storage = image.storage
+    storage_name = _resolve_photo_storage_name(storage, image.name, photo.uploaded_at)
     if isinstance(storage, FileSystemStorage):
         content_type, _ = mimetypes.guess_type(storage_name)
         return FileResponse(storage.open(storage_name, "rb"), content_type=content_type or "application/octet-stream")
@@ -804,6 +819,19 @@ def photo_file(request, photo_pk):
 def _resolve_photo_storage_name(storage, stored_name, uploaded_at=None):
     if not stored_name:
         return stored_name
+
+    path_parts = stored_name.strip('/').split('/')
+    if len(path_parts) >= 5:
+        year, month, day = path_parts[-4:-1]
+        if (
+            len(year) == 2
+            and len(month) == 2
+            and len(day) == 2
+            and year.isdigit()
+            and month.isdigit()
+            and day.isdigit()
+        ):
+            return stored_name
 
     try:
         if storage.exists(stored_name):
@@ -1262,7 +1290,6 @@ def workorder_list(request):
         'completed_to': filters['completed_to'],
         'organizations': Organization.objects.filter(company=company),
         'venues': Venue.objects.filter(company=company),
-        'technicians': company_users(company, technicians_only=True).order_by('first_name', 'last_name'),
         'status_choices': WorkOrder.Status.choices,
         'priority_choices': WorkOrder.Priority.choices,
         'type_choices': TaskType.choices,
@@ -1283,13 +1310,21 @@ def workorder_detail(request, pk):
         pk=pk,
     )
     user = request.user
-    logs = wo.logs.select_related('technician').order_by('-logged_at')
-    technicians = company_users(company, technicians_only=True).order_by('first_name', 'last_name')
-
+    logs = (
+        wo.logs
+        .select_related('technician')
+        .prefetch_related(
+            Prefetch(
+                'parts_used',
+                queryset=PartUsed.objects.select_related('part'),
+            )
+        )
+        .order_by('-logged_at')
+    )
     is_assigned_to_me = wo.assigned_tech_id == user.pk
     tech_mode = _is_tech_mode(request)
-    can_edit_wo = _can_update_workorder(user, wo, tech_mode)
-    can_work_wo = _can_work_on_workorder(user, wo, tech_mode)
+    can_edit_wo = _can_update_workorder(request, wo, tech_mode)
+    can_work_wo = _can_work_on_workorder(request, wo, tech_mode)
     return_url = _safe_return_url(request, '/work-orders/')
 
     today = date.today()
@@ -1298,7 +1333,6 @@ def workorder_detail(request, pk):
         'active_nav': 'workorders',
         'wo': wo,
         'logs': logs,
-        'technicians': technicians,
         'today': today,
         'service_status': _service_status_context(wo, today),
         'can_edit_wo': can_edit_wo,
@@ -1356,7 +1390,7 @@ def workorder_edit(request, pk):
         WorkOrder.objects.filter(company=company).select_related('piano', 'assigned_tech'),
         pk=pk,
     )
-    if not _can_update_workorder(request.user, wo, _is_tech_mode(request)):
+    if not _can_update_workorder(request, wo, _is_tech_mode(request)):
         messages.error(request, 'You can only edit work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, _safe_return_url(request, '/work-orders/')))
 
@@ -1439,11 +1473,17 @@ def workorder_assign(request, pk):
         if wo.assigned_tech_id and wo.assigned_tech_id != previous_assigned_tech_id:
             notify_work_order_assigned(wo, request)
 
-    technicians = company_users(company, technicians_only=True).order_by('first_name', 'last_name')
+    assignment_editing = request.method == 'GET'
+    technicians = (
+        company_users(company, technicians_only=True).order_by('first_name', 'last_name')
+        if assignment_editing
+        else ()
+    )
     return render(request, 'maintenance/partials/workorder_assign_cell.html', {
         'wo': wo,
         'technicians': technicians,
         'tech_mode': tech_mode,
+        'assignment_editing': assignment_editing,
     })
 
 
@@ -1456,7 +1496,7 @@ def workorder_complete(request, pk):
     )
     user = request.user
     return_url = _safe_return_url(request, f'/work-orders/{wo.pk}/')
-    if not _can_work_on_workorder(user, wo, _is_tech_mode(request)):
+    if not _can_work_on_workorder(request, wo, _is_tech_mode(request)):
         messages.error(request, 'You can only complete work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 
@@ -1484,7 +1524,13 @@ def workorder_complete(request, pk):
             # Handle photo uploads (validate type and size)
             for f in request.FILES.getlist('photos'):
                 if _validate_upload(f) is None:
-                    Photo.objects.create(company=company, piano=wo.piano, work_order=wo, image=f, caption='')
+                    _create_photo_with_thumbnail(
+                        company=company,
+                        piano=wo.piano,
+                        work_order=wo,
+                        image=f,
+                        caption='',
+                    )
 
             # Handle parts used
             part_ids = request.POST.getlist('part_id')
@@ -1618,7 +1664,7 @@ def workorder_reopen(request, pk):
 
     if request.method != 'POST':
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
-    if not _can_work_on_workorder(request.user, wo, _is_tech_mode(request)):
+    if not _can_work_on_workorder(request, wo, _is_tech_mode(request)):
         messages.error(request, 'You can only reopen work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
     if wo.status != WorkOrder.Status.COMPLETE:
@@ -1643,7 +1689,7 @@ def workorder_log_work(request, pk):
     )
     user = request.user
     return_url = _safe_return_url(request, f'/work-orders/{wo.pk}/')
-    if not _can_work_on_workorder(user, wo, _is_tech_mode(request)):
+    if not _can_work_on_workorder(request, wo, _is_tech_mode(request)):
         messages.error(request, 'You can only log work on work orders assigned to you.')
         return HttpResponseRedirect(_workorder_detail_url(wo, return_url))
 
@@ -1669,7 +1715,13 @@ def workorder_log_work(request, pk):
             # Handle photo uploads
             for f in request.FILES.getlist('photos'):
                 if _validate_upload(f) is None:
-                    Photo.objects.create(company=company, piano=wo.piano, work_order=wo, image=f, caption='')
+                    _create_photo_with_thumbnail(
+                        company=company,
+                        piano=wo.piano,
+                        work_order=wo,
+                        image=f,
+                        caption='',
+                    )
 
             # Handle parts used
             part_ids = request.POST.getlist('part_id')
@@ -1757,6 +1809,13 @@ def _validate_upload(f):
     return None
 
 
+def _create_photo_with_thumbnail(*, image, **photo_fields):
+    thumbnail = build_photo_thumbnail(image)
+    if thumbnail is not None:
+        photo_fields['thumbnail'] = thumbnail
+    return Photo.objects.create(image=image, **photo_fields)
+
+
 @login_required
 def piano_photo_upload(request, pk):
     piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=pk)
@@ -1770,7 +1829,13 @@ def piano_photo_upload(request, pk):
                 messages.error(request, err)
                 continue
             is_profile = not piano.photos.exists() and uploaded == 0
-            Photo.objects.create(company=piano.company, piano=piano, image=f, caption=caption, is_profile_photo=is_profile)
+            _create_photo_with_thumbnail(
+                company=piano.company,
+                piano=piano,
+                image=f,
+                caption=caption,
+                is_profile_photo=is_profile,
+            )
             uploaded += 1
         if uploaded:
             log_audit_event(
@@ -1807,8 +1872,11 @@ def piano_photo_delete(request, pk, photo_pk):
     if request.method == 'POST':
         was_profile = photo.is_profile_photo
         photo_name = photo.image.name if photo.image else ''
+        thumbnail_name = photo.thumbnail.name if photo.thumbnail else ''
         if photo.image:
             photo.image.delete(save=False)
+        if photo.thumbnail:
+            photo.thumbnail.delete(save=False)
         photo.delete()
 
         if was_profile:
@@ -1823,7 +1891,11 @@ def piano_photo_delete(request, pk, photo_pk):
             event_type='piano.photo_deleted',
             target=piano,
             message='Deleted a piano photo.',
-            metadata={'was_profile_photo': was_profile, 'image_name': photo_name},
+            metadata={
+                'was_profile_photo': was_profile,
+                'image_name': photo_name,
+                'thumbnail_name': thumbnail_name,
+            },
         )
         messages.success(request, 'Photo deleted.')
     return redirect('piano_detail', pk=piano.pk)
@@ -1861,6 +1933,11 @@ def schedule(request):
     else:
         due_filter = ''
 
+    page_obj = Paginator(
+        active_wos.order_by('due_date', '-created_at'),
+        SCHEDULE_WORK_ORDERS_PER_PAGE,
+    ).get_page(request.GET.get('page'))
+
     work_orders_by_type = {
         task_type: []
         for task_type in (
@@ -1870,7 +1947,7 @@ def schedule(request):
             TaskType.CLEANING,
         )
     }
-    for work_order in active_wos.order_by('due_date', '-created_at'):
+    for work_order in page_obj.object_list:
         if work_order.task_type in work_orders_by_type:
             work_orders_by_type[work_order.task_type].append(work_order)
 
@@ -1946,6 +2023,8 @@ def schedule(request):
         'organizations': Organization.objects.filter(company=company),
         'venues': Venue.objects.filter(company=company),
         'schedule_return_url': schedule_return_url,
+        'page_obj': page_obj,
+        'pagination_query': _pagination_query(request),
         'today': today,
     }
     if request.headers.get('HX-Request') == 'true':
@@ -1972,9 +2051,13 @@ def request_list(request):
     if status_filter:
         qs = qs.filter(status=status_filter)
 
+    page_obj = Paginator(qs, REQUESTS_PER_PAGE).get_page(request.GET.get('page'))
+
     return render(request, 'maintenance/request_list.html', {
         'active_nav': 'requests',
-        'requests': qs,
+        'requests': page_obj.object_list,
+        'page_obj': page_obj,
+        'pagination_query': _pagination_query(request),
         'status_filter': status_filter,
         'status_choices': MaintenanceRequest.RequestStatus.choices,
     })

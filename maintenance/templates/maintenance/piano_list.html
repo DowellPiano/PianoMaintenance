@@ -61,7 +61,9 @@
   <div class="piano-card">
     <div class="piano-card-photo">
       {% if piano.profile_photo %}
-        <img src="{% url 'photo_file' piano.profile_photo.pk %}" alt="{{ piano.name }}">
+        <img src="{% url 'photo_file' piano.profile_photo.pk %}?variant=thumbnail"
+             alt="{{ piano.name }}" loading="lazy" decoding="async"
+             width="640" height="480">
       {% else %}
         🎹
       {% endif %}

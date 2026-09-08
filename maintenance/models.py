@@ -213,6 +213,12 @@ class AuditLog(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["company", "target_model", "target_id", "-created_at"],
+                name="audit_target_recent_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.company} · {self.event_type}"
@@ -759,6 +765,20 @@ class WorkOrder(TenantValidatedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["company", "-created_at"],
+                name="wo_company_recent_idx",
+            ),
+            models.Index(
+                fields=["company", "due_date", "-created_at"],
+                name="wo_active_due_idx",
+            ),
+            models.Index(
+                fields=["piano", "task_type", "status", "-completed_date"],
+                name="wo_service_recent_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"WO-{self.pk} · {self.order_type} · {self.status}"
@@ -1070,6 +1090,12 @@ class MaintenanceRequest(TenantValidatedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["company", "-created_at"],
+                name="request_company_recent_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"Request #{self.pk} · {self.status}"
@@ -1090,6 +1116,7 @@ class Photo(models.Model):
     piano      = models.ForeignKey(Piano,     null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
     work_order = models.ForeignKey(WorkOrder, null=True, blank=True, on_delete=models.CASCADE, related_name='photos')
     image      = models.ImageField(upload_to='photos/%y/%m/%d/', validators=[validate_image_file])
+    thumbnail  = models.ImageField(upload_to='photos/thumbnails/%y/%m/%d/', blank=True)
     caption    = models.CharField(max_length=300, blank=True)
     is_profile_photo = models.BooleanField(default=False)
     uploaded_at = models.DateTimeField(auto_now_add=True)

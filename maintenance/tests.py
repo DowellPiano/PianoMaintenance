@@ -2,7 +2,7 @@ import csv
 import os
 import tempfile
 from datetime import date, datetime, timedelta
-from io import StringIO
+from io import BytesIO, StringIO
 from urllib.parse import urlencode
 from unittest.mock import patch
 
@@ -18,6 +18,7 @@ from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from .models import (
     AuditLog,
@@ -81,12 +82,17 @@ class StubPhotoStorage(Storage):
 
 
 class PhotoStorageNameResolutionTests(TestCase):
-    def test_uses_stored_name_when_it_exists(self):
+    def test_uses_canonical_dated_name_without_storage_request(self):
         storage = StubPhotoStorage(['photos/26/06/12/photo.jpg'])
 
-        resolved_name = _resolve_photo_storage_name(storage, 'photos/26/06/12/photo.jpg')
+        with patch.object(storage, 'exists', wraps=storage.exists) as exists:
+            resolved_name = _resolve_photo_storage_name(
+                storage,
+                'photos/26/06/12/photo.jpg',
+            )
 
         self.assertEqual(resolved_name, 'photos/26/06/12/photo.jpg')
+        exists.assert_not_called()
 
     def test_resolves_single_dated_photo_when_stored_name_is_missing_folders(self):
         storage = StubPhotoStorage(['photos/26/06/12/photo.jpg'])
@@ -415,7 +421,107 @@ class PerformanceRegressionTests(CompanyScopedTestCase):
             and 'FROM "maintenance_workorder"' in query['sql']
         ]
         self.assertEqual(len(work_order_selects), 2)
+        self.assertLessEqual(len(queries), 7)
+
+    def test_work_order_detail_prefetches_parts_used(self):
+        piano = self.create_piano(name='Performance Detail Piano')
+        work_order = WorkOrder.objects.create(
+            company=self.company,
+            piano=piano,
+            assigned_tech=self.admin,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+        parts = Part.objects.bulk_create([
+            Part(company=self.company, name='Performance Part A'),
+            Part(company=self.company, name='Performance Part B'),
+        ])
+        logs = MaintenanceLog.objects.bulk_create([
+            MaintenanceLog(
+                company=self.company,
+                work_order=work_order,
+                technician=self.admin,
+                piano=piano,
+                hours_worked=1,
+                work_performed=f'Performance service {index}',
+            )
+            for index in range(20)
+        ])
+        PartUsed.objects.bulk_create([
+            PartUsed(
+                company=self.company,
+                log=log,
+                part=part,
+                quantity_used=1,
+            )
+            for log in logs
+            for part in parts
+        ])
+
+        response, queries = self.captured_get(
+            reverse('workorder_detail', args=[work_order.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        part_usage_selects = [
+            query['sql'] for query in queries
+            if query['sql'].lstrip().upper().startswith('SELECT')
+            and 'FROM "maintenance_partused"' in query['sql']
+        ]
+        self.assertEqual(len(part_usage_selects), 1, part_usage_selects)
+        self.assertIn('JOIN "maintenance_part"', part_usage_selects[0])
+        membership_selects = [
+            query['sql'] for query in queries
+            if query['sql'].lstrip().startswith(
+                'SELECT "maintenance_companymembership".'
+            )
+        ]
+        self.assertEqual(len(membership_selects), 1, membership_selects)
+        self.assertLessEqual(len(queries), 10)
+
+    def test_technician_dashboard_limits_work_order_rows(self):
+        WorkOrder.objects.bulk_create([
+            WorkOrder(
+                company=self.company,
+                assigned_tech=self.admin,
+                order_type=WorkOrder.OrderType.REQUEST,
+                status=WorkOrder.Status.OPEN,
+                priority=WorkOrder.Priority.NORMAL,
+                description=f'Performance dashboard work order {index:02}',
+            )
+            for index in range(15)
+        ])
+        session = self.client.session
+        session['tech_mode'] = True
+        session.save()
+
+        response, queries = self.captured_get(reverse('dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context['is_admin'])
+        self.assertEqual(len(response.context['dashboard_work_orders']), 10)
         self.assertLessEqual(len(queries), 8)
+
+    def test_request_list_is_paginated_without_query_growth(self):
+        MaintenanceRequest.objects.bulk_create([
+            MaintenanceRequest(
+                company=self.company,
+                issue_description=f'Performance request {index:02}',
+            )
+            for index in range(55)
+        ])
+
+        response, queries = self.captured_get(reverse('request_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['page_obj'].paginator.count, 55)
+        self.assertEqual(len(response.context['requests']), 50)
+        self.assertLessEqual(len(queries), 5)
+
+        second_page = self.client.get(reverse('request_list'), {'page': 2})
+        self.assertEqual(len(second_page.context['requests']), 5)
 
     def test_dashboard_combines_work_order_counts(self):
         WorkOrder.objects.create(
@@ -436,7 +542,7 @@ class PerformanceRegressionTests(CompanyScopedTestCase):
         self.assertEqual(len(work_order_selects), 2)
         self.assertLessEqual(len(queries), 12)
 
-    def test_schedule_fetches_work_orders_once(self):
+    def test_schedule_is_paginated_without_query_growth(self):
         task_types = ['Tuning', 'Regulation', 'Voicing', 'Cleaning']
         WorkOrder.objects.bulk_create([
             WorkOrder(
@@ -446,19 +552,36 @@ class PerformanceRegressionTests(CompanyScopedTestCase):
                 status=WorkOrder.Status.OPEN,
                 priority=WorkOrder.Priority.NORMAL,
             )
-            for index in range(40)
+            for index in range(120)
         ])
 
         response, queries = self.captured_get(reverse('schedule'))
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['page_obj'].paginator.count, 120)
+        self.assertEqual(
+            sum(
+                len(column['work_orders'])
+                for column in response.context['schedule_columns']
+            ),
+            100,
+        )
         work_order_selects = [
             query['sql'] for query in queries
             if query['sql'].lstrip().upper().startswith('SELECT')
             and 'FROM "maintenance_workorder"' in query['sql']
         ]
-        self.assertEqual(len(work_order_selects), 1)
-        self.assertLessEqual(len(queries), 6)
+        self.assertEqual(len(work_order_selects), 2)
+        self.assertLessEqual(len(queries), 7)
+
+        second_page = self.client.get(reverse('schedule'), {'page': 2})
+        self.assertEqual(
+            sum(
+                len(column['work_orders'])
+                for column in second_page.context['schedule_columns']
+            ),
+            20,
+        )
 
     def test_platform_company_counts_use_correlated_subqueries(self):
         self.admin.is_staff = True
@@ -1126,11 +1249,74 @@ class PhotoDeletionTests(CompanyScopedTestCase):
             is_profile_photo=is_profile_photo,
         )
 
+    def _valid_image_upload(self):
+        image_bytes = BytesIO()
+        Image.new('RGB', (1200, 800), color=(24, 74, 122)).save(
+            image_bytes,
+            format='JPEG',
+        )
+        return SimpleUploadedFile(
+            'large-photo.jpg',
+            image_bytes.getvalue(),
+            content_type='image/jpeg',
+        )
+
+    def test_piano_upload_creates_card_thumbnail(self):
+        user = self.create_user('thumbnailtech')
+        self.login_user(user)
+
+        response = self.client.post(
+            reverse('piano_photo_upload', args=[self.piano.pk]),
+            {'photos': self._valid_image_upload()},
+        )
+
+        self.assertRedirects(response, reverse('piano_detail', args=[self.piano.pk]))
+        photo = Photo.objects.get(piano=self.piano)
+        self.assertTrue(photo.thumbnail)
+        with photo.thumbnail.open('rb') as thumbnail_file:
+            with Image.open(thumbnail_file) as thumbnail:
+                self.assertLessEqual(thumbnail.width, 640)
+                self.assertLessEqual(thumbnail.height, 480)
+
+    def test_thumbnail_backfill_processes_existing_photos(self):
+        photo = Photo.objects.create(
+            company=self.company,
+            piano=self.piano,
+            image=self._valid_image_upload(),
+        )
+        self.assertFalse(photo.thumbnail)
+
+        output = StringIO()
+        call_command('backfill_photo_thumbnails', stdout=output)
+
+        photo.refresh_from_db()
+        self.assertTrue(photo.thumbnail)
+        self.assertIn('Created: 1 | Skipped: 0', output.getvalue())
+
+    def test_piano_list_uses_lazy_thumbnail_endpoint(self):
+        user = self.create_user('thumbnailviewer')
+        photo = self._create_photo(is_profile_photo=True)
+        self.login_user(user)
+
+        response = self.client.get(reverse('piano_list'))
+
+        self.assertContains(
+            response,
+            f'{reverse("photo_file", args=[photo.pk])}?variant=thumbnail',
+        )
+        self.assertContains(response, 'loading="lazy"')
+        self.assertContains(response, 'decoding="async"')
+
     def test_technician_can_delete_piano_photo(self):
         user = self.create_user('phototech')
-        photo = self._create_photo()
-        image_path = photo.image.path
         self.login_user(user)
+        self.client.post(
+            reverse('piano_photo_upload', args=[self.piano.pk]),
+            {'photos': self._valid_image_upload()},
+        )
+        photo = Photo.objects.get(piano=self.piano)
+        image_path = photo.image.path
+        thumbnail_path = photo.thumbnail.path
 
         response = self.client.post(reverse(
             'piano_photo_delete',
@@ -1140,6 +1326,24 @@ class PhotoDeletionTests(CompanyScopedTestCase):
         self.assertRedirects(response, reverse('piano_detail', args=[self.piano.pk]))
         self.assertFalse(Photo.objects.filter(pk=photo.pk).exists())
         self.assertFalse(os.path.exists(image_path))
+        self.assertFalse(os.path.exists(thumbnail_path))
+
+    def test_company_member_can_view_generated_thumbnail(self):
+        user = self.create_user('generatedthumbnailviewer')
+        self.login_user(user)
+        self.client.post(
+            reverse('piano_photo_upload', args=[self.piano.pk]),
+            {'photos': self._valid_image_upload()},
+        )
+        photo = Photo.objects.get(piano=self.piano)
+
+        response = self.client.get(
+            reverse('photo_file', args=[photo.pk]),
+            {'variant': 'thumbnail'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'image/jpeg')
 
     def test_admin_can_delete_piano_photo(self):
         user = self.create_user('photoadmin', role_admin=True, role_technician=False)
@@ -1666,6 +1870,40 @@ class ScheduledWorkOrderGenerationTests(CompanyScopedTestCase):
 
         self.assertGreaterEqual(result.created, 1)
         self.assertFalse(WorkOrder.objects.filter(piano=self.piano).exists())
+
+    def test_generation_query_count_does_not_grow_per_piano_or_schedule(self):
+        pianos = Piano.objects.bulk_create([
+            Piano(
+                company=self.company,
+                name=f'Generator Performance Piano {index:02}',
+                make='Yamaha',
+                piano_type=Piano.PianoType.UPRIGHT,
+                next_tuning_due=self.today,
+            )
+            for index in range(25)
+        ])
+        MaintenanceSchedule.objects.bulk_create([
+            MaintenanceSchedule(
+                company=self.company,
+                piano=piano,
+                task_name='Performance inspection',
+                task_type='Inspection',
+                interval_days=365,
+                warning_days_before=14,
+                last_service_date=self.today - timedelta(days=360),
+            )
+            for piano in pianos
+        ])
+
+        with CaptureQueriesContext(connection) as queries:
+            result = generate_scheduled_work_orders(
+                today=self.today,
+                dry_run=True,
+                company=self.company,
+            )
+
+        self.assertGreater(result.created, 0)
+        self.assertLessEqual(len(queries), 5, queries.captured_queries)
 
     def test_management_command_uses_generation_service(self):
         out = StringIO()
@@ -2360,8 +2598,8 @@ class WorkOrderListAssignmentTests(CompanyScopedTestCase):
         )
         self.login_user(self.admin)
 
-    def test_workorder_list_assignment_dropdown_includes_company_technicians(self):
-        WorkOrder.objects.create(
+    def test_workorder_list_loads_assignment_dropdown_on_demand(self):
+        work_order = WorkOrder.objects.create(
             company=self.company,
             piano=self.create_piano(name='Dropdown Piano'),
             order_type=WorkOrder.OrderType.REQUEST,
@@ -2371,6 +2609,14 @@ class WorkOrderListAssignmentTests(CompanyScopedTestCase):
         )
 
         response = self.client.get(reverse('workorder_list'))
+
+        self.assertNotContains(response, '<select name="assigned_tech"', html=False)
+        self.assertContains(response, 'Change')
+
+        response = self.client.get(
+            reverse('workorder_assign', args=[work_order.pk]),
+            HTTP_HX_REQUEST='true',
+        )
 
         self.assertContains(response, '<select name="assigned_tech"', html=False)
         self.assertContains(response, f'value="{self.admin.pk}"')
