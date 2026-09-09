@@ -86,7 +86,7 @@ projects:
             autoDeployTrigger: checksPass
 
           - type: cron
-            name: Overtone-Generate-Work-Orders
+            name: Overtone-Generate-Work-Orders-Oregon
             runtime: python
             repo: https://github.com/DowellPiano/PianoMaintenance
             branch: SaaS
@@ -148,7 +148,7 @@ projects:
                 sync: false
               - key: SECRET_KEY
                 sync: false
-            region: ohio
+            region: oregon
             buildCommand: >-
               python -m pip install --upgrade pip==26.1.2 &&
               python -m pip install --require-hashes -r requirements.txt &&
