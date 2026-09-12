@@ -9,6 +9,7 @@
   <link rel="apple-touch-icon" href="{% static 'img/overtone-icon.png' %}">
   <link rel="stylesheet" href="{% static 'css/base.css' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/qr-scanner.css' %}">
   {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -123,6 +124,7 @@
           <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>
         </div>
         <div class="topbar-actions">
+          <button type="button" id="scan-code" class="btn btn-sm btn-secondary" aria-haspopup="dialog">Scan Code</button>
           {% if active_company %}
           <span class="active-company-pill">{{ active_company.name }}</span>
           {% endif %}
@@ -143,10 +145,12 @@
   </div>
 
   <div id="modal-container"></div>
+  {% include "partials/qr_scanner.html" %}
 
   <script src="{% static 'js/htmx.min.js' %}"></script>
   <script>document.body.addEventListener('htmx:configRequest', function(e){ e.detail.headers['X-CSRFToken'] = '{{ csrf_token }}'; });</script>
   <script src="{% static 'js/form-submit-lock.js' %}"></script>
+  <script src="{% static 'js/qr-scanner.js' %}" defer></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>
