@@ -2018,6 +2018,57 @@ class ScheduleViewTests(CompanyScopedTestCase):
         self.assertContains(response, f'WO-{tuning.pk}')
         self.assertContains(response, 'Studio B')
 
+    def test_schedule_counts_are_total_and_paging_stays_within_categories(self):
+        for index in range(26):
+            self._work_order('Tuning')
+        for index in range(3):
+            self._work_order('Regulation')
+
+        first_page = self.client.get(reverse('schedule'))
+        first_columns = {
+            column['short_label']: column
+            for column in first_page.context['schedule_columns']
+        }
+
+        self.assertEqual(first_columns['Tuning']['total_count'], 26)
+        self.assertEqual(len(first_columns['Tuning']['work_orders']), 25)
+        self.assertEqual(first_columns['Regulation']['total_count'], 3)
+        self.assertEqual(len(first_columns['Regulation']['work_orders']), 3)
+        self.assertEqual(first_page.context['page_obj'].paginator.num_pages, 2)
+
+        second_page = self.client.get(reverse('schedule'), {'page': 2})
+        second_columns = {
+            column['short_label']: column
+            for column in second_page.context['schedule_columns']
+        }
+        self.assertEqual(len(second_columns['Tuning']['work_orders']), 1)
+        self.assertEqual(len(second_columns['Regulation']['work_orders']), 0)
+
+    def test_schedule_keeps_due_tuning_visible_when_other_categories_fill_page(self):
+        due_piano = Piano.objects.create(
+            company=self.company,
+            name='Kawai Grand',
+            make='Kawai',
+            piano_type=Piano.PianoType.GRAND,
+            room='1005',
+            next_tuning_due=date.today() - timedelta(days=1),
+        )
+        WorkOrder.objects.create(
+            company=self.company,
+            piano=due_piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Tuning',
+            status=WorkOrder.Status.OPEN,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+        for index in range(100):
+            self._work_order('Regulation')
+
+        response = self.client.get(reverse('schedule'))
+
+        self.assertContains(response, 'Kawai Grand')
+        self.assertContains(response, '1005')
+
     def test_schedule_due_filter_applies_before_category_grouping(self):
         today = date.today()
         overdue_tuning = self._work_order('Tuning', today - timedelta(days=1))

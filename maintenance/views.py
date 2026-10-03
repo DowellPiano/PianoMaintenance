@@ -17,10 +17,10 @@ from django.core.files.storage import FileSystemStorage
 from django.core.paginator import Paginator
 from django.db import connection, transaction
 from django.db.models import (
-    Q, Count, Sum, Max, DecimalField, IntegerField, OuterRef, Prefetch,
-    Subquery, Value,
+    Q, Count, Sum, Max, DecimalField, IntegerField, OuterRef, Prefetch, Exists,
+    Subquery, Value, F, Window,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, RowNumber
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
@@ -1933,23 +1933,64 @@ def schedule(request):
     else:
         due_filter = ''
 
-    page_obj = Paginator(
-        active_wos.order_by('due_date', '-created_at'),
-        SCHEDULE_WORK_ORDERS_PER_PAGE,
-    ).get_page(request.GET.get('page'))
+    task_types = (
+        TaskType.TUNING,
+        TaskType.REGULATION,
+        TaskType.VOICING,
+        TaskType.CLEANING,
+    )
+    scheduled_wos = active_wos.filter(task_type__in=task_types)
+    task_counts = dict(
+        scheduled_wos
+        .order_by()
+        .values('task_type')
+        .annotate(total=Count('pk'))
+        .values_list('task_type', 'total')
+    )
+    total_scheduled = sum(task_counts.values())
+    per_column_page_size = max(1, SCHEDULE_WORK_ORDERS_PER_PAGE // len(task_types))
+    max_category_pages = max(
+        [
+            (count + per_column_page_size - 1) // per_column_page_size
+            for count in task_counts.values()
+        ]
+        or [1]
+    )
 
-    work_orders_by_type = {
-        task_type: []
-        for task_type in (
-            TaskType.TUNING,
-            TaskType.REGULATION,
-            TaskType.VOICING,
-            TaskType.CLEANING,
+    # Keep the existing page context contract, but make the page count reflect
+    # the largest category rather than the mixed work-order stream. Each page
+    # can show up to 25 cards per category (100 total across the board).
+    page_obj = Paginator(range(total_scheduled), SCHEDULE_WORK_ORDERS_PER_PAGE)
+    page_obj.num_pages = max_category_pages
+    page_obj = page_obj.get_page(request.GET.get('page'))
+    page_offset = (page_obj.number - 1) * per_column_page_size
+
+    if total_scheduled:
+        page_wos = (
+            scheduled_wos
+            .annotate(
+                _schedule_row=Window(
+                    expression=RowNumber(),
+                    partition_by=[F('task_type')],
+                    order_by=[
+                        F('due_date').asc(nulls_last=True),
+                        F('created_at').desc(),
+                        F('pk').desc(),
+                    ],
+                )
+            )
+            .filter(
+                _schedule_row__gt=page_offset,
+                _schedule_row__lte=page_offset + per_column_page_size,
+            )
+            .order_by('task_type', 'due_date', '-created_at', '-pk')
         )
-    }
-    for work_order in page_obj.object_list:
-        if work_order.task_type in work_orders_by_type:
-            work_orders_by_type[work_order.task_type].append(work_order)
+    else:
+        page_wos = scheduled_wos.none()
+
+    work_orders_by_type = {task_type: [] for task_type in task_types}
+    for work_order in page_wos:
+        work_orders_by_type[work_order.task_type].append(work_order)
 
     schedule_columns = [
         {
@@ -1957,24 +1998,28 @@ def schedule(request):
             'short_label': 'Tuning',
             'css_class': 'col-tuning',
             'work_orders': work_orders_by_type[TaskType.TUNING],
+            'total_count': task_counts.get(TaskType.TUNING, 0),
         },
         {
             'label': 'Pianos Needing Regulation',
             'short_label': 'Regulation',
             'css_class': 'col-regulation',
             'work_orders': work_orders_by_type[TaskType.REGULATION],
+            'total_count': task_counts.get(TaskType.REGULATION, 0),
         },
         {
             'label': 'Pianos Needing Voicing',
             'short_label': 'Voicing',
             'css_class': 'col-voicing',
             'work_orders': work_orders_by_type[TaskType.VOICING],
+            'total_count': task_counts.get(TaskType.VOICING, 0),
         },
         {
             'label': 'Pianos Needing Cleaning',
             'short_label': 'Cleaning',
             'css_class': 'col-cleaning',
             'work_orders': work_orders_by_type[TaskType.CLEANING],
+            'total_count': task_counts.get(TaskType.CLEANING, 0),
         },
     ]
     due_filter_choices = [

@@ -33,7 +33,7 @@
               class="schedule-mobile-tab {% if forloop.first %}active{% endif %}"
               data-schedule-tab="{{ column.css_class }}"
               aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">
-        {{ column.short_label }} <span>{{ column.work_orders|length }}</span>
+        {{ column.short_label }} <span>{{ column.total_count }}</span>
       </button>
     {% endfor %}
   </div>
@@ -42,7 +42,7 @@
     {% for column in schedule_columns %}
     <div class="kanban-col {{ column.css_class }} {% if forloop.first %}mobile-active{% endif %}" data-schedule-column="{{ column.css_class }}">
       <div class="kanban-col-header">
-        {{ column.label }} <span class="count">{{ column.work_orders|length }}</span>
+        {{ column.label }} <span class="count">{{ column.total_count }}</span>
       </div>
       <div class="kanban-col-body">
         {% for wo in column.work_orders %}
