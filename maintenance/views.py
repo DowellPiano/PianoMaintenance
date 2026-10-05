@@ -990,6 +990,66 @@ def piano_deactivate(request, pk):
     })
 
 
+def _delete_stored_photo_files(photo_files):
+    """Remove photo objects after the piano deletion transaction commits."""
+    for storage, name in photo_files:
+        if not name:
+            continue
+        try:
+            storage.delete(name)
+        except Exception:
+            # The database deletion has already succeeded. A missing or
+            # unavailable object store should not turn this into a false error.
+            pass
+
+
+@admin_required
+def piano_delete(request, pk):
+    """Permanently delete a paused piano and its piano-owned records."""
+    company = ensure_company_access(request)
+    piano = get_object_or_404(Piano, company=company, pk=pk, is_active=False)
+
+    if request.method == 'POST':
+        with transaction.atomic():
+            # Lock and re-check the row so a piano reactivated between the
+            # confirmation page and this POST cannot be hard-deleted.
+            piano = get_object_or_404(
+                Piano.objects.select_for_update(),
+                company=company,
+                pk=pk,
+                is_active=False,
+            )
+            name = piano.name
+            photo_files = []
+            for photo in piano.photos.all():
+                for image_field in (photo.image, photo.thumbnail):
+                    if image_field and image_field.name:
+                        photo_files.append((image_field.storage, image_field.name))
+
+            log_audit_event(
+                company=company,
+                actor=request.user,
+                event_type='piano.deleted',
+                target=piano,
+                message=f'Permanently deleted piano {name}.',
+            )
+            piano.delete()
+            transaction.on_commit(
+                lambda files=photo_files: _delete_stored_photo_files(files)
+            )
+
+        messages.success(request, f'Piano "{name}" was permanently deleted.')
+        return redirect('piano_list')
+
+    return render(request, 'maintenance/piano_confirm_delete.html', {
+        'active_nav': 'pianos',
+        'piano': piano,
+        'work_order_count': piano.work_orders.count(),
+        'schedule_count': piano.schedules.count(),
+        'photo_count': piano.photos.count(),
+    })
+
+
 @admin_required
 def piano_reactivate(request, pk):
     piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=pk)

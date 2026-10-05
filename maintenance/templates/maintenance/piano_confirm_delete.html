@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Delete {{ piano.name }} — Overtone{% endblock %}
+{% block topbar_title %}Delete Piano{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1rem;">
+  <a href="{% url 'piano_detail' piano.pk %}" class="text-muted text-sm">&larr; Back to Piano</a>
+</div>
+
+<div class="card" style="max-width:560px;">
+  <div class="card-header"><h2>Delete Piano Permanently</h2></div>
+  <div class="card-body">
+    <p style="margin-bottom:1rem;">
+      Permanently delete <strong>{{ piano.name }}</strong>
+      ({{ piano.make }}{% if piano.model %} {{ piano.model }}{% endif %})?
+    </p>
+
+    <div style="background:#fee2e2; border:1px solid #fca5a5; border-radius:var(--radius-sm); padding:.75rem 1rem; margin-bottom:1rem;">
+      <strong style="color:#991b1b;">This cannot be undone.</strong>
+      <p style="margin-top:.25rem; color:#7f1d1d; font-size:.9rem;">
+        The piano, its tag associations, maintenance schedules, and attached photos will be removed from the database.
+        Historical work orders, work logs, condition readings, and maintenance requests will be kept for reporting,
+        with the piano link cleared and its name preserved.
+      </p>
+    </div>
+
+    <p class="text-sm text-muted" style="margin-bottom:1.25rem;">
+      Related records: {{ work_order_count }} work order{{ work_order_count|pluralize }},
+      {{ schedule_count }} schedule{{ schedule_count|pluralize }}, and
+      {{ photo_count }} photo{{ photo_count|pluralize }}.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <div style="display:flex; gap:.5rem; justify-content:flex-end;">
+        <a href="{% url 'piano_detail' piano.pk %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-danger">Delete Permanently</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

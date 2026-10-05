@@ -47,6 +47,7 @@
             {% csrf_token %}
             <button type="submit" class="btn btn-sm btn-primary">Resume Maintenance</button>
           </form>
+          <a href="{% url 'piano_delete' piano.pk %}" class="btn btn-sm btn-danger">Delete Permanently</a>
           {% endif %}
         {% endif %}
       </div>

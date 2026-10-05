@@ -7,6 +7,7 @@ EVENT_LABELS = {
     "piano.deactivated": "Deactivated",
     "piano.paused": "Paused",
     "piano.reactivated": "Resumed",
+    "piano.deleted": "Permanently deleted",
     "organization.created": "Created",
     "organization.updated": "Updated",
     "organization.deleted": "Deleted",

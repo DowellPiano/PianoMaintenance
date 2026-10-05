@@ -26,6 +26,7 @@ from .models import (
     CompanyInvitation,
     CompanyMembership,
     CompanySettings,
+    ConditionLevel,
     ConditionReading,
     JobRun,
     MaintenanceLog,
@@ -38,6 +39,7 @@ from .models import (
     Piano,
     ScheduleTemplate,
     Tag,
+    TaskType,
     Technician,
     Venue,
     WorkOrder,
@@ -1453,6 +1455,122 @@ class PhotoDeletionTests(CompanyScopedTestCase):
                     content_type='image/jpeg',
                 ),
             )
+
+
+class PianoHardDeleteTests(CompanyScopedTestCase):
+    def setUp(self):
+        super().setUp()
+        self.media_root = tempfile.TemporaryDirectory()
+        self.settings_override = override_settings(MEDIA_ROOT=self.media_root.name)
+        self.settings_override.enable()
+        self.admin = self.create_user(
+            'piano-delete-admin',
+            role_admin=True,
+            role_technician=True,
+        )
+        self.piano = self.create_piano(name='Piano To Delete')
+        self.piano.is_active = False
+        self.piano.save(update_fields=['is_active'])
+        self.login_user(self.admin)
+
+    def tearDown(self):
+        self.settings_override.disable()
+        self.media_root.cleanup()
+
+    def _create_related_records(self):
+        tag = Tag.objects.create(company=self.company, name='Delete Me Tag')
+        self.piano.tags.add(tag)
+        schedule = MaintenanceSchedule.objects.create(
+            company=self.company,
+            piano=self.piano,
+            task_name='Tune piano',
+            task_type=TaskType.TUNING,
+            interval_days=180,
+        )
+        work_order = WorkOrder.objects.create(
+            company=self.company,
+            piano=self.piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type=TaskType.TUNING,
+            status=WorkOrder.Status.COMPLETE,
+            priority=WorkOrder.Priority.NORMAL,
+        )
+        log = MaintenanceLog.objects.create(
+            company=self.company,
+            work_order=work_order,
+            technician=self.admin,
+            piano=self.piano,
+            hours_worked='1.00',
+            work_performed='Tuned the piano.',
+        )
+        reading = ConditionReading.objects.create(
+            company=self.company,
+            piano=self.piano,
+            log=log,
+            overall_rating=ConditionLevel.GOOD,
+        )
+        request = MaintenanceRequest.objects.create(
+            company=self.company,
+            piano=self.piano,
+            issue_description='A key is sticking.',
+        )
+        photo = Photo.objects.create(
+            company=self.company,
+            piano=self.piano,
+            image=SimpleUploadedFile(
+                'delete-me.jpg',
+                b'test image content',
+                content_type='image/jpeg',
+            ),
+        )
+        return tag, schedule, work_order, log, reading, request, photo
+
+    def test_paused_piano_can_be_deleted_and_related_rows_remain_consistent(self):
+        tag, schedule, work_order, log, reading, request, photo = self._create_related_records()
+        piano_pk = self.piano.pk
+        image_name = photo.image.name
+
+        with patch.object(photo.image.storage, 'delete', wraps=photo.image.storage.delete) as storage_delete:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(reverse('piano_delete', args=[piano_pk]))
+
+        self.assertRedirects(response, reverse('piano_list'))
+        self.assertFalse(Piano.objects.filter(pk=piano_pk).exists())
+        self.assertFalse(MaintenanceSchedule.objects.filter(pk=schedule.pk).exists())
+        self.assertFalse(Photo.objects.filter(pk=photo.pk).exists())
+        self.assertFalse(Piano.tags.through.objects.filter(piano_id=piano_pk).exists())
+        storage_delete.assert_called_once_with(image_name)
+
+        work_order.refresh_from_db()
+        log.refresh_from_db()
+        reading.refresh_from_db()
+        request.refresh_from_db()
+        self.assertIsNone(work_order.piano_id)
+        self.assertEqual(work_order.piano_display, 'Piano To Delete — Yamaha')
+        self.assertIsNone(log.piano_id)
+        self.assertEqual(log.piano_display, 'Piano To Delete — Yamaha')
+        self.assertIsNone(reading.piano_id)
+        self.assertEqual(reading.piano_display, 'Piano To Delete — Yamaha')
+        self.assertIsNone(request.piano_id)
+        self.assertEqual(request.piano_display, 'Piano To Delete — Yamaha')
+        self.assertTrue(Tag.objects.filter(pk=tag.pk).exists())
+
+        audit = AuditLog.objects.get(event_type='piano.deleted')
+        self.assertEqual(audit.target_id, str(piano_pk))
+
+    def test_delete_confirmation_is_available_only_for_paused_pianos(self):
+        response = self.client.get(reverse('piano_delete', args=[self.piano.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'maintenance/piano_confirm_delete.html')
+        self.assertContains(response, 'This cannot be undone.')
+
+        self.piano.is_active = True
+        self.piano.save(update_fields=['is_active'])
+        response = self.client.get(reverse('piano_delete', args=[self.piano.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Piano.objects.filter(pk=self.piano.pk).exists())
 
 
 class WorkOrderStateTests(CompanyScopedTestCase):
