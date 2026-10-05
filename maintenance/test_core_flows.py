@@ -64,6 +64,7 @@ class CompanyAdminWebTestCase(TestCase):
             'voicing_interval_unit': 'months',
             'cleaning_interval_value': '6',
             'cleaning_interval_unit': 'months',
+            'warning_days_before': '7',
             'notes': '',
         }
         data.update(overrides)
@@ -219,6 +220,9 @@ class CoreCrudFlowTests(CompanyAdminWebTestCase):
 
     def test_piano_create_edit_pause_and_resume_are_scoped_and_audited(self):
         venue = Venue.objects.create(company=self.company, name='Music School')
+
+        response = self.client.get(reverse('piano_create'))
+        self.assertContains(response, 'name="warning_days_before"')
 
         response = self.client.post(
             reverse('piano_create'),

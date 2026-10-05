@@ -3640,7 +3640,7 @@ class SaaSReadinessReportCommandTests(TestCase):
         self.assertIn('SaaS readiness report', output)
         self.assertIn('Warnings:', output)
         self.assertIn('not configured for production email delivery', output)
-        self.assertIn('SQLite', output)
+        self.assertIn(f'Database engine={connection.settings_dict["ENGINE"]}', output)
 
     @override_settings(
         DEBUG=False,
