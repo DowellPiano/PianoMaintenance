@@ -1743,6 +1743,21 @@ class ScheduledWorkOrderGenerationTests(CompanyScopedTestCase):
         )
         self.assertFalse(work_order.is_team_job)
 
+    def test_service_creates_built_in_work_order_inside_warning_window(self):
+        self.piano.next_tuning_due = self.today + timedelta(days=5)
+        self.piano.warning_days_before = 7
+        self.piano.save(update_fields=['next_tuning_due', 'warning_days_before'])
+
+        result = generate_scheduled_work_orders(today=self.today)
+
+        self.assertTrue(WorkOrder.objects.filter(
+            piano=self.piano,
+            task_type='Tuning',
+            due_date=self.today + timedelta(days=5),
+            status=WorkOrder.Status.OPEN,
+        ).exists())
+        self.assertGreaterEqual(result.created, 1)
+
     def test_service_recalculates_built_in_due_from_latest_completed_work(self):
         self.piano.tuning_interval_value = 30
         self.piano.tuning_interval_unit = 'days'

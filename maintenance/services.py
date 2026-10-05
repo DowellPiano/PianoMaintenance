@@ -235,7 +235,12 @@ def generate_scheduled_work_orders(today=None, dry_run=False, company=None):
                     setattr(piano, due_field, today)
                     piano_updates_by_field[due_field].append(piano)
 
-            if not due_date or due_date > today:
+            if not due_date:
+                result.skipped_not_due += 1
+                continue
+
+            warn_from = due_date - timedelta(days=piano.warning_days_before)
+            if today < warn_from:
                 result.skipped_not_due += 1
                 continue
 

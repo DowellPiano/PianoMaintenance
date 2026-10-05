@@ -369,6 +369,11 @@ class Piano(TenantValidatedModel):
     cleaning_interval_unit = models.CharField(
         max_length=10, choices=IntervalUnit.choices, default=IntervalUnit.MONTHS
     )
+    warning_days_before = models.IntegerField(
+        default=7,
+        validators=[MinValueValidator(0)],
+        help_text="Create preventive work orders this many days before they are due.",
+    )
 
     # -- Next due dates (computed from intervals + last service) --------------
     next_tuning_due = models.DateField(null=True, blank=True)

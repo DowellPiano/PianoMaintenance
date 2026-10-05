@@ -120,6 +120,7 @@ class PianoForm(forms.ModelForm):
             'regulation_interval_value', 'regulation_interval_unit',
             'voicing_interval_value', 'voicing_interval_unit',
             'cleaning_interval_value', 'cleaning_interval_unit',
+            'warning_days_before',
             'notes',
         ]
 
@@ -155,6 +156,9 @@ class BulkPianoIntervalForm(forms.Form):
         required=False,
     )
 
+    update_warning_days_before = forms.BooleanField(required=False)
+    warning_days_before = forms.IntegerField(min_value=0, required=False)
+
     interval_tasks = (
         'tuning',
         'regulation',
@@ -177,7 +181,7 @@ class BulkPianoIntervalForm(forms.Form):
         ]
         if not cleaned.get('piano_ids'):
             raise forms.ValidationError('Select at least one piano to update.')
-        if not selected_tasks:
+        if not selected_tasks and not cleaned.get('update_warning_days_before'):
             raise forms.ValidationError('Choose at least one interval to update.')
         for task in selected_tasks:
             if not cleaned.get(f'{task}_interval_value'):
@@ -190,6 +194,11 @@ class BulkPianoIntervalForm(forms.Form):
                     f'{task}_interval_unit',
                     'Choose an interval unit.',
                 )
+        if cleaned.get('update_warning_days_before') and cleaned.get('warning_days_before') is None:
+            self.add_error(
+                'warning_days_before',
+                'Enter the number of warning days.',
+            )
         return cleaned
 
     def interval_updates(self):
@@ -198,6 +207,8 @@ class BulkPianoIntervalForm(forms.Form):
             if self.cleaned_data.get(f'update_{task}'):
                 updates[f'{task}_interval_value'] = self.cleaned_data[f'{task}_interval_value']
                 updates[f'{task}_interval_unit'] = self.cleaned_data[f'{task}_interval_unit']
+        if self.cleaned_data.get('update_warning_days_before'):
+            updates['warning_days_before'] = self.cleaned_data['warning_days_before']
         return updates
 
 

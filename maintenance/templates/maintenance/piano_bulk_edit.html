@@ -157,6 +157,19 @@
           {% if form.cleaning_interval_value.errors %}<span class="form-error">{{ form.cleaning_interval_value.errors.0 }}</span>{% endif %}
         </div>
 
+        <div class="form-group">
+          <label class="gap-row">
+            <input type="checkbox" name="update_warning_days_before" value="on">
+            <span class="form-label" style="margin:0;">Warning window</span>
+          </label>
+          <div class="gap-row">
+            <input class="form-input" type="number" name="warning_days_before" min="0" placeholder="7" style="width:90px;">
+            <span class="text-muted">days before due</span>
+          </div>
+          {% if form.warning_days_before.errors %}<span class="form-error">{{ form.warning_days_before.errors.0 }}</span>{% endif %}
+          <div class="text-dim text-sm">Applies to all four built-in maintenance intervals.</div>
+        </div>
+
         <button type="submit" class="btn btn-primary" {% if not pianos %}disabled{% endif %}>Apply Changes</button>
       </div>
     </div>
