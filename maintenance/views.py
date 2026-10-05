@@ -50,7 +50,7 @@ from .models import (
 )
 from .photo_processing import build_photo_thumbnail
 from .tenancy import ACTIVE_COMPANY_SESSION_KEY, company_queryset, company_users, ensure_company_access
-from .services import build_company_setup_progress
+from .services import build_company_setup_progress, cancel_current_work_orders
 
 
 PIANOS_PER_PAGE = 25
@@ -971,8 +971,10 @@ def piano_edit(request, pk):
 def piano_deactivate(request, pk):
     piano = get_object_or_404(Piano, company=ensure_company_access(request), pk=pk)
     if request.method == 'POST':
-        piano.is_active = False
-        piano.save(update_fields=['is_active'])
+        with transaction.atomic():
+            piano.is_active = False
+            piano.save(update_fields=['is_active'])
+            cancel_current_work_orders(piano)
         log_audit_event(
             company=piano.company,
             actor=request.user,

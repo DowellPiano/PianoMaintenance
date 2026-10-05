@@ -60,6 +60,14 @@ class CompanySetupProgress:
         return all(task.is_complete for task in self.tasks)
 
 
+def cancel_current_work_orders(piano):
+    """Cancel all open work orders belonging to a piano."""
+    return WorkOrder.objects.filter(
+        piano=piano,
+        status__in=[WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS],
+    ).update(status=WorkOrder.Status.CANCELLED)
+
+
 def build_company_setup_progress(
     company,
     *,

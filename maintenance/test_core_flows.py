@@ -255,6 +255,52 @@ class CoreCrudFlowTests(CompanyAdminWebTestCase):
             ['piano.created', 'piano.updated', 'piano.paused', 'piano.reactivated'],
         )
 
+    def test_pausing_piano_cancels_current_work_orders(self):
+        piano = Piano.objects.create(
+            company=self.company,
+            name='Maintenance Piano',
+            make='Yamaha',
+            piano_type=Piano.PianoType.UPRIGHT,
+        )
+        current_statuses = [WorkOrder.Status.OPEN, WorkOrder.Status.IN_PROGRESS]
+        for index, status in enumerate(current_statuses):
+            WorkOrder.objects.create(
+                company=self.company,
+                piano=piano,
+                order_type=WorkOrder.OrderType.PREVENTIVE,
+                task_type='Tuning',
+                status=status,
+                description=f'Current order {index}',
+            )
+        completed = WorkOrder.objects.create(
+            company=self.company,
+            piano=piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Cleaning',
+            status=WorkOrder.Status.COMPLETE,
+            description='Completed order',
+        )
+        cancelled = WorkOrder.objects.create(
+            company=self.company,
+            piano=piano,
+            order_type=WorkOrder.OrderType.PREVENTIVE,
+            task_type='Voicing',
+            status=WorkOrder.Status.CANCELLED,
+            description='Previously cancelled order',
+        )
+
+        response = self.client.post(reverse('piano_deactivate', args=[piano.pk]))
+
+        self.assertRedirects(response, reverse('piano_list'))
+        self.assertEqual(
+            set(WorkOrder.objects.filter(piano=piano).values_list('status', flat=True)),
+            {WorkOrder.Status.CANCELLED, WorkOrder.Status.COMPLETE},
+        )
+        completed.refresh_from_db()
+        cancelled.refresh_from_db()
+        self.assertEqual(completed.status, WorkOrder.Status.COMPLETE)
+        self.assertEqual(cancelled.status, WorkOrder.Status.CANCELLED)
+
     def test_core_edit_and_delete_views_hide_other_company_records(self):
         organization = Organization.objects.create(company=self.other_company, name='Hidden Org')
         venue = Venue.objects.create(company=self.other_company, name='Hidden Venue')
